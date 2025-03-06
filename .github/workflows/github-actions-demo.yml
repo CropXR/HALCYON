@@ -16,3 +16,21 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: echo "🍏 BZZZ This job's status is ${{ job.status }}."
+      - name: Set up mamba environment
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          micromamba-version: '1.4.2'
+          environment-file: environment.yml
+          environment-name: mlmmint
+          init-shell: bash
+          generate-run-shell: true
+
+      - name: Install dependencies
+        shell: micromamba-shell {0}
+        run: |
+          python -m pip install pytest
+
+      - name: Test with Pytest
+        shell: micromamba-shell {0}
+        run: |
+          python -m pytest
