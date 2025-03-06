@@ -1,8 +1,13 @@
-name: Continous Integration
+name: Continuous Integration
 run-name: ${{ github.actor }} performed a ${{ github.event_name }} to ${{ github.ref }}
-on: [push]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, reopened, synchronize]
 jobs:
-  Compile-and-run-tests:
+  compile-and-run-tests:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
