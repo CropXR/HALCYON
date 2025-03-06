@@ -19,7 +19,7 @@ jobs:
       - name: Set up mamba environment
         uses: mamba-org/setup-micromamba@v1
         with:
-          micromamba-version: '1.4.2'
+          micromamba-version: '1.2.3-0'
           environment-file: environment.yml
           environment-name: mlmmint
           init-shell: bash
