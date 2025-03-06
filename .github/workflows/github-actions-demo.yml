@@ -18,6 +18,5 @@ jobs:
       - name: Test with Pytest
         shell: micromamba-shell {0}
         run: |
-          micromamba activate mlmmint
           export PYTHONPATH=$PYTHONPATH:$(pwd)
           pytest 
