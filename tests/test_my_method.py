@@ -1,7 +1,7 @@
 import pytest
-from src.my_method import TheBestClass
+from mlmmint.my_method import TheBestClass
 
 
 def test_my_method():
     obj = TheBestClass()
-    assert obj.my_method() == 'Hello World'
+    assert obj.my_method() == "Hello World"

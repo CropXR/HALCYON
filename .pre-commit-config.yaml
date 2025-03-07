@@ -1,6 +1,5 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.2.2  # Check for latest version
+  - repo: https://github.com/psf/black
+    rev: 24.2.0  # Use the latest stable version of Black
     hooks:
-      - id: ruff
-      - id: ruff-format  # Enables Ruff’s formatter
+      - id: black
