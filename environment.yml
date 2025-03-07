@@ -24,6 +24,7 @@ dependencies:
   - cached_property=1.5.2=pyha770c72_1
   - certifi=2025.1.31=pyhd8ed1ab_0
   - cffi=1.17.1=py310h8deb56e_0
+  - cfgv=3.3.1=pyhd8ed1ab_1
   - charset-normalizer=3.4.1=pyhd8ed1ab_0
   - colorama=0.4.6=pyhd8ed1ab_1
   - comm=0.2.2=pyhd8ed1ab_1
@@ -32,8 +33,10 @@ dependencies:
   - debugpy=1.8.13=py310hf71b8c6_0
   - decorator=5.2.1=pyhd8ed1ab_0
   - defusedxml=0.7.1=pyhd8ed1ab_0
+  - distlib=0.3.9=pyhd8ed1ab_1
   - exceptiongroup=1.2.2=pyhd8ed1ab_1
   - executing=2.1.0=pyhd8ed1ab_1
+  - filelock=3.17.0=pyhd8ed1ab_0
   - fonttools=4.56.0=py310h89163eb_0
   - fqdn=1.5.1=pyhd8ed1ab_1
   - freetype=2.12.1=h267a509_2
@@ -43,6 +46,7 @@ dependencies:
   - httpcore=1.0.7=pyh29332c3_1
   - httpx=0.28.1=pyhd8ed1ab_0
   - hyperframe=6.1.0=pyhd8ed1ab_0
+  - identify=2.6.8=pyhd8ed1ab_0
   - idna=3.10=pyhd8ed1ab_1
   - importlib-metadata=8.6.1=pyha770c72_0
   - importlib_resources=6.5.2=pyhd8ed1ab_0
@@ -115,6 +119,7 @@ dependencies:
   - nbformat=5.10.4=pyhd8ed1ab_1
   - ncurses=6.5=h2d0b736_3
   - nest-asyncio=1.6.0=pyhd8ed1ab_1
+  - nodeenv=1.9.1=pyhd8ed1ab_1
   - notebook=7.3.2=pyhd8ed1ab_0
   - notebook-shim=0.2.4=pyhd8ed1ab_1
   - numpy=2.2.3=py310hefbff90_0
@@ -133,6 +138,7 @@ dependencies:
   - pkgutil-resolve-name=1.3.10=pyhd8ed1ab_2
   - platformdirs=4.3.6=pyhd8ed1ab_1
   - pluggy=1.5.0=pyhd8ed1ab_1
+  - pre-commit=4.1.0=pyha770c72_0
   - prometheus_client=0.21.1=pyhd8ed1ab_0
   - prompt-toolkit=3.0.50=pyha770c72_0
   - prompt_toolkit=3.0.50=hd8ed1ab_0
@@ -182,9 +188,11 @@ dependencies:
   - typing_extensions=4.12.2=pyha770c72_1
   - typing_utils=0.1.0=pyhd8ed1ab_1
   - tzdata=2025a=h78e105d_0
+  - ukkonen=1.0.1=py310h3788b33_5
   - unicodedata2=16.0.0=py310ha75aee5_0
   - uri-template=1.3.0=pyhd8ed1ab_1
   - urllib3=2.3.0=pyhd8ed1ab_0
+  - virtualenv=20.29.3=pyhd8ed1ab_0
   - wcwidth=0.2.13=pyhd8ed1ab_1
   - webcolors=24.11.1=pyhd8ed1ab_0
   - webencodings=0.5.1=pyhd8ed1ab_3
