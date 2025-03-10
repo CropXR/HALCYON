@@ -1,0 +1,3 @@
+[tool.black]
+line-length = 88  # Default line length (can be adjusted if needed)
+target-version = ['py310']  # Set the target Python version to 3.10
