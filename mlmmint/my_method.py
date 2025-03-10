@@ -8,5 +8,5 @@ class TheBestClass:
         some_df = pd.DataFrame()
         return "Hello World"
 
-    def someReallyWeird_name(self):
+    def someReallyWeiard_name(self):
         unusual_quotes = "double_now"
