@@ -48,3 +48,9 @@ def create_synthetic_expressions() -> ExpressionData:
     y_out = solve_ivp(dy_dt, timespan, initial_state, method="RK45")
     df = pd.DataFrame(y_out.y, index=["G1", "G2", "G3", "G4", "G5"], columns=y_out.t)
     return ExpressionData(df)
+
+
+def get_synthetic_data():
+    gene_network, interactions = create_synthetic_gene_network()
+    expressions = create_synthetic_expressions()
+    return gene_network, interactions, expressions

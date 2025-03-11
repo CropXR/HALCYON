@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 
 import numpy as np
+import torch
 
 from mlmmint import GeneNetwork
 from mlmmint.ExpressionData import ExpressionData
@@ -8,7 +9,7 @@ from mlmmint.ExpressionData import ExpressionData
 
 class BaseModel(ABC):
     @abstractmethod
-    def get_derivative(self, state: np.ndarray, t: float):
+    def forward(self, state: torch.Tensor | np.ndarray, t: float):
         """Compute the derivative of the system at a given state and time."""
         pass
 

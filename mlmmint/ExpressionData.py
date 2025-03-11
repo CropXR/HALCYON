@@ -10,7 +10,7 @@ class ExpressionData:
 
     def keep_genes_in_list(self, genes: list):
         """Keep only the specified genes in the data"""
-        return ExpressionData(self.df.loc[genes, :])
+        return ExpressionData(self.df[self.df.index.isin(genes)])
 
     @property
     def genes(self):

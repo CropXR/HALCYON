@@ -14,6 +14,10 @@ class GeneNetwork:
         """
         return list(self.graph.in_edges(gene_name, data=True))
 
+    def get_all_interactions(self):
+        """Get all edges in the network."""
+        return list(self.graph.edges(data=True))
+
     @property
     def genes(self):
         """Note: these might differ from the order of ExpressionData.genes
