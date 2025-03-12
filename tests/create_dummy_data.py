@@ -2,7 +2,7 @@ from typing import Tuple
 import networkx as nx
 import pandas as pd
 from mlmmint.ExpressionData import ExpressionData
-from mlmmint.GeneNetwork import GeneNetwork
+from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from scipy.integrate import solve_ivp
 
 
@@ -17,7 +17,7 @@ def get_interactions() -> dict:
 
 
 # Create and return the gene network as a GeneNetwork object
-def create_synthetic_gene_network() -> Tuple[GeneNetwork, dict]:
+def create_synthetic_gene_network() -> Tuple[RegulatoryNetwork, dict]:
     interactions = get_interactions()
     graph = nx.DiGraph()
     graph.add_nodes_from(
@@ -27,7 +27,7 @@ def create_synthetic_gene_network() -> Tuple[GeneNetwork, dict]:
     for (from_gene, to_gene), influence in interactions.items():
         graph.add_edge(from_gene, to_gene, influence=influence)
 
-    return GeneNetwork(graph), interactions
+    return RegulatoryNetwork(graph), interactions
 
 
 # Create synthetic gene expression time series using ODEs
@@ -51,6 +51,6 @@ def create_synthetic_expressions() -> ExpressionData:
 
 
 def get_synthetic_data():
-    gene_network, interactions = create_synthetic_gene_network()
+    regulatory_network, interactions = create_synthetic_gene_network()
     expressions = create_synthetic_expressions()
-    return gene_network, interactions, expressions
+    return regulatory_network, interactions, expressions
