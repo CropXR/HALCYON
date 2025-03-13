@@ -2,19 +2,12 @@ import torch
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from mlmmint.Models.Model import Model
 
-from torchdiffeq import odeint_adjoint as odeint
 from torch import nn
 
 
 class MechanisticModel(Model):
     def __init__(self, network: RegulatoryNetwork):
         super().__init__(network.node_names)
-
-    def forward(self):
-        raise NotImplementedError
-
-    def integrate(self):
-        raise NotImplementedError
 
 
 class TorchLinearODE(MechanisticModel):
@@ -40,11 +33,6 @@ class TorchLinearODE(MechanisticModel):
 
     def forward(self, t, state):
         return self.weight_matrix @ state
-
-    def integrate(self, initial_state, t_eval, stress=None, gene_ko=None):
-        output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
-        # Transposed for some reason
-        return output.T
 
     def _make_weight_matrix_zeroes(self):
         """Initialize the weight matrix by setting everything to 0."""

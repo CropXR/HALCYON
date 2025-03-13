@@ -3,6 +3,7 @@ from typing import List
 
 import torch
 import torch.nn as nn
+from torchdiffeq import odeint_adjoint as odeint
 
 
 class Model(ABC, nn.Module):
@@ -15,6 +16,10 @@ class Model(ABC, nn.Module):
         return len(self.modelled_gene_labels)
 
     @abstractmethod
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """Get the derivative at a given time point."""
+        pass
+
     def integrate(
         self,
         initial_state: torch.Tensor,
@@ -22,10 +27,7 @@ class Model(ABC, nn.Module):
         stress=None,
         gene_ko=None,
     ) -> torch.Tensor:
-        """Solve the system over time"""
-        pass
-
-    @abstractmethod
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        """Get the derivative at a given time point."""
-        pass
+        """Solve the system over time. Returns tensor with rows as genes and time points as columns."""
+        output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
+        # Transposed for some reason
+        return output.T

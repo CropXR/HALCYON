@@ -3,9 +3,10 @@ from unittest.mock import MagicMock
 from pytest import approx
 import torch
 
+from mlmmint.Models.MachineLearningModel import NeuralODE
 from mlmmint.Models.MechanisticModel import TorchLinearODE
 from mlmmint.Trainer import Trainer
-from tests.create_dummy_data import get_synthetic_data
+from tests.create_dummy_data import create_synthetic_expressions, get_synthetic_data
 
 
 def test_calculate_loss():
@@ -44,7 +45,7 @@ def test_model_with_more_genes_in_expressions():
     assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
 
 
-def test_train_model():
+def test_train_mechanistic_linear_model():
     gt_regulatory_network, interactions, expressions = get_synthetic_data()
     correct_model = TorchLinearODE(gt_regulatory_network)
     # Set all values to zero in weight matrix
@@ -56,4 +57,14 @@ def test_train_model():
     my_trainer = Trainer(wrong_model, expressions)
     loss_history = my_trainer.train(200)
     assert loss_history[-1] < 1e-3
+    # assert torch.allclose(wrong_model.weight_matrix, correct_model.weight_matrix, atol=0.1)
+
+
+def test_train_neural_ode():
+    expressions = create_synthetic_expressions()
+    neural_ode_model = NeuralODE(expressions.genes)
+    my_trainer = Trainer(neural_ode_model, expressions)
+    loss_history = my_trainer.train(10)
+    # Assert loss is decreasing
+    assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
     # assert torch.allclose(wrong_model.weight_matrix, correct_model.weight_matrix, atol=0.1)

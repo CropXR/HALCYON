@@ -51,6 +51,7 @@ class Trainer:
     def integrate_model(
         self, initial_states_tensor: torch.Tensor, time_points_tensor: torch.Tensor
     ) -> torch.Tensor:
+        """Integrate the model over time. Returns tensor with genes as rows and time points as columns."""
         output = self.model.integrate(
             initial_state=initial_states_tensor, t_eval=time_points_tensor
         )
