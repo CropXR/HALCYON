@@ -1,8 +1,6 @@
-import numpy as np
 import torch
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from mlmmint.Models.Model import Model
-from scipy.integrate import solve_ivp
 
 from torchdiffeq import odeint_adjoint as odeint
 from torch import nn
@@ -11,6 +9,12 @@ from torch import nn
 class MechanisticModel(Model):
     def __init__(self, network: RegulatoryNetwork):
         super().__init__(network.node_names)
+
+    def forward(self):
+        raise NotImplementedError
+
+    def integrate(self):
+        raise NotImplementedError
 
 
 class TorchLinearODE(MechanisticModel):
@@ -21,6 +25,7 @@ class TorchLinearODE(MechanisticModel):
         self.weight_matrix = torch.zeros(
             (self.n_genes, self.n_genes), dtype=torch.float32
         )
+        self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
 
         for (
             from_gene,
@@ -40,3 +45,10 @@ class TorchLinearODE(MechanisticModel):
         output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
         # Transposed for some reason
         return output.T
+
+    def _make_weight_matrix_zeroes(self):
+        """Initialize the weight matrix by setting everything to 0."""
+        self.weight_matrix = nn.Parameter(
+            torch.zeros_like(self.weight_matrix, dtype=torch.float32),
+            requires_grad=True,
+        )

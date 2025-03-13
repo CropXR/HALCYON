@@ -21,10 +21,7 @@ class RegulatoryNetwork:
 
     @property
     def node_names(self):
-        """Note: these might differ from the order of ExpressionData.genes
-
-        To fix, perhaps do look into merging these two classes into one.
-        """
+        """Note: these might differ from the order of ExpressionData.genes."""
         return list(self._graph.nodes)
 
     def add_edge(self, edge: tuple, attributes: dict, contains_new_genes=False):

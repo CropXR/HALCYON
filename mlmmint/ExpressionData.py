@@ -10,11 +10,10 @@ class ExpressionData:
     def __init__(self, expression_data: pd.DataFrame):
         """Rows are genes and columns are samples"""
         self.df = expression_data
-        self.df = self.df.loc[sorted(self.genes)]
 
-    def keep_genes_in_list(self, genes: list):
+    def match_genes_to_list(self, genes: list):
         """Keep only the specified genes in the data"""
-        return ExpressionData(self.df[self.df.index.isin(genes)])
+        return ExpressionData(self.df.loc[genes])
 
     @property
     def genes(self) -> List:
@@ -26,14 +25,14 @@ class ExpressionData:
         new_df.loc[gene_name] = expression
         return ExpressionData(new_df)
 
-    def get_initial_states(self) -> np.ndarray:
+    def _get_initial_states(self) -> np.ndarray:
         """Return the initial states of the genes
 
         Is assumed to be in first column of the dataframe
         """
         return self.df.iloc[:, 0].values  # type: ignore
 
-    def get_time_points(self) -> np.ndarray:
+    def _get_time_points(self) -> np.ndarray:
         """Return the time points of the samples"""
         return self.df.columns.values.astype(float)
 

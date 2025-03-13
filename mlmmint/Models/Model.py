@@ -8,8 +8,7 @@ import torch.nn as nn
 class Model(ABC, nn.Module):
     def __init__(self, modelled_gene_labels: List[str]):
         super().__init__()
-        self.modelled_gene_labels = sorted(modelled_gene_labels)
-        self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
+        self.modelled_gene_labels = modelled_gene_labels
 
     @property
     def n_genes(self):
@@ -23,7 +22,7 @@ class Model(ABC, nn.Module):
         stress=None,
         gene_ko=None,
     ) -> torch.Tensor:
-        """"""
+        """Solve the system over time"""
         pass
 
     @abstractmethod
