@@ -29,6 +29,8 @@ dependencies:
   - colorama=0.4.6=pyhd8ed1ab_1
   - comm=0.2.2=pyhd8ed1ab_1
   - contourpy=1.3.1=py310h3788b33_0
+  - coverage=7.6.12=py310h89163eb_0
+  - cpython=3.10.16=py310hd8ed1ab_1
   - cycler=0.12.1=pyhd8ed1ab_1
   - debugpy=1.8.13=py310hf71b8c6_0
   - decorator=5.2.1=pyhd8ed1ab_0
@@ -40,6 +42,9 @@ dependencies:
   - fonttools=4.56.0=py310h89163eb_0
   - fqdn=1.5.1=pyhd8ed1ab_1
   - freetype=2.12.1=h267a509_2
+  - fsspec=2025.3.0=pyhd8ed1ab_0
+  - gmp=6.3.0=hac33072_2
+  - gmpy2=2.1.5=py310he8512ff_3
   - h11=0.14.0=pyhd8ed1ab_1
   - h2=4.2.0=pyhd8ed1ab_0
   - hpack=4.1.0=pyhd8ed1ab_0
@@ -80,6 +85,7 @@ dependencies:
   - lcms2=2.17=h717163a_0
   - ld_impl_linux-64=2.43=h712a8e2_4
   - lerc=4.0.0=h27087fc_0
+  - libabseil=20240722.0=cxx17_hbbce691_4
   - libblas=3.9.0=31_h59b9bed_openblas
   - libbrotlicommon=1.1.0=hb9d3cd8_2
   - libbrotlidec=1.1.0=hb9d3cd8_2
@@ -99,12 +105,15 @@ dependencies:
   - libnsl=2.0.1=hd590300_0
   - libopenblas=0.3.29=pthreads_h94d23a6_0
   - libpng=1.6.47=h943b412_0
+  - libprotobuf=5.28.3=h6128344_1
   - libsodium=1.0.20=h4ab18f5_0
   - libsqlite=3.49.1=hee588c1_1
   - libstdcxx=14.2.0=h8f9b012_2
   - libstdcxx-ng=14.2.0=h4852527_2
   - libtiff=4.7.0=hd9ff511_3
+  - libtorch=2.6.0=cpu_generic_haed06de_0
   - libuuid=2.38.1=h0b41bf4_0
+  - libuv=1.50.0=hb9d3cd8_0
   - libwebp-base=1.5.0=h851e524_0
   - libxcb=1.17.0=h8a09558_0
   - libxcrypt=4.4.36=hd590300_1
@@ -113,18 +122,24 @@ dependencies:
   - matplotlib-base=3.10.1=py310h68603db_0
   - matplotlib-inline=0.1.7=pyhd8ed1ab_1
   - mistune=3.1.2=pyhd8ed1ab_0
+  - mpc=1.3.1=h24ddda3_1
+  - mpfr=4.2.1=h90cbb55_3
+  - mpmath=1.3.0=pyhd8ed1ab_1
   - munkres=1.1.4=pyh9f0ad1d_0
   - nbclient=0.10.2=pyhd8ed1ab_0
   - nbconvert-core=7.16.6=pyh29332c3_0
   - nbformat=5.10.4=pyhd8ed1ab_1
   - ncurses=6.5=h2d0b736_3
   - nest-asyncio=1.6.0=pyhd8ed1ab_1
+  - networkx=3.4.2=pyh267e887_2
   - nodeenv=1.9.1=pyhd8ed1ab_1
+  - nomkl=1.0=h5ca1d4c_0
   - notebook=7.3.2=pyhd8ed1ab_0
   - notebook-shim=0.2.4=pyhd8ed1ab_1
   - numpy=2.2.3=py310hefbff90_0
   - openjpeg=2.5.3=h5fbd93e_0
   - openssl=3.4.1=h7b32b05_0
+  - optree=0.14.1=py310h3788b33_0
   - overrides=7.7.0=pyhd8ed1ab_1
   - packaging=24.2=pyhd8ed1ab_2
   - pandas=2.2.3=py310h5eaa309_1
@@ -146,17 +161,21 @@ dependencies:
   - pthread-stubs=0.4=hb9d3cd8_1002
   - ptyprocess=0.7.0=pyhd8ed1ab_1
   - pure_eval=0.2.3=pyhd8ed1ab_1
+  - pybind11=2.13.6=pyh1ec8472_2
+  - pybind11-global=2.13.6=pyh415d2e4_2
   - pycparser=2.22=pyh29332c3_1
   - pygments=2.19.1=pyhd8ed1ab_0
   - pyparsing=3.2.1=pyhd8ed1ab_0
   - pysocks=1.7.1=pyha55dd90_7
   - pytest=8.3.5=pyhd8ed1ab_0
+  - pytest-cov=6.0.0=pyhd8ed1ab_1
   - python=3.10.16=he725a3c_1_cpython
   - python-dateutil=2.9.0.post0=pyhff2d567_1
   - python-fastjsonschema=2.21.1=pyhd8ed1ab_0
   - python-json-logger=2.0.7=pyhd8ed1ab_0
   - python-tzdata=2025.1=pyhd8ed1ab_0
   - python_abi=3.10=5_cp310
+  - pytorch=2.6.0=cpu_generic_py310_hb0ad038_0
   - pytz=2024.1=pyhd8ed1ab_0
   - pyyaml=6.0.2=py310h89163eb_2
   - pyzmq=26.2.1=py310h71f11fc_0
@@ -173,14 +192,18 @@ dependencies:
   - send2trash=1.8.3=pyh0d859eb_1
   - setuptools=75.8.2=pyhff2d567_0
   - six=1.17.0=pyhd8ed1ab_0
+  - sleef=3.8=h1b44611_0
   - sniffio=1.3.1=pyhd8ed1ab_1
   - soupsieve=2.5=pyhd8ed1ab_1
   - stack_data=0.6.3=pyhd8ed1ab_1
   - statsmodels=0.14.4=py310hf462985_0
+  - sympy=1.13.3=pyh2585a3b_105
   - terminado=0.18.1=pyh0d859eb_0
   - tinycss2=1.4.0=pyhd8ed1ab_0
   - tk=8.6.13=noxft_h4845f30_101
+  - toml=0.10.2=pyhd8ed1ab_1
   - tomli=2.2.1=pyhd8ed1ab_1
+  - torchdiffeq=0.2.2=pyhd8ed1ab_0
   - tornado=6.4.2=py310ha75aee5_0
   - traitlets=5.14.3=pyhd8ed1ab_1
   - types-python-dateutil=2.9.0.20241206=pyhd8ed1ab_0
