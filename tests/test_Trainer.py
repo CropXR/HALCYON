@@ -1,5 +1,6 @@
 from copy import deepcopy
 from unittest.mock import MagicMock
+import numpy as np
 from pytest import approx
 import torch
 
@@ -28,8 +29,7 @@ def test_integrate_model():
     gt_regulatory_network, interactions, expressions = get_synthetic_data()
     correct_model = TorchLinearODE(gt_regulatory_network)
     my_trainer = Trainer(correct_model, expressions)
-    init_values, t = my_trainer.get_initial_states_and_time_points()
-    output = my_trainer.integrate_model(init_values, t)
+    output = my_trainer.integrate_model_with_init_and_t_from_expressions()
     assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
 
 
@@ -39,8 +39,7 @@ def test_model_with_more_genes_in_expressions():
     expressions = expressions._add_one_gene_expression("G6", 2)
     correct_model = TorchLinearODE(gt_regulatory_network)
     my_trainer = Trainer(correct_model, expressions)
-    init_values, t = my_trainer.get_initial_states_and_time_points()
-    output = my_trainer.integrate_model(init_values, t)
+    output = my_trainer.integrate_model_with_init_and_t_from_expressions()
 
     assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
 
@@ -64,7 +63,26 @@ def test_train_neural_ode():
     expressions = create_synthetic_expressions()
     neural_ode_model = NeuralODE(expressions.genes)
     my_trainer = Trainer(neural_ode_model, expressions)
-    loss_history = my_trainer.train(10)
+    loss_history = my_trainer.train(5)
     # Assert loss is decreasing
     assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
     # assert torch.allclose(wrong_model.weight_matrix, correct_model.weight_matrix, atol=0.1)
+
+
+def test_plot_fit_vs_real_data():
+    gt_regulatory_network, _, expressions = get_synthetic_data()
+    correct_model = TorchLinearODE(gt_regulatory_network)
+    my_trainer = Trainer(correct_model, expressions)
+    out_fig, out_axs = my_trainer.plot_fit_vs_real()
+    assert out_fig is not None
+    # Check if times both match
+    gt_time = [0.0, 0.11618519612311953, 1.2780371573543148, 5.0]
+    for ax in out_axs:
+        assert np.allclose(ax.get_lines()[0].get_data()[0], gt_time)
+    # Check if y values match for all genes'
+    for i, _ in enumerate(expressions.genes):
+        assert np.allclose(
+            out_axs[0].get_lines()[i].get_data()[1],
+            out_axs[1].get_lines()[i].get_data()[1],
+            atol=1e-3,
+        )

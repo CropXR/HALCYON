@@ -1,11 +1,17 @@
 from typing import List
+from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
 import torch
+import seaborn as sns
 
 
 class ExpressionData:
     """Store RNA seq expression data (from simulator)"""
+
+    time_name = "Time"
+    gene_name = "Gene"
+    expression_name = "Expression"
 
     def __init__(self, expression_data: pd.DataFrame):
         """Rows are genes and columns are samples"""
@@ -38,3 +44,19 @@ class ExpressionData:
 
     def as_tensor(self) -> torch.Tensor:
         return torch.Tensor(self.df.values)
+
+    def _return_long_df(self) -> pd.DataFrame:
+        return self.df.melt(
+            ignore_index=False, value_name=self.expression_name, var_name=self.time_name
+        ).reset_index(names=self.gene_name)
+
+    def plot_expressions(self, axis=None) -> Axes:
+        """Show expressions of genes. Will have to call plt.show() after to actually see the plot though."""
+        df_to_plot = self._return_long_df()
+        return sns.lineplot(
+            data=df_to_plot,
+            x=self.time_name,
+            y=self.expression_name,
+            hue=self.gene_name,
+            ax=axis,
+        )

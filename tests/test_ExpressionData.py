@@ -1,3 +1,4 @@
+from matplotlib.axes import Axes
 import numpy as np
 from tests.create_dummy_data import create_synthetic_expressions, get_synthetic_data
 
@@ -32,3 +33,20 @@ def test_filter_by_only_present_genes():
     assert [gene in ["G1", "G2", "G3", "G4", "G5"] for gene in expressions.genes]
     assert "G6" not in expressions.genes
     assert gene_network.node_names == expressions.genes
+
+
+def test_plot_expressions():
+    _, _, expressions = get_synthetic_data()
+    plot = expressions.plot_expressions()
+    assert isinstance(plot, Axes)
+
+
+def test_get_long_form_df():
+    _, _, expressions = get_synthetic_data()
+    long_df = expressions._return_long_df()
+    assert list(long_df.columns) == [
+        expressions.gene_name,
+        expressions.time_name,
+        expressions.expression_name,
+    ]
+    assert long_df.shape == (len(expressions.df.index) * len(expressions.df.columns), 3)

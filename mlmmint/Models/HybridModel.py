@@ -1,10 +1,9 @@
-from mlmmint.Models.MachineLearningModel import MachineLearningModel
 from mlmmint.Models.MechanisticModel import MechanisticModel
 from mlmmint.Models.Model import Model
 
 
 class HybridModel(Model):
-    def __init__(self, mm_model: MechanisticModel, ml_model: MachineLearningModel):
+    def __init__(self, mm_model: MechanisticModel, ml_model: Model):
         all_modelled_genes = set(mm_model.modelled_gene_labels) | set(
             ml_model.modelled_gene_labels
         )

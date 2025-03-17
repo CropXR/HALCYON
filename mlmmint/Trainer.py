@@ -1,3 +1,5 @@
+from matplotlib import pyplot as plt
+import pandas as pd
 import torch
 from mlmmint.ExpressionData import ExpressionData
 from typing import Callable
@@ -29,13 +31,11 @@ class Trainer:
 
     def train(self, n_iters: int):
         """Train the model for a given number of iterations using autograd."""
-        initial_states_tensor, time_points_tensor = (
-            self.get_initial_states_and_time_points()
-        )
+
         loss_history = []
         for itr in range(n_iters):
             self.optimizer.zero_grad()
-            output = self.integrate_model(initial_states_tensor, time_points_tensor)
+            output = self.integrate_model_with_init_and_t_from_expressions()
             loss = self.calculate_loss(output)
             loss.backward()
             self.optimizer.step()
@@ -48,10 +48,44 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(self.expressions.as_tensor(), output)
 
-    def integrate_model(
+    def integrate_model_with_init_and_t_from_expressions(self) -> torch.Tensor:
+        """Integrate the model over time starting with same initial conditions as in the expression data and evaluating at the same time points as in the expressions data.
+
+        Returns tensor with genes as rows and time points as columns."""
+        initial_states_tensor, time_points_tensor = (
+            self.get_initial_states_and_time_points()
+        )
+        output = self.model.integrate(
+            initial_state=initial_states_tensor, t_eval=time_points_tensor
+        )
+        return output
+
+    def plot_fit_vs_real(self):
+        fig, axs = plt.subplots(1, 2, sharey=True)
+        axs[0].set_title("Measured")
+        axs[1].set_title("Model")
+        self.expressions.plot_expressions(axis=axs[0])
+
+        model_expression_outputs = self.model_output_as_expression_data_object()
+        model_expression_outputs.plot_expressions(axis=axs[1])
+        plt.tight_layout()
+        return fig, axs
+
+    def model_output_as_expression_data_object(self) -> ExpressionData:
+        model_outputs = self.integrate_model_with_init_and_t_from_expressions()
+        model_output_df = pd.DataFrame(
+            model_outputs.detach().numpy(),
+            columns=self.expressions._get_time_points(),
+            index=self.expressions.genes,
+        )
+        return ExpressionData(model_output_df)
+
+    def integrate_model_with_custom_init_and_t(
         self, initial_states_tensor: torch.Tensor, time_points_tensor: torch.Tensor
     ) -> torch.Tensor:
-        """Integrate the model over time. Returns tensor with genes as rows and time points as columns."""
+        """Integrate the model over time for a user-specified initial condition and time points.
+
+        Returns tensor with genes as rows and time points as columns."""
         output = self.model.integrate(
             initial_state=initial_states_tensor, t_eval=time_points_tensor
         )
