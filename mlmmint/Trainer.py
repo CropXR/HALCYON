@@ -90,7 +90,7 @@ class Trainer:
 
         Returns tensor with genes as rows and time points as columns."""
         initial_states_tensor = initial_states_tensor.to(self.model.device)
-        initial_states_tensor = time_points_tensor.to(self.model.device)
+        time_points_tensor = time_points_tensor.to(self.model.device)
 
         output = self.model.integrate(
             initial_state=initial_states_tensor, t_eval=time_points_tensor
