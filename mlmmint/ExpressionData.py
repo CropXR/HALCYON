@@ -43,7 +43,9 @@ class ExpressionData:
         return self.df.columns.values.astype(float)
 
     def as_tensor(self) -> torch.Tensor:
-        return torch.Tensor(self.df.values)
+        return torch.Tensor(
+            self.df.values,
+        )
 
     def _return_long_df(self) -> pd.DataFrame:
         return self.df.melt(

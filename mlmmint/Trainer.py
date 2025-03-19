@@ -40,7 +40,7 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
             loss_history.append(loss.item())
-            if itr % 100 == 0:
+            if itr % 20 == 0:
                 print(f"Iteration {itr}: Loss {loss}")
         return loss_history
 
