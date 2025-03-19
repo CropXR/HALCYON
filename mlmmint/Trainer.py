@@ -23,6 +23,7 @@ class Trainer:
         if optimizer_kwargs is None:
             optimizer_kwargs = dict()
         self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
+        self.model.to(self.model.device)
 
     def get_initial_states_and_time_points(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Get inital states (i.e. the expression levels at time 0) and time points."""
@@ -88,6 +89,9 @@ class Trainer:
         """Integrate the model over time for a user-specified initial condition and time points.
 
         Returns tensor with genes as rows and time points as columns."""
+        initial_states_tensor = initial_states_tensor.to(self.model.device)
+        initial_states_tensor = time_points_tensor.to(self.model.device)
+
         output = self.model.integrate(
             initial_state=initial_states_tensor, t_eval=time_points_tensor
         )

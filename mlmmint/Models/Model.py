@@ -11,7 +11,6 @@ class Model(ABC, nn.Module):
         super().__init__()
         self.modelled_gene_labels = sorted(modelled_gene_labels)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.to(self.device)  # Send model to device
 
     @property
     def n_genes(self):
