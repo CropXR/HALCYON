@@ -86,3 +86,12 @@ def test_plot_fit_vs_real_data():
             out_axs[1].get_lines()[i].get_data()[1],
             atol=1e-3,
         )
+
+
+def test_with_regularisation():
+    gt_regulatory_network, _, expressions = get_synthetic_data()
+    correct_model = TorchLinearODE(gt_regulatory_network)
+    my_trainer = Trainer(
+        correct_model, expressions, optimizer_kwargs={"weight_decay": 1}
+    )
+    assert my_trainer.optimizer.state_dict()["param_groups"][0]["weight_decay"] == 1

@@ -13,13 +13,16 @@ class Trainer:
         model: Model,
         expressions: ExpressionData,
         optimizer_fn: Callable = torch.optim.Adam,
+        optimizer_kwargs=None,
         loss_fn: Callable = mse_loss,
     ):
         self.model = model
         self.loss_fn = loss_fn
         # Ensure that expressions match the order of the modelled genes
         self.expressions = expressions.match_genes_to_list(model.modelled_gene_labels)
-        self.optimizer = optimizer_fn(model.parameters())
+        if optimizer_kwargs is None:
+            optimizer_kwargs = dict()
+        self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
 
     def get_initial_states_and_time_points(self) -> tuple[torch.Tensor, torch.Tensor]:
         """Get inital states (i.e. the expression levels at time 0) and time points."""
@@ -55,10 +58,9 @@ class Trainer:
         initial_states_tensor, time_points_tensor = (
             self.get_initial_states_and_time_points()
         )
-        output = self.model.integrate(
-            initial_state=initial_states_tensor, t_eval=time_points_tensor
+        return self.integrate_model_with_custom_init_and_t(
+            initial_states_tensor, time_points_tensor
         )
-        return output
 
     def plot_fit_vs_real(self):
         fig, axs = plt.subplots(1, 2, sharey=True)
