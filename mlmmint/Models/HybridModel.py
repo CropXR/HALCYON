@@ -4,20 +4,31 @@ import torch
 
 
 class HybridModel(Model):
-    def __init__(self, mm_model: MechanisticModel, ml_model: Model):
+    def __init__(self, mm: MechanisticModel, ml: Model):
+        """
+        Initialize the HybridModel with a mechanistic model and a machine learning model.
+        Args:
+            mm (MechanisticModel): The mechanistic model instance.
+            ml (Model): The machine learning model instance.
+        Attributes:
+            mm (MechanisticModel): The mechanistic model instance.
+            ml (Model): The machine learning model instance.
+            mm_indices (torch.Tensor): Precomputed indices for the mechanistic model genes.
+            ml_indices (torch.Tensor): Precomputed indices for the machine learning model genes.
+        """
         all_modelled_genes = list(
-            set(mm_model.modelled_gene_labels) | set(ml_model.modelled_gene_labels)
+            set(mm.modelled_gene_labels) | set(ml.modelled_gene_labels)
         )
         super().__init__(modelled_gene_labels=list(all_modelled_genes))
-        self.mechanistic = mm_model
-        self.ml = ml_model
+        self.mm = mm
+        self.ml = ml
 
         # Precompute indices
         self.mm_indices = torch.tensor(
-            [self.modelled_gene_labels.index(g) for g in mm_model.modelled_gene_labels]
+            [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels]
         )
         self.ml_indices = torch.tensor(
-            [self.modelled_gene_labels.index(g) for g in ml_model.modelled_gene_labels]
+            [self.modelled_gene_labels.index(g) for g in ml.modelled_gene_labels]
         )
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -36,5 +47,5 @@ class HybridModel(Model):
 
     def _get_mm_forward(self, t, state):
         mm_input = torch.index_select(state, dim=0, index=self.mm_indices)
-        mm_output = self.mechanistic.forward(t, mm_input)
+        mm_output = self.mm.forward(t, mm_input)
         return mm_output

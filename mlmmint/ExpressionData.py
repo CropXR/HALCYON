@@ -53,7 +53,11 @@ class ExpressionData:
         ).reset_index(names=self.gene_name)
 
     def plot_expressions(self, axis=None) -> Axes:
-        """Show expressions of genes. Will have to call plt.show() after to actually see the plot though."""
+        """Plot gene expression levels.
+
+        This method does not call plt.show() to allow integration into larger
+        subplot layouts. Call plt.show() separately to display the figure.
+        """
         df_to_plot = self._return_long_df()
         return sns.lineplot(
             data=df_to_plot,
