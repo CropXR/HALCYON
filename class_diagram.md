@@ -52,13 +52,7 @@ classDiagram
     %% Notes
     note for MechanisticModel "Any class that is informed 
     by an underlying network structure"
-    
-    note for nn.Module "Are we fine 
-     having everything 
-     inherit from this?
-    Would greatly help 
-    with the integration
-     of everything"
+
 
     note for Simulator "Can simulate with certain condition 
     and genes knocked out"
