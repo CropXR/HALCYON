@@ -15,3 +15,11 @@ class NeuralODE(Model):
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         return self.neural_net(state)
+
+
+class CellBox(Model):
+    def __init__(self, modelled_gene_labels):
+        super().__init__(modelled_gene_labels)
+
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        pass
