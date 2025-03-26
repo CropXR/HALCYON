@@ -1,5 +1,5 @@
 import torch
-from mlmmint.Models.MachineLearningModel import NeuralODE
+from mlmmint.Models.MachineLearningModel import CellBox, NeuralODE
 
 
 def test_create_neuralODE():
@@ -9,3 +9,16 @@ def test_create_neuralODE():
     t = torch.tensor([0.0, 0.5, 1.0, 1.5])
     output = my_neural_ode.integrate(init_values, t)
     assert output.shape == (3, 4)
+
+
+def test_cellbox_forward():
+    # Test nonlinear envelope
+    gene_labels = ["a", "b", "c"]
+    my_cellbox = CellBox(gene_labels)
+    init_values = torch.tensor([1.0, 2.0, 3.0])
+    my_cellbox._set_weight_matrix_to_ones()
+    # Time not important
+    assert torch.allclose(
+        my_cellbox.forward(t=torch.tensor([0]), state=init_values),
+        torch.tanh(torch.tensor([5, 4, 3])),
+    )
