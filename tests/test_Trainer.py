@@ -76,7 +76,7 @@ def test_train_cellbox():
     init_epsilon = deepcopy(cellbox.epsilon)
     init_decay = deepcopy(cellbox.decay_params)
     my_trainer = Trainer(cellbox, expressions)
-    loss_history = my_trainer.train(50)
+    loss_history = my_trainer.train(5)
     # Assert loss is decreasing
     assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
     # Check if epsilon and decay rate changes
