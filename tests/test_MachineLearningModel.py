@@ -37,3 +37,22 @@ def test_cellbox_decay():
         torch.tensor([-1, -2, -3], dtype=torch.float32),
         atol=1e-3,
     )
+
+
+def test_cellbox_gene_knockout():
+    # Test nonlinear envelope
+    gene_labels = ["a", "b", "c"]
+    my_cellbox = CellBox(gene_labels)
+    init_values = torch.tensor([1.0, 2.0, 3.0])
+    my_cellbox._set_weight_matrix_to_ones()
+    assert my_cellbox.get_w_masked()[0, 1] == 1
+    my_cellbox.knockout_interaction("b", "a")
+    my_cellbox.knockout_interaction("a", "b")
+    assert my_cellbox.get_w_masked()[0, 1] == 0
+    assert my_cellbox.get_w_masked()[1, 0] == 0
+    # Time not important
+    assert torch.allclose(
+        my_cellbox.forward(t=torch.tensor([0]), state=init_values),
+        torch.tanh(torch.tensor([3, 3, 3]))
+        - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10) * init_values,
+    )

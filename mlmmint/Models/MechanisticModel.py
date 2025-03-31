@@ -18,7 +18,6 @@ class TorchLinearODE(MechanisticModel):
         self.weight_matrix = torch.zeros(
             (self.n_genes, self.n_genes), dtype=torch.float32
         )
-        self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
 
         for (
             from_gene,
