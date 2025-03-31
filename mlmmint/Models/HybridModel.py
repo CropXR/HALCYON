@@ -1,10 +1,14 @@
+import logging
+import torch
+
+from mlmmint.Models.MachineLearningModel import MachineLearningModel
 from mlmmint.Models.MechanisticModel import MechanisticModel
 from mlmmint.Models.Model import Model
-import torch
+from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 
 
 class HybridModel(Model):
-    def __init__(self, mm: MechanisticModel, ml: Model):
+    def __init__(self, mm: MechanisticModel, ml: MachineLearningModel):
         """
         Initialize the HybridModel with a mechanistic model and a machine learning model.
         Args:
@@ -40,12 +44,23 @@ class HybridModel(Model):
         output.index_add_(dim=0, index=self.ml_indices, source=ml_output)
         return output
 
-    def _get_ml_forward(self, t, state):
+    def _get_ml_forward(self, t, state) -> torch.Tensor:
         ml_input = torch.index_select(state, dim=0, index=self.ml_indices)
         ml_output = self.ml.forward(t, ml_input)
         return ml_output
 
-    def _get_mm_forward(self, t, state):
+    def _get_mm_forward(self, t, state) -> torch.Tensor:
         mm_input = torch.index_select(state, dim=0, index=self.mm_indices)
         mm_output = self.mm.forward(t, mm_input)
         return mm_output
+
+    def get_inferred_network(self) -> RegulatoryNetwork:
+        """Get the inferred network
+
+        Returns:
+            RegulatoryNetwork: Inferred network from data
+        """
+        logging.warning(
+            "Now just use the ML-model network inference, but later on combine this with MM?"
+        )
+        return self.ml.get_inferred_network()
