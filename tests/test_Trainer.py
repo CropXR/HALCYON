@@ -29,7 +29,7 @@ def test_integrate_model():
     gt_regulatory_network, interactions, expressions = get_synthetic_data()
     correct_model = TorchLinearODE(gt_regulatory_network)
     my_trainer = Trainer(correct_model, expressions)
-    output = my_trainer.integrate_model_with_init_and_t_from_expressions()
+    output = my_trainer.integrate_model()
     assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
 
 
@@ -39,7 +39,7 @@ def test_model_with_more_genes_in_expressions():
     expressions = expressions._add_one_gene_expression("G6", 2)
     correct_model = TorchLinearODE(gt_regulatory_network)
     my_trainer = Trainer(correct_model, expressions)
-    output = my_trainer.integrate_model_with_init_and_t_from_expressions()
+    output = my_trainer.integrate_model()
 
     assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
 

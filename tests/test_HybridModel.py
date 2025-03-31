@@ -37,7 +37,7 @@ def test_hybrid_model_gene_split():
         ),
         torch.tensor([0.1000, 0.0000, -0.0800]),
     )
-    integration_output = trainer.integrate_model_with_init_and_t_from_expressions()
+    integration_output = trainer.integrate_model()
     # Check if at least shape and initial gene expressions match
     assert tuple(integration_output.shape) == (5, 4)
     assert torch.allclose(
