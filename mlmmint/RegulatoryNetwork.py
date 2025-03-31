@@ -15,9 +15,13 @@ class RegulatoryNetwork:
         """
         return list(self._graph.in_edges(gene_name, data=True))
 
-    def get_all_interactions(self):
-        """Get all edges in the network."""
-        return list(self._graph.edges(data=True))
+    def get_all_interactions(self, with_data: bool = True):
+        """Get all edges in the network.
+
+        Parameters:
+        - with_data (bool): If set to true (default) include the edge attributes as dict
+        """
+        return list(self._graph.edges(data=with_data))
 
     @property
     def node_names(self):
