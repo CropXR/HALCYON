@@ -1,9 +1,23 @@
 import torch
 from torch import nn
 from mlmmint.Models.Model import Model
+from abc import abstractmethod
+import networkx as nx
+
+from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 
 
-class NeuralODE(Model):
+class MachineLearningModel(Model):
+    def __init__(self, modelled_gene_labels):
+        super().__init__(modelled_gene_labels)
+
+    @abstractmethod
+    def get_inferred_network(self) -> RegulatoryNetwork:
+        """Extract the inferred network"""
+        pass
+
+
+class NeuralODE(MachineLearningModel):
     def __init__(self, modelled_gene_labels):
         super().__init__(modelled_gene_labels)
         # Create a fully connected neural network
@@ -16,8 +30,11 @@ class NeuralODE(Model):
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         return self.neural_net(state)
 
+    def get_inferred_network(self) -> RegulatoryNetwork:
+        raise NotImplementedError
 
-class CellBox(Model):
+
+class CellBox(MachineLearningModel):
     def __init__(self, modelled_gene_labels, phi=torch.tanh):
         super().__init__(modelled_gene_labels)
         self.W = nn.Parameter(
@@ -69,3 +86,21 @@ class CellBox(Model):
     def _set_epsilon_to_zero(self):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
         self.epsilon = nn.Parameter(torch.tensor(1e-6, dtype=torch.float32))
+
+    def get_inferred_network(self, threshold: float = 0.1) -> RegulatoryNetwork:
+        """Return the inferred network
+
+        Args:
+            threshold (float, optional): Cutoff to determine from what interaction strength we want to predict an edge. Defaults to 0.1.
+
+        Returns:
+            RegulatoryNetwork
+        """
+        w_masked = self.get_w_masked().detach().numpy()
+        G = nx.DiGraph()
+        for i, gene_to in enumerate(self.modelled_gene_labels):
+            for j, gene_from in enumerate(self.modelled_gene_labels):
+                weight = w_masked[i, j]
+                if abs(weight) > threshold:
+                    G.add_edge(gene_from, gene_to, weight=weight)
+        return RegulatoryNetwork(G)

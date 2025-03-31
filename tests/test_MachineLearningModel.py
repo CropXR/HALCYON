@@ -25,6 +25,21 @@ def test_cellbox_forward():
     )
 
 
+def test_cellbox_infer_edges():
+    gene_labels = ["a", "b", "c"]
+    my_cellbox = CellBox(gene_labels)
+    my_cellbox._set_weight_matrix_to_ones()
+    my_cellbox.knockout_interaction("a", "c")
+    out_network = my_cellbox.get_inferred_network()
+    assert set(out_network.get_all_interactions(with_data=False)) == {
+        ("b", "c"),
+        ("b", "a"),
+        ("c", "a"),
+        ("a", "b"),
+        ("c", "b"),
+    }
+
+
 def test_cellbox_decay():
     gene_labels = ["a", "b", "c"]
     my_cellbox = CellBox(gene_labels)

@@ -93,7 +93,7 @@ class Trainer:
             time_points_tensor (torch.Tensor | None, optional): If specified, evaluate ODE integration at exactly these time points. Defaults to None.
 
         Returns:
-            torch.Tensor: Outputs of genes at given time points
+            torch.Tensor: Tensor with genes as rows and time points as columns.
         """
 
         if initial_states_tensor is None:
