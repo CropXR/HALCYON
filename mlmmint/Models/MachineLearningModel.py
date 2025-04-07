@@ -24,7 +24,7 @@ class CellBox(Model):
             torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32)
         )
         self.decay_params = nn.Parameter(torch.zeros(self.n_genes))
-        self.epsilon = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))
+        self.epsilon = nn.Parameter(torch.ones(self.n_genes, dtype=torch.float32))
         self.phi = phi
         # Ensure no self-interactions (stored as non-parameters (buffer) because
         # we'll always be masking these and doesnt need to be optimised)
@@ -68,4 +68,6 @@ class CellBox(Model):
 
     def _set_epsilon_to_zero(self):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
-        self.epsilon = nn.Parameter(torch.tensor(1e-6, dtype=torch.float32))
+        self.epsilon = nn.Parameter(
+            torch.full_like(self.epsilon, 1e-6, dtype=torch.float32)
+        )
