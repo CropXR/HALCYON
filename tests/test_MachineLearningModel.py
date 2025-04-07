@@ -30,7 +30,7 @@ def test_cellbox_infer_edges():
     my_cellbox = CellBox(gene_labels)
     my_cellbox._set_weight_matrix_to_ones()
     my_cellbox.knockout_interaction("a", "c")
-    out_network = my_cellbox.get_inferred_network()
+    out_network = my_cellbox.get_inferred_network(threshold=0.1)
     assert set(out_network.get_all_interactions(with_data=False)) == {
         ("b", "c"),
         ("b", "a"),

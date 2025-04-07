@@ -34,10 +34,11 @@ class Evaluator:
     def auroc_score_edge_detection(
         self, fitted_model: HybridModel | MachineLearningModel
     ):
-        """_summary_
+        """Calculate area under the receiver operator curve for network inference (edge prediction)
 
         Args:
-            fitted_model (HybridModel | MachineLearningModel): _description_
+            fitted_model (HybridModel | MachineLearningModel): Model that has been fitted and can infer network.
+            I.e. it has the .get_inferred_network method that can be called with threshold=None to return raw prediction values.
         """
         inferred_network = fitted_model.get_inferred_network(threshold=None)
         gt_edges_set = set(self.gt_network.get_all_interactions(with_data=False))

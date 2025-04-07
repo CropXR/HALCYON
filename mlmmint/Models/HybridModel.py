@@ -54,7 +54,7 @@ class HybridModel(Model):
         mm_output = self.mm.forward(t, mm_input)
         return mm_output
 
-    def get_inferred_network(self) -> RegulatoryNetwork:
+    def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         """Get the inferred network
 
         Returns:
@@ -63,4 +63,4 @@ class HybridModel(Model):
         logging.warning(
             "Now just use the ML-model network inference, but later on combine this with MM?"
         )
-        return self.ml.get_inferred_network()
+        return self.ml.get_inferred_network(threshold=threshold)

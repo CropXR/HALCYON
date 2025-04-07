@@ -12,7 +12,7 @@ class MachineLearningModel(Model):
         super().__init__(modelled_gene_labels)
 
     @abstractmethod
-    def get_inferred_network(self) -> RegulatoryNetwork:
+    def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         """Extract the inferred network"""
         pass
 
@@ -30,7 +30,7 @@ class NeuralODE(MachineLearningModel):
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         return self.neural_net(state)
 
-    def get_inferred_network(self) -> RegulatoryNetwork:
+    def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
 
 
@@ -87,12 +87,12 @@ class CellBox(MachineLearningModel):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
         self.epsilon = nn.Parameter(torch.tensor(1e-6, dtype=torch.float32))
 
-    def get_inferred_network(self, threshold: float | None = 0.1) -> RegulatoryNetwork:
+    def get_inferred_network(self, threshold: float | None = None) -> RegulatoryNetwork:
         """Return the inferred network
 
         Args:
             threshold (float, optional): Cutoff to determine from what interaction strength we want
-            to predict an edge. Defaults to 0.1. If set to None, return all edges and their weights.
+            to predict an edge. Defaults to None. If set to a float, return only edges with weights that have an absolute value larger than this cutoff.
 
         Returns:
             RegulatoryNetwork
