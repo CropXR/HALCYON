@@ -87,11 +87,12 @@ class CellBox(MachineLearningModel):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
         self.epsilon = nn.Parameter(torch.tensor(1e-6, dtype=torch.float32))
 
-    def get_inferred_network(self, threshold: float = 0.1) -> RegulatoryNetwork:
+    def get_inferred_network(self, threshold: float | None = 0.1) -> RegulatoryNetwork:
         """Return the inferred network
 
         Args:
-            threshold (float, optional): Cutoff to determine from what interaction strength we want to predict an edge. Defaults to 0.1.
+            threshold (float, optional): Cutoff to determine from what interaction strength we want
+            to predict an edge. Defaults to 0.1. If set to None, return all edges and their weights.
 
         Returns:
             RegulatoryNetwork
@@ -101,6 +102,6 @@ class CellBox(MachineLearningModel):
         for i, gene_to in enumerate(self.modelled_gene_labels):
             for j, gene_from in enumerate(self.modelled_gene_labels):
                 weight = w_masked[i, j]
-                if abs(weight) > threshold:
-                    G.add_edge(gene_from, gene_to, weight=weight)
+                if threshold is None or abs(weight) > threshold:
+                    G.add_edge(gene_from, gene_to, influence=weight)
         return RegulatoryNetwork(G)

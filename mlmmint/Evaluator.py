@@ -1,3 +1,6 @@
+from sklearn.metrics import roc_auc_score
+
+
 from mlmmint.ExpressionData import ExpressionData
 from mlmmint.Models.HybridModel import HybridModel
 from mlmmint.Models.MachineLearningModel import MachineLearningModel
@@ -27,3 +30,29 @@ class Evaluator:
         union_edges = inferred_edges_set | gt_edges_set
         iou = len(intersection_edges) / len(union_edges)
         return iou
+
+    def auroc_score_edge_detection(
+        self, fitted_model: HybridModel | MachineLearningModel
+    ):
+        """_summary_
+
+        Args:
+            fitted_model (HybridModel | MachineLearningModel): _description_
+        """
+        inferred_network = fitted_model.get_inferred_network(threshold=None)
+        gt_edges_set = set(self.gt_network.get_all_interactions(with_data=False))
+
+        y_true = []
+        y_pred = []
+        for from_gene, to_gene, edge_dict in inferred_network.get_all_interactions():
+            if (from_gene, to_gene) in gt_edges_set:
+                y_true.append(1)
+            else:
+                y_true.append(0)
+            y_pred.append(edge_dict["influence"])
+
+        return roc_auc_score(y_true, y_pred)
+
+        # RocCurveDisplay.from_predictions
+
+        # PrecisionRecallDisplay.from_predictions()
