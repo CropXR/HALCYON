@@ -1,5 +1,6 @@
 import logging
 from matplotlib import pyplot as plt
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
@@ -66,13 +67,40 @@ class Trainer:
 
     def plot_fit_vs_real(self):
         """Plot fitted model vs measured data"""
-        fig, axs = plt.subplots(1, 2, sharey=True)
-        axs[0].set_title("Measured")
-        axs[1].set_title("Model")
-        self.dataset.plot_expressions(axis=axs[0])
+        if len(self.dataset) == 0:
+            raise ValueError("Dataset is empty.")
 
-        model_expression_outputs = self.model_output_as_expression_data_object()
-        model_expression_outputs.plot_expressions(axis=axs[1])
+        n = len(self.dataset)
+        fig, axs = plt.subplots(n, 2, sharey=True, figsize=(10, 4 * n))
+        if n == 1:
+            axs = np.expand_dims(
+                axs, axis=0
+            )  # ensure consistent indexing for single row
+
+        timepoints = self.dataset._get_time_points()
+        gene_labels = self.dataset.genes
+        for i in range(n):
+            env, expressions = self.dataset[i]
+            # Plot ground truth
+            df_real = pd.DataFrame(
+                expressions.detach().numpy(), columns=timepoints, index=gene_labels
+            )
+            ExpressionData(df_real).plot_expressions(axis=axs[i, 0])
+            axs[i, 0].set_title(f"Measured (Sample {i})")
+
+            # Simulate and plot prediction
+            self.model.set_conditions(env.unsqueeze(0))
+            output = self.integrate_model(
+                initial_states_tensor=expressions[:, 0].unsqueeze(0)
+            )
+            df_pred = pd.DataFrame(
+                output.squeeze(0).detach().numpy(),
+                columns=timepoints,
+                index=gene_labels,
+            )
+            ExpressionData(df_pred).plot_expressions(axis=axs[i, 1])
+            axs[i, 1].set_title(f"Model (Sample {i})")
+
         plt.tight_layout()
         return fig, axs
 

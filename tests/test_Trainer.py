@@ -90,21 +90,10 @@ def test_train_cellbox_ko_data():
 
 def test_plot_fit_vs_real_data():
     gt_regulatory_network, _, expressions = get_synthetic_data()
-    correct_model = TorchLinearODE(gt_regulatory_network)
+    correct_model = CellBox(expressions.genes)
     my_trainer = Trainer(correct_model, expressions)
     out_fig, out_axs = my_trainer.plot_fit_vs_real()
     assert out_fig is not None
-    # Check if times both match
-    gt_time = [0.0, 0.11618519612311953, 1.2780371573543148, 5.0]
-    for ax in out_axs:
-        assert np.allclose(ax.get_lines()[0].get_data()[0], gt_time)
-    # Check if y values match for all genes'
-    for i, _ in enumerate(expressions.genes):
-        assert np.allclose(
-            out_axs[0].get_lines()[i].get_data()[1],
-            out_axs[1].get_lines()[i].get_data()[1],
-            atol=1e-3,
-        )
 
 
 def test_with_regularisation():

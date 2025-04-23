@@ -63,7 +63,7 @@ class NeuralODE(MachineLearningModel):
 
 
 class CellBox(MachineLearningModel):
-    def __init__(self, modelled_gene_labels, phi=torch.tanh):
+    def __init__(self, modelled_gene_labels: list[str], phi=torch.tanh):
         super().__init__(modelled_gene_labels)
         self.W = nn.Parameter(
             torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32)
@@ -91,7 +91,7 @@ class CellBox(MachineLearningModel):
         self.register_buffer("w_mask", new_w_masked)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        # Batch matrix multiplication: [B, G, G] @ [B, G, 1] -> [B, G]
+        # Batch matrix multiplication: w_masked [B, G, G] @ state [B, G, 1] -> change_in_state [B, G]
         input_term = torch.bmm(
             self.w_masked,
             state.unsqueeze(2),  # type: ignore
