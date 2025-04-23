@@ -1,4 +1,5 @@
 from typing import List
+from typing_extensions import Self
 import networkx as nx
 
 
@@ -6,7 +7,7 @@ class RegulatoryNetwork:
     def __init__(self, network: nx.DiGraph):
         self._graph = network
 
-    def get_ingoing_interactions(self, gene_name: str):
+    def get_ingoing_interactions(self, gene_name: str) -> List:
         """Get interactions that influence a certain gene
 
         Args:
@@ -17,7 +18,7 @@ class RegulatoryNetwork:
         """
         return list(self._graph.in_edges(gene_name, data=True))
 
-    def get_all_interactions(self, with_data: bool = True):
+    def get_all_interactions(self, with_data: bool = True) -> List:
         """Return all interaction (edges) in the network.
 
         Args:
@@ -48,7 +49,7 @@ class RegulatoryNetwork:
         self._graph.add_nodes_from(edge)
         self._graph.add_edge(*edge, **attributes)
 
-    def select_subset(self, nodes: List[str]):
+    def select_subset(self, nodes: List[str]) -> Self:
         """Return only subset of the network.
 
         Args:
@@ -57,4 +58,4 @@ class RegulatoryNetwork:
         Returns:
             subset_network (RegulatoryNetwork): Network that contains only the specified nodes
         """
-        return RegulatoryNetwork(self._graph.subgraph(nodes).copy())
+        return RegulatoryNetwork(self._graph.subgraph(nodes).copy())  # type: ignore

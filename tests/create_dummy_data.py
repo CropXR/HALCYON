@@ -1,7 +1,10 @@
+from pathlib import Path
 from typing import Tuple
 import networkx as nx
 import pandas as pd
-from mlmmint.ExpressionData import ExpressionData
+from mlmmint.Datasets.ExperimentCondition import ExperimentCondition
+from mlmmint.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from mlmmint.Datasets.ExpressionData import ExpressionData
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from scipy.integrate import solve_ivp
 
@@ -31,10 +34,11 @@ def create_synthetic_gene_network() -> Tuple[RegulatoryNetwork, dict]:
 
 
 # Create synthetic gene expression time series using ODEs
-def create_synthetic_expressions() -> ExpressionData:
+def create_synthetic_expressions() -> ExpressionDataWithConditions:
     interactions = get_interactions()
     initial_state = [0.1, 0.2, 0.3, 0.4, 0.5]
     timespan = [0, 5]
+    genes = ("G1", "G2", "G3", "G4", "G5")
 
     def dy_dt(t, state):
         return [
@@ -46,11 +50,26 @@ def create_synthetic_expressions() -> ExpressionData:
         ]
 
     y_out = solve_ivp(dy_dt, timespan, initial_state, method="RK45")
-    df = pd.DataFrame(y_out.y, index=["G1", "G2", "G3", "G4", "G5"], columns=y_out.t)
-    return ExpressionData(df)
+    df = pd.DataFrame(y_out.y, index=genes, columns=y_out.t)
+    condition = ExperimentCondition(
+        all_genes=genes,
+        all_environments=("test1", "test2"),
+        ko_gene=None,
+        environment=None,
+    )
+    return ExpressionDataWithConditions({condition: ExpressionData(df)})
 
 
 def get_synthetic_data():
     regulatory_network, interactions = create_synthetic_gene_network()
     expressions = create_synthetic_expressions()
     return regulatory_network, interactions, expressions
+
+
+def create_ko_from_sample_data() -> ExpressionDataWithConditions:
+    input_path = Path(
+        "tests/grnsimdummydata/InSilicoSize10-Yeast1_knockout_timeseries.tsv"
+    )
+    return ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+        input_path
+    )

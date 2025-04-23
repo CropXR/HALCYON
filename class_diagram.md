@@ -28,6 +28,8 @@ classDiagram
     class nn.Module
     class MachineLearningModel
     class MechanisticModel
+    class ExperimentCondition
+    class ExpressionDataWithConditions
     class ExpressionData{
         expressions : DataFrame
         normalise()
@@ -53,7 +55,6 @@ classDiagram
     note for MechanisticModel "Any class that is informed 
     by an underlying network structure"
 
-
     note for Simulator "Can simulate with certain condition 
     and genes knocked out"
 
@@ -74,9 +75,14 @@ classDiagram
 
     Trainer ..> Evaluator: Uses output
 
-    ExpressionData --> Trainer
+    ExpressionData --* ExpressionDataWithConditions
+    ExperimentCondition -- ExpressionData : Linked to 
+    ExpressionDataWithConditions --> Trainer
+    ExperimentCondition --* ExpressionDataWithConditions
+    ExpressionDataWithConditions --|> torch.DataSet
 
     Simulator ..> ExpressionData: Produces
+    Simulator ..> ExperimentCondition: Produces
     Simulator ..> RegulatoryNetwork: Produces
 
 ```

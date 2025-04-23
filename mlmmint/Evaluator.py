@@ -1,14 +1,19 @@
 from sklearn.metrics import roc_auc_score
 
 
-from mlmmint.ExpressionData import ExpressionData
+from mlmmint.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from mlmmint.Datasets.ExpressionData import ExpressionData
 from mlmmint.Models.HybridModel import HybridModel
 from mlmmint.Models.MachineLearningModel import MachineLearningModel
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 
 
 class Evaluator:
-    def __init__(self, gt_network: RegulatoryNetwork, gt_expressions: ExpressionData):
+    def __init__(
+        self,
+        gt_network: RegulatoryNetwork,
+        gt_expressions: ExpressionDataWithConditions,
+    ):
         self.gt_network = gt_network
         self.gt_expressions = gt_expressions
 

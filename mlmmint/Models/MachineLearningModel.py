@@ -1,3 +1,4 @@
+import logging
 import torch
 from torch import nn
 from mlmmint.Models.Model import Model
@@ -16,22 +17,49 @@ class MachineLearningModel(Model):
         """Extract the inferred network"""
         pass
 
+    def parse_env_data(self, environment_data) -> tuple[torch.Tensor, torch.Tensor]:
+        knockout_flags = environment_data[:, : self.n_genes]
+        env_flags = environment_data[:, self.n_genes :]
+        # Build batch-specific masks: if gene j is knocked out in batch b,
+        # we zero out all incoming connections to gene j
+        # i.e., we zero row j of the weight matrix in that batch
+        knockout_masks = 1.0 - knockout_flags.unsqueeze(2)  # [B, G, 1]
+        return knockout_masks, env_flags
+
 
 class NeuralODE(MachineLearningModel):
-    def __init__(self, modelled_gene_labels):
+    def __init__(
+        self, modelled_gene_labels: list[str], condition_names: tuple[str, ...]
+    ):
         super().__init__(modelled_gene_labels)
+        self.n_conditions = len(condition_names)
         # Create a fully connected neural network
         self.neural_net = nn.Sequential(
-            nn.Linear(self.n_genes, 32),
+            nn.Linear(self.n_genes + self.n_conditions, 32),
             nn.ReLU(),
             nn.Linear(32, self.n_genes),
         )
 
+    def set_conditions(self, env_data):
+        self.reset_conditions()
+        assert (
+            env_data.shape[1] == self.n_genes + self.n_conditions
+        ), "Environment data should be of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions"
+        # Knockouts should be used as mask after the forwards pass
+        ko_masks, env_flags = self.parse_env_data(env_data)
+        self.env_flags = env_flags
+        # Environments should be appended to the forward pass but not returned (Because they do not change over time)
+        self.register_buffer("ko_masks", ko_masks)
+
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        return self.neural_net(state)
+        input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
+        return self.neural_net(input) * self.ko_masks.squeeze(2)  # type: ignore
 
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
+
+    def reset_conditions(self):
+        self.register_buffer("ko_masks", torch.ones(self.n_genes))  # type: ignore
 
 
 class CellBox(MachineLearningModel):
@@ -45,35 +73,33 @@ class CellBox(MachineLearningModel):
         self.phi = phi
         # Ensure no self-interactions (stored as non-parameters (buffer) because
         # we'll always be masking these and doesnt need to be optimised)
-        self.register_buffer(
-            "mask_self_interaction", ~torch.eye(self.n_genes, dtype=torch.bool)
-        )
-        self.register_buffer(
-            "mask_knockout_interaction", torch.ones_like(self.W, dtype=torch.bool)
-        )
+        self.reset_conditions()
 
-    def knockout_interaction(self, from_gene: str, to_gene: str):
-        """Knock out the directed interaction from gene <from_gene> to gene <to_gene>"""
-        assert from_gene in self.modelled_gene_labels
-        assert to_gene in self.modelled_gene_labels
-        new_mask = self.mask_knockout_interaction.clone()  # type: ignore
-        new_mask[self.gene_index[to_gene], self.gene_index[from_gene]] = (
-            False  # Knockout the interaction
-        )
-        self.register_buffer("mask_knockout_interaction", new_mask)
+    @property
+    def w_masked(self) -> torch.Tensor:
+        return self.W * self.w_mask  # type: ignore
 
-    def get_w_masked(self) -> torch.Tensor:
-        """Get the weight matrix, but mask e.g. the self interactions and knockouts (if they are specified)"""
-        w_masked = self.W * self.mask_self_interaction * self.mask_knockout_interaction  # type: ignore
-        return w_masked
+    def reset_conditions(self):
+        mask_self_interaction = ~torch.eye(self.n_genes, dtype=torch.bool)
+        self.register_buffer("w_mask", mask_self_interaction)
+
+    def set_conditions(self, environment_data: torch.Tensor):
+        self.reset_conditions()
+        knockout_masks, _ = self.parse_env_data(environment_data)
+        new_w_masked = self.w_masked.unsqueeze(0) * knockout_masks  # [B, G, G]
+        assert not torch.isnan(new_w_masked).any(), "NaN in w_masked"
+        self.register_buffer("w_mask", new_w_masked)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        w_masked = self.get_w_masked()
+        # Batch matrix multiplication: [B, G, G] @ [B, G, 1] -> [B, G]
+        input_term = torch.bmm(
+            self.w_masked,
+            state.unsqueeze(2),  # type: ignore
+        ).squeeze(2)
         # Decay always has to be negative, hence the softplus
-        return (
-            self.epsilon * self.phi(w_masked @ state)
-            - nn.functional.softplus(self.decay_params, beta=10) * state
-        )
+        decay = nn.functional.softplus(self.decay_params, beta=10)
+        gene_expression_changes = self.epsilon * self.phi(input_term) - decay * state
+        return gene_expression_changes
 
     def _set_weight_matrix_to_ones(self):
         """For unit testing mainly"""
@@ -97,7 +123,7 @@ class CellBox(MachineLearningModel):
         Returns:
             RegulatoryNetwork
         """
-        w_masked = self.get_w_masked().detach().numpy()
+        w_masked = self.w_masked.detach().numpy()
         G = nx.DiGraph()
         for i, gene_to in enumerate(self.modelled_gene_labels):
             for j, gene_from in enumerate(self.modelled_gene_labels):

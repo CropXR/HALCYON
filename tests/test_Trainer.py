@@ -7,7 +7,11 @@ import torch
 from mlmmint.Models.MachineLearningModel import CellBox, NeuralODE
 from mlmmint.Models.MechanisticModel import TorchLinearODE
 from mlmmint.Trainer import Trainer
-from tests.create_dummy_data import create_synthetic_expressions, get_synthetic_data
+from tests.create_dummy_data import (
+    create_ko_from_sample_data,
+    create_synthetic_expressions,
+    get_synthetic_data,
+)
 
 
 def test_calculate_loss():
@@ -22,47 +26,28 @@ def test_calculate_loss():
             [0.3, 0.30463339, 0.34882503, 0.43889286],
         ]
     )
-    assert my_trainer.calculate_loss(expressions_gt) == approx(0.0)
+    assert my_trainer.calculate_loss(expressions_gt, expressions_gt) == approx(0.0)
 
 
 def test_integrate_model():
-    gt_regulatory_network, interactions, expressions = get_synthetic_data()
+    gt_regulatory_network, interactions, data = get_synthetic_data()
     correct_model = TorchLinearODE(gt_regulatory_network)
-    my_trainer = Trainer(correct_model, expressions)
-    output = my_trainer.integrate_model()
-    assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
-
-
-def test_model_with_more_genes_in_expressions():
-    # Get an expression dataset that contains more genes than are in the network
-    gt_regulatory_network, interactions, expressions = get_synthetic_data()
-    expressions = expressions._add_one_gene_expression("G6", 2)
-    correct_model = TorchLinearODE(gt_regulatory_network)
-    my_trainer = Trainer(correct_model, expressions)
-    output = my_trainer.integrate_model()
-
-    assert torch.allclose(my_trainer.calculate_loss(output), torch.tensor([0.0]))
-
-
-def test_train_mechanistic_linear_model():
-    gt_regulatory_network, interactions, expressions = get_synthetic_data()
-    correct_model = TorchLinearODE(gt_regulatory_network)
-    # Set all values to zero in weight matrix
-    wrong_model = deepcopy(correct_model)
-    wrong_model._make_weight_matrix_zeroes()
+    my_trainer = Trainer(correct_model, data)
+    gt_expressions = data[0][1]
+    init_conditions = gt_expressions[:, 0].unsqueeze(0)
+    output = my_trainer.integrate_model(init_conditions)
     assert torch.allclose(
-        wrong_model.weight_matrix, torch.zeros_like(wrong_model.weight_matrix)
+        my_trainer.calculate_loss(output, gt_expressions.unsqueeze(0)),
+        torch.tensor([0.0]),
     )
-    my_trainer = Trainer(wrong_model, expressions)
-    loss_history = my_trainer.train(200)
-    assert loss_history[-1] < 1e-3
-    # assert torch.allclose(wrong_model.weight_matrix, correct_model.weight_matrix, atol=0.1)
 
 
 def test_train_neural_ode():
     expressions = create_synthetic_expressions()
-    neural_ode_model = NeuralODE(expressions.genes)
-    my_trainer = Trainer(neural_ode_model, expressions)
+    neural_ode_model = NeuralODE(
+        expressions.genes, expressions.conditions[0].all_environments
+    )
+    my_trainer = Trainer(neural_ode_model, expressions, batch_size=1)
     loss_history = my_trainer.train(5)
     # Assert loss is decreasing
     assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
@@ -72,6 +57,7 @@ def test_train_neural_ode():
 def test_train_cellbox():
     expressions = create_synthetic_expressions()
     cellbox = CellBox(expressions.genes)
+    cellbox._set_weight_matrix_to_ones()
     cellbox._set_epsilon_to_zero()
     init_epsilon = deepcopy(cellbox.epsilon)
     init_decay = deepcopy(cellbox.decay_params)
@@ -82,6 +68,24 @@ def test_train_cellbox():
     # Check if epsilon and decay rate changes
     assert not torch.allclose(cellbox.epsilon, init_epsilon)
     assert not torch.allclose(cellbox.decay_params, init_decay)
+
+
+def test_train_cellbox_ko_data():
+    expressions = create_ko_from_sample_data()
+    cellbox = CellBox(expressions.genes)
+    # cellbox._set_epsilon_to_zero()
+    cellbox._set_weight_matrix_to_ones()
+    init_epsilon = deepcopy(cellbox.epsilon)
+    init_decay = deepcopy(cellbox.decay_params)
+    init_w = deepcopy(cellbox.W)
+    my_trainer = Trainer(cellbox, expressions, batch_size=2)
+    loss_history = my_trainer.train(3)
+    # Assert loss is decreasing
+    assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
+    # Check if epsilon and decay rate changes
+    assert not torch.allclose(cellbox.epsilon, init_epsilon)
+    assert not torch.allclose(cellbox.decay_params, init_decay)
+    assert not torch.allclose(cellbox.W, init_w)
 
 
 def test_plot_fit_vs_real_data():

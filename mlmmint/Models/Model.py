@@ -22,13 +22,18 @@ class Model(ABC, nn.Module):
         """Get the derivative at a given time point."""
         pass
 
+    @abstractmethod
+    def set_conditions(self, conditions: torch.Tensor) -> None:
+        """Set the environmental conditions."""
+        pass
+
     def integrate(
         self,
         initial_state: torch.Tensor,
         t_eval: torch.Tensor,
         stress=None,
     ) -> torch.Tensor:
-        """Solve the system over time. Returns tensor with rows as genes and time points as columns."""
+        """Solve the system over time. Provide initial state in form of [BatchxGenes]. Returns tensor with [BatchxGenesxTime]."""
         output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
-        # Transposed for some reason
-        return output.T
+        # Permute dimensions for some reason
+        return output.permute(1, 2, 0)

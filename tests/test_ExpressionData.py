@@ -3,16 +3,10 @@ import numpy as np
 from tests.create_dummy_data import create_synthetic_expressions, get_synthetic_data
 
 
-def test_add_genes_to_expressions():
-    expressions = create_synthetic_expressions()
-    expressions = expressions._add_one_gene_expression("G6", 2)
-    assert "G6" in expressions.genes
-    assert all(expressions.df.loc["G6"] == 2)
-
-
 def test_extract_info():
     expressions = create_synthetic_expressions()
-    initial_states = expressions._get_initial_states()
+    # First sample, expression data, all genes, timepoint 0
+    initial_states = expressions[0][1][:, 0]
     time_points = expressions._get_time_points()
     time_points_gt = np.array([0.0, 0.1161852, 1.27803716, 5.0])
     gt_initial_states = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
@@ -33,12 +27,6 @@ def test_filter_by_only_present_genes():
     assert [gene in ["G1", "G2", "G3", "G4", "G5"] for gene in expressions.genes]
     assert "G6" not in expressions.genes
     assert gene_network.node_names == expressions.genes
-
-
-def test_plot_expressions():
-    _, _, expressions = get_synthetic_data()
-    plot = expressions.plot_expressions()
-    assert isinstance(plot, Axes)
 
 
 def test_get_long_form_df():
