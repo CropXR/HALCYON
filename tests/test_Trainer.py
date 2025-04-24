@@ -19,7 +19,7 @@ def test_calculate_loss():
     mock_model = MagicMock()
     mock_model.modelled_gene_labels.return_value = ["G1", "G3"]
     mock_model.parameters.return_value = [torch.randn(2, 2), torch.randn(3, 3)]
-    my_trainer = Trainer(model=mock_model, expressions=expressions)  # type: ignore
+    my_trainer = Trainer(model=mock_model, dataset=expressions)  # type: ignore
     expressions_gt = torch.tensor(
         [
             [0.1, 0.11151179, 0.21647672, 0.51517834],

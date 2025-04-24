@@ -15,7 +15,7 @@ class Trainer:
     def __init__(
         self,
         model: Model,
-        expressions: ExpressionDataWithConditions,
+        dataset: ExpressionDataWithConditions,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
         loss_fn: Callable = mse_loss,
@@ -24,7 +24,7 @@ class Trainer:
         self.model = model
         self.loss_fn = loss_fn
         # Ensure that expressions match the order of the modelled genes
-        self.dataset = expressions
+        self.dataset = dataset
         self.dataset.match_genes_to_list(model.modelled_gene_labels)
         self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
         if optimizer_kwargs is None:
@@ -103,16 +103,6 @@ class Trainer:
 
         plt.tight_layout()
         return fig, axs
-
-    def model_output_as_expression_data_object(self) -> ExpressionData:
-        """Integrate the model and return the output as ExpressionData"""
-        model_outputs = self.integrate_model(self.get_time_points())
-        model_output_df = pd.DataFrame(
-            model_outputs.detach().numpy(),
-            columns=self.dataset._get_time_points(),
-            index=self.dataset.genes,
-        )
-        return ExpressionData(model_output_df)
 
     def integrate_model(
         self,
