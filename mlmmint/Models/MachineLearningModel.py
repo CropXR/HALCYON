@@ -17,13 +17,21 @@ class MachineLearningModel(Model):
         """Extract the inferred network"""
         pass
 
-    def parse_env_data(self, environment_data) -> tuple[torch.Tensor, torch.Tensor]:
+    def parse_env_data(
+        self, environment_data: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Given the environment data as a tensor, split that into the knockout masks and the environment flags.
+
+        Can be used by children classes to proceed with these KO and env flags.
+        Args:
+            environment_data (torch.Tensor): tensor of [n_batch, n_genes + n_conditions].
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: tuple of knockout masks and environment flags.
+        """
         knockout_flags = environment_data[:, : self.n_genes]
         env_flags = environment_data[:, self.n_genes :]
-        # Build batch-specific masks: if gene j is knocked out in batch b,
-        # we zero out all incoming connections to gene j
-        # i.e., we zero row j of the weight matrix in that batch
-        knockout_masks = 1.0 - knockout_flags.unsqueeze(2)  # [B, G, 1]
+        knockout_masks = 1.0 - knockout_flags.unsqueeze(2)
         return knockout_masks, env_flags
 
 
@@ -31,6 +39,12 @@ class NeuralODE(MachineLearningModel):
     def __init__(
         self, modelled_gene_labels: list[str], condition_names: tuple[str, ...]
     ):
+        """Create neuralODE, i.e. a neural network that takes the gene expression and the environment as input and returns the change in gene expression.
+
+        Args:
+            modelled_gene_labels (list[str]): List of genes that the model models.
+            condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes for the neural network.
+        """
         super().__init__(modelled_gene_labels)
         self.n_conditions = len(condition_names)
         # Create a fully connected neural network
@@ -39,8 +53,15 @@ class NeuralODE(MachineLearningModel):
             nn.ReLU(),
             nn.Linear(32, self.n_genes),
         )
+        self.reset_conditions()
 
-    def set_conditions(self, env_data):
+    def set_conditions(self, env_data: torch.Tensor):
+        """Use the env_data tensor to set the condition (i.e. knockouts and environment flags) for the model.
+
+        On each forward pass the environment flags are used as input to the neural network, and the knockout masks are used to mask the output of the neural network.
+        Args:
+            env_data (torch.Tensor): Tensor of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions.
+        """
         self.reset_conditions()
         assert (
             env_data.shape[1] == self.n_genes + self.n_conditions
@@ -52,7 +73,7 @@ class NeuralODE(MachineLearningModel):
         self.register_buffer("ko_masks", ko_masks)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
+        input = torch.cat((state, self.env_flags), dim=1)
         return self.neural_net(input) * self.ko_masks.squeeze(2)  # type: ignore
 
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
@@ -64,6 +85,12 @@ class NeuralODE(MachineLearningModel):
 
 class CellBox(MachineLearningModel):
     def __init__(self, modelled_gene_labels: list[str], phi=torch.tanh):
+        """Create a cellbox model; a linear ODE with a nonlinear activation function.
+
+        Args:
+            modelled_gene_labels (list[str]): list of all modelled genes
+            phi: Activation function. Defaults to torch.tanh.
+        """
         super().__init__(modelled_gene_labels)
         self.W = nn.Parameter(
             torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32)
@@ -71,19 +98,26 @@ class CellBox(MachineLearningModel):
         self.decay_params = nn.Parameter(torch.zeros(self.n_genes))
         self.epsilon = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))
         self.phi = phi
-        # Ensure no self-interactions (stored as non-parameters (buffer) because
-        # we'll always be masking these and doesnt need to be optimised)
         self.reset_conditions()
 
     @property
     def w_masked(self) -> torch.Tensor:
+        """Return the weight matrix with the mask applied."""
         return self.W * self.w_mask  # type: ignore
 
     def reset_conditions(self):
+        """Reset the mask to the default values, i.e. no knockouts, only no self-interactions."""
         mask_self_interaction = ~torch.eye(self.n_genes, dtype=torch.bool)
         self.register_buffer("w_mask", mask_self_interaction)
 
     def set_conditions(self, environment_data: torch.Tensor):
+        """Set the conditions for the model. This is used to set the knockout masks for the ODE.
+
+        Currently the environment flags are not used.
+
+        Args:
+            environment_data (torch.Tensor): Environment data tensor.
+        """
         self.reset_conditions()
         knockout_masks, _ = self.parse_env_data(environment_data)
         new_w_masked = self.w_masked.unsqueeze(0) * knockout_masks  # [B, G, G]

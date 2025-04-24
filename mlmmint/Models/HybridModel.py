@@ -36,6 +36,15 @@ class HybridModel(Model):
         )
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """Perform forward pass
+
+        Args:
+            t (torch.Tensor): Time point to pass to forward pass
+            state (torch.Tensor): Gene expressions at that time point. Should be in shape [batch_size, n_genes].
+
+        Returns:
+            torch.Tensor: Change in expressions of genes. Again in shape [batch_size, n_genes].
+        """
         mm_output = self._get_mm_forward(t, state)
         ml_output = self._get_ml_forward(t, state)
 

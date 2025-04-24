@@ -65,7 +65,12 @@ class ExpressionDataWithConditions(Dataset):
         expression_data = self._ko_dict[experiment_condition]
         return experiment_condition.as_tensor(), expression_data.as_tensor()
 
-    def match_genes_to_list(self, genes: list):
+    def match_genes_to_list(self, genes: list[str]):
+        """Reorder the genes in the expression data to match the given list of genes.
+
+        Args:
+            genes (list): list of strings of genes that should be in the expression data, and the order in which the models expect them to be.
+        """
         for experiment_condition, expression_data in self._ko_dict.items():
             self._ko_dict[experiment_condition] = expression_data.match_genes_to_list(
                 genes

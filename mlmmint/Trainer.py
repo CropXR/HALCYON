@@ -21,6 +21,16 @@ class Trainer:
         loss_fn: Callable = mse_loss,
         batch_size: int = 1,
     ):
+        """Class to handle training of models
+
+        Args:
+            model (Model): Model to be trained
+            dataset (ExpressionDataWithConditions): Dataset that contains expressions and their associated conditions.
+            optimizer_fn (Callable, optional): Optimizer function. Defaults to torch.optim.Adam.
+            optimizer_kwargs (_type_, optional): Optimizer kwargs. Defaults to None.
+            loss_fn (Callable, optional): Loss functions. Defaults to mse_loss.
+            batch_size (int, optional): Batch size to use during training. Defaults to 1.
+        """
         self.model = model
         self.loss_fn = loss_fn
         # Ensure that expressions match the order of the modelled genes
@@ -39,7 +49,14 @@ class Trainer:
         return time_points_tensor
 
     def train(self, n_epochs: int) -> list[float]:
-        """Train the model"""
+        """Perform model training on batches.
+
+        Args:
+            n_epochs (int): Number of epochs to train
+
+        Returns:
+            list[float]: History of mean epoch loss during training.
+        """
         loss_history = []
         for epoch in range(n_epochs):
             epoch_loss = 0.0
