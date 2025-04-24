@@ -40,17 +40,17 @@ class HybridModel(Model):
         ml_output = self._get_ml_forward(t, state)
 
         output = torch.zeros_like(state)
-        output.index_add_(dim=0, index=self.mm_indices, source=mm_output)
-        output.index_add_(dim=0, index=self.ml_indices, source=ml_output)
+        output.index_add_(dim=1, index=self.mm_indices, source=mm_output)
+        output.index_add_(dim=1, index=self.ml_indices, source=ml_output)
         return output
 
     def _get_ml_forward(self, t, state) -> torch.Tensor:
-        ml_input = torch.index_select(state, dim=0, index=self.ml_indices)
+        ml_input = state[:, self.ml_indices]
         ml_output = self.ml.forward(t, ml_input)
         return ml_output
 
     def _get_mm_forward(self, t, state) -> torch.Tensor:
-        mm_input = torch.index_select(state, dim=0, index=self.mm_indices)
+        mm_input = state[:, self.mm_indices]
         mm_output = self.mm.forward(t, mm_input)
         return mm_output
 
@@ -64,3 +64,7 @@ class HybridModel(Model):
             "Now just use the ML-model network inference, but later on combine this with MM?"
         )
         return self.ml.get_inferred_network(threshold=threshold)
+
+    def set_conditions(self, env_conditions: torch.Tensor):
+        self.mm.set_conditions(env_conditions)
+        self.ml.set_conditions(env_conditions)

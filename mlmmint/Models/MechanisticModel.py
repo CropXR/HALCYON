@@ -1,3 +1,4 @@
+import logging
 import torch
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from mlmmint.Models.Model import Model
@@ -44,4 +45,5 @@ class TorchLinearODE(MechanisticModel):
         )
 
     def set_conditions(self, conditions):
-        raise NotImplementedError
+        logging.warning("Currently TorchLinearODE does not parse the conditions")
+        pass
