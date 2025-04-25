@@ -25,13 +25,17 @@ class Trainer:
         self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
         self.model.to(self.model.device)
 
-    def get_initial_states_and_time_points(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """Get inital states (i.e. the expression levels at time 0) and time points."""
+    def get_initial_states(self) -> torch.Tensor:
+        """Get inital states (i.e. the expression levels at time 0 for the expressiondata)."""
         initial_states = self.expressions._get_initial_states()
-        time_points = self.expressions._get_time_points()
         initial_states_tensor = torch.tensor(initial_states, dtype=torch.float32)
+        return initial_states_tensor
+
+    def get_time_points(self) -> torch.Tensor:
+        """Get time points at which the expressions were measured."""
+        time_points = self.expressions._get_time_points()
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
-        return initial_states_tensor, time_points_tensor
+        return time_points_tensor
 
     def train(self, n_iters: int):
         """Train the model for a given number of iterations using autograd."""
@@ -39,7 +43,7 @@ class Trainer:
         loss_history = []
         for itr in range(n_iters):
             self.optimizer.zero_grad()
-            output = self.integrate_model_with_init_and_t_from_expressions()
+            output = self.integrate_model()
             loss = self.calculate_loss(output)
             loss.backward()
             self.optimizer.step()
@@ -52,18 +56,8 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(self.expressions.as_tensor(), output)
 
-    def integrate_model_with_init_and_t_from_expressions(self) -> torch.Tensor:
-        """Integrate the model over time starting with same initial conditions as in the expression data and evaluating at the same time points as in the expressions data.
-
-        Returns tensor with genes as rows and time points as columns."""
-        initial_states_tensor, time_points_tensor = (
-            self.get_initial_states_and_time_points()
-        )
-        return self.integrate_model_with_custom_init_and_t(
-            initial_states_tensor, time_points_tensor
-        )
-
     def plot_fit_vs_real(self):
+        """Plot fitted model vs measured data"""
         fig, axs = plt.subplots(1, 2, sharey=True)
         axs[0].set_title("Measured")
         axs[1].set_title("Model")
@@ -75,7 +69,8 @@ class Trainer:
         return fig, axs
 
     def model_output_as_expression_data_object(self) -> ExpressionData:
-        model_outputs = self.integrate_model_with_init_and_t_from_expressions()
+        """Integrate the model and return the output as ExpressionData"""
+        model_outputs = self.integrate_model()
         model_output_df = pd.DataFrame(
             model_outputs.detach().numpy(),
             columns=self.expressions._get_time_points(),
@@ -83,12 +78,23 @@ class Trainer:
         )
         return ExpressionData(model_output_df)
 
-    def integrate_model_with_custom_init_and_t(
-        self, initial_states_tensor: torch.Tensor, time_points_tensor: torch.Tensor
+    def integrate_model(
+        self,
+        initial_states_tensor: torch.Tensor | None = None,
+        time_points_tensor: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        """Integrate the model over time for a user-specified initial condition and time points.
+        """Integrate the model over time
+
+        If no initital states or time points are provided, integrate the model over time starting with same initial conditions as in the
+        expression data and evaluating at the same time points as in the expressions data. Otherwise return data fo user-specified initial conditions and time points.
 
         Returns tensor with genes as rows and time points as columns."""
+
+        if initial_states_tensor is None:
+            initial_states_tensor = self.get_initial_states()
+        if time_points_tensor is None:
+            time_points_tensor = self.get_time_points()
+
         initial_states_tensor = initial_states_tensor.to(self.model.device)
         time_points_tensor = time_points_tensor.to(self.model.device)
 

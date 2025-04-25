@@ -10,6 +10,7 @@ class Model(ABC, nn.Module):
     def __init__(self, modelled_gene_labels: List[str]):
         super().__init__()
         self.modelled_gene_labels = sorted(modelled_gene_labels)
+        self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     @property
@@ -26,7 +27,6 @@ class Model(ABC, nn.Module):
         initial_state: torch.Tensor,
         t_eval: torch.Tensor,
         stress=None,
-        gene_ko=None,
     ) -> torch.Tensor:
         """Solve the system over time. Returns tensor with rows as genes and time points as columns."""
         output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore

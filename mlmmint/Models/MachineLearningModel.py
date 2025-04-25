@@ -15,3 +15,59 @@ class NeuralODE(Model):
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         return self.neural_net(state)
+
+
+class CellBox(Model):
+    def __init__(self, modelled_gene_labels, phi=torch.tanh):
+        super().__init__(modelled_gene_labels)
+        self.W = nn.Parameter(
+            torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32)
+        )
+        self.decay_params = nn.Parameter(torch.zeros(self.n_genes))
+        self.epsilon = nn.Parameter(torch.ones(self.n_genes, dtype=torch.float32))
+        self.phi = phi
+        # Ensure no self-interactions (stored as non-parameters (buffer) because
+        # we'll always be masking these and doesnt need to be optimised)
+        self.register_buffer(
+            "mask_self_interaction", ~torch.eye(self.n_genes, dtype=torch.bool)
+        )
+        self.register_buffer(
+            "mask_knockout_interaction", torch.ones_like(self.W, dtype=torch.bool)
+        )
+
+    def knockout_interaction(self, from_gene: str, to_gene: str):
+        """Knock out the directed interaction from gene <from_gene> to gene <to_gene>"""
+        assert from_gene in self.modelled_gene_labels
+        assert to_gene in self.modelled_gene_labels
+        new_mask = self.mask_knockout_interaction.clone()  # type: ignore
+        new_mask[self.gene_index[to_gene], self.gene_index[from_gene]] = (
+            False  # Knockout the interaction
+        )
+        self.register_buffer("mask_knockout_interaction", new_mask)
+
+    def get_w_masked(self) -> torch.Tensor:
+        """Get the weight matrix, but mask e.g. the self interactions and knockouts (if they are specified)"""
+        w_masked = self.W * self.mask_self_interaction * self.mask_knockout_interaction  # type: ignore
+        return w_masked
+
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        w_masked = self.get_w_masked()
+        # Decay always has to be negative, hence the softplus
+        return (
+            self.epsilon * self.phi(w_masked @ state)
+            - nn.functional.softplus(self.decay_params, beta=10) * state
+        )
+
+    def _set_weight_matrix_to_ones(self):
+        """For unit testing mainly"""
+        self.W = nn.Parameter(torch.ones_like(self.W))
+
+    def _set_decay_matrix_to_ones(self):
+        """For unit testing mainly"""
+        self.decay_params = nn.Parameter(torch.ones_like(self.decay_params))
+
+    def _set_epsilon_to_zero(self):
+        """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
+        self.epsilon = nn.Parameter(
+            torch.full_like(self.epsilon, 1e-6, dtype=torch.float32)
+        )
