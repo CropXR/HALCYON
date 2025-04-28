@@ -38,15 +38,11 @@ def test_hybrid_model_gene_split():
     ] == ["G1", "G4", "G5"]
     hybrid_model.set_conditions(env_conditions)
     assert torch.allclose(
-        hybrid_model._get_mm_forward(
-            0, torch.tensor(expressions[:, :, 0], dtype=torch.float32)
-        ),
+        hybrid_model._get_mm_forward(0, expressions[:, :, 0]),
         torch.tensor([0.1000, 0.0000, -0.0800]),
     )
 
-    one_forward = hybrid_model.forward(
-        t=torch.tensor([0]), state=torch.tensor(expressions[:, :, 0])
-    )
+    one_forward = hybrid_model.forward(t=torch.tensor([0]), state=expressions[:, :, 0])
     assert one_forward.shape == (1, 5)
 
     trainer = Trainer(hybrid_model, expression_dataset)
