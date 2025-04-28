@@ -33,6 +33,7 @@ class ExperimentCondition:
         return torch.cat((ko_tensor, env_tensor), dim=0)
 
     def return_with_changed_gene_list(self, new_all_genes: list[str]) -> Self:
+        """Get ExperimentCondition like current object, but with a different gene (order) list. Used when matching genes in experiment to order how the model expects the genes"""
         return ExperimentCondition(
             ko_gene=self.ko_gene,
             all_genes=tuple(new_all_genes),
