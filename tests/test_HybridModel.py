@@ -1,10 +1,10 @@
 from unittest.mock import MagicMock
 
 import torch
-from mlmmint.Models.HybridModel import HybridModel
-from mlmmint.Models.MachineLearningModel import NeuralODE
-from mlmmint.Models.MechanisticModel import TorchLinearODE
-from mlmmint.Trainer import Trainer
+from halcyon.Models.HybridModel import HybridModel
+from halcyon.Models.MachineLearningModel import NeuralODE
+from halcyon.Models.MechanisticModel import TorchLinearODE
+from halcyon.Trainer import Trainer
 from tests.create_dummy_data import get_synthetic_data
 
 

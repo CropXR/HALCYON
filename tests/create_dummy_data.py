@@ -2,10 +2,10 @@ from pathlib import Path
 from typing import Tuple
 import networkx as nx
 import pandas as pd
-from mlmmint.Datasets.ExperimentCondition import ExperimentCondition
-from mlmmint.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from mlmmint.Datasets.ExpressionData import ExpressionData
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.ExperimentCondition import ExperimentCondition
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from scipy.integrate import solve_ivp
 
 

@@ -1,5 +1,5 @@
 import torch
-from mlmmint.Models.MachineLearningModel import CellBox, NeuralODE
+from halcyon.Models.MachineLearningModel import CellBox, NeuralODE
 
 
 def test_create_neuralODE():
@@ -112,3 +112,10 @@ def test_cellbox_gene_knockout():
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
         * torch.tensor([1.0, 2.0, 3.0]),
     )
+
+
+def test_cellbox_random_weight_matrix():
+    gene_labels = ["a", "b", "c"]
+    my_cellbox = CellBox(gene_labels)
+    my_cellbox._set_weight_matrix_to_random()
+    assert not torch.allclose(torch.zeros_like(my_cellbox.W), my_cellbox.W, atol=0.1)

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import torch
+from typing_extensions import Self
 
 
 @dataclass(frozen=True)
@@ -30,3 +31,11 @@ class ExperimentCondition:
         if self.environment is not None:
             env_tensor[self.all_environments.index(self.environment)] = 1
         return torch.cat((ko_tensor, env_tensor), dim=0)
+
+    def return_with_changed_gene_list(self, new_all_genes: list[str]) -> Self:
+        return ExperimentCondition(
+            ko_gene=self.ko_gene,
+            all_genes=tuple(new_all_genes),
+            environment=self.environment,
+            all_environments=self.all_environments,
+        )  # type: ignore

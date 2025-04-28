@@ -4,9 +4,9 @@ import numpy as np
 from pytest import approx
 import torch
 
-from mlmmint.Models.MachineLearningModel import CellBox, NeuralODE
-from mlmmint.Models.MechanisticModel import TorchLinearODE
-from mlmmint.Trainer import Trainer
+from halcyon.Models.MachineLearningModel import CellBox, NeuralODE
+from halcyon.Models.MechanisticModel import TorchLinearODE
+from halcyon.Trainer import Trainer
 from tests.create_dummy_data import (
     create_ko_from_sample_data,
     create_synthetic_expressions,

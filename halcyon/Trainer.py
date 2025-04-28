@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
-from mlmmint.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from typing import Callable
-from mlmmint.Datasets.ExpressionData import ExpressionData
-from mlmmint.Models.Model import Model
+from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.Models.Model import Model
 from torch.nn.functional import mse_loss
 
 
@@ -73,7 +73,8 @@ class Trainer:
                 epoch_loss += loss.item()
             mean_epoch_loss = epoch_loss / len(self.dataloader)
             loss_history.append(mean_epoch_loss)
-            logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+            # logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+            print(f"Epoch {epoch}, loss {mean_epoch_loss}")
         return loss_history
 
     def calculate_loss(

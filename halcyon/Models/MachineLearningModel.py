@@ -1,11 +1,11 @@
 import logging
 import torch
 from torch import nn
-from mlmmint.Models.Model import Model
+from halcyon.Models.Model import Model
 from abc import abstractmethod
 import networkx as nx
 
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 class MachineLearningModel(Model):
@@ -135,6 +135,10 @@ class CellBox(MachineLearningModel):
         gene_expression_changes = self.epsilon * self.phi(input_term) - decay * state
         return gene_expression_changes
 
+    def _set_weight_matrix_to_random(self):
+        """Initialise the weight matrix to be sampled from N(0,1)"""
+        self.W = nn.Parameter(torch.randn_like(self.W))
+
     def _set_weight_matrix_to_ones(self):
         """For unit testing mainly"""
         self.W = nn.Parameter(torch.ones_like(self.W))
@@ -167,4 +171,3 @@ class CellBox(MachineLearningModel):
                 if threshold is None or abs(weight) > threshold:
                     G.add_edge(gene_from, gene_to, influence=weight)
         return RegulatoryNetwork(G)
-        

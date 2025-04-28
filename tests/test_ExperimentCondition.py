@@ -1,5 +1,5 @@
 import torch
-from mlmmint.Datasets.ExperimentCondition import ExperimentCondition
+from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 
 
 def test_create_ExperimentCondition():

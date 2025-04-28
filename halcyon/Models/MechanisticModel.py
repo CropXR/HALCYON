@@ -1,7 +1,7 @@
 import logging
 import torch
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
-from mlmmint.Models.Model import Model
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Models.Model import Model
 
 from torch import nn
 

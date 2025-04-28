@@ -1,10 +1,10 @@
 import logging
 import torch
 
-from mlmmint.Models.MachineLearningModel import MachineLearningModel
-from mlmmint.Models.MechanisticModel import MechanisticModel
-from mlmmint.Models.Model import Model
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Models.MachineLearningModel import MachineLearningModel
+from halcyon.Models.MechanisticModel import MechanisticModel
+from halcyon.Models.Model import Model
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 class HybridModel(Model):

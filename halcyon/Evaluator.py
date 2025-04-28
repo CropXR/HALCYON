@@ -1,11 +1,11 @@
 from sklearn.metrics import roc_auc_score
 
 
-from mlmmint.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from mlmmint.Datasets.ExpressionData import ExpressionData
-from mlmmint.Models.HybridModel import HybridModel
-from mlmmint.Models.MachineLearningModel import MachineLearningModel
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.Models.HybridModel import HybridModel
+from halcyon.Models.MachineLearningModel import MachineLearningModel
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 class Evaluator:
