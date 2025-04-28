@@ -86,9 +86,15 @@ class Trainer:
         """Integrate the model over time
 
         If no initital states or time points are provided, integrate the model over time starting with same initial conditions as in the
-        expression data and evaluating at the same time points as in the expressions data. Otherwise return data fo user-specified initial conditions and time points.
+        expression data and evaluating at the same time points as in the expressions data. Otherwise calculate data for user-specified initial conditions and time points.
 
-        Returns tensor with genes as rows and time points as columns."""
+        Args:
+            initial_states_tensor (torch.Tensor | None, optional): If specified, use these custom initial states. Defaults to None.
+            time_points_tensor (torch.Tensor | None, optional): If specified, evaluate ODE integration at exactly these time points. Defaults to None.
+
+        Returns:
+            torch.Tensor: Tensor with genes as rows and time points as columns.
+        """
 
         if initial_states_tensor is None:
             initial_states_tensor = self.get_initial_states()
