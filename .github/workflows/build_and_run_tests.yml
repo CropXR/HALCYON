@@ -23,4 +23,4 @@ jobs:
       - name: Test with Pytest
         shell: micromamba-shell {0}
         run: |
-          pytest --cov --cov-report term
+          pytest --cov --cov-report term --cov-omit="/tmp/*"
