@@ -41,7 +41,7 @@ class CellBox(MachineLearningModel):
             torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32)
         )
         self.decay_params = nn.Parameter(torch.zeros(self.n_genes))
-        self.epsilon = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))
+        self.epsilon = nn.Parameter(torch.ones(self.n_genes, dtype=torch.float32))
         self.phi = phi
         # Ensure no self-interactions (stored as non-parameters (buffer) because
         # we'll always be masking these and doesnt need to be optimised)
@@ -85,7 +85,9 @@ class CellBox(MachineLearningModel):
 
     def _set_epsilon_to_zero(self):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
-        self.epsilon = nn.Parameter(torch.tensor(1e-6, dtype=torch.float32))
+        self.epsilon = nn.Parameter(
+            torch.full_like(self.epsilon, 1e-6, dtype=torch.float32)
+        )
 
     def get_inferred_network(self, threshold: float | None = None) -> RegulatoryNetwork:
         """Return the inferred network
@@ -105,3 +107,4 @@ class CellBox(MachineLearningModel):
                 if threshold is None or abs(weight) > threshold:
                     G.add_edge(gene_from, gene_to, influence=weight)
         return RegulatoryNetwork(G)
+        
