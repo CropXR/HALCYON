@@ -32,6 +32,11 @@ class RegulatoryNetwork:
     def node_names(self):
         """Note: these might differ from the order of ExpressionData.genes."""
         return list(self._graph.nodes)
+    
+    @property
+    def nodes(self):
+        """Get all nodes in the network."""
+        return self._graph.nodes
 
     def add_edge(self, edge: tuple, attributes: dict, contains_new_genes=False):
         """Add an edge to the network.
