@@ -1,6 +1,7 @@
+import logging
 import torch
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
-from mlmmint.Models.Model import Model
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Models.Model import Model
 
 from torch import nn
 
@@ -30,8 +31,11 @@ class TorchLinearODE(MechanisticModel):
                 self.weight_matrix[to_idx, from_idx] = property_dict["influence"]
         self.weight_matrix = nn.Parameter(self.weight_matrix, requires_grad=True)
 
-    def forward(self, t, state):
-        return self.weight_matrix @ state
+    def forward(self, t, state) -> torch.Tensor:
+        return torch.bmm(
+            self.weight_matrix.unsqueeze(0),
+            state.unsqueeze(2),
+        ).squeeze(2)
 
     def _make_weight_matrix_zeroes(self):
         """Initialize the weight matrix by setting everything to 0."""
@@ -39,3 +43,7 @@ class TorchLinearODE(MechanisticModel):
             torch.zeros_like(self.weight_matrix, dtype=torch.float32),
             requires_grad=True,
         )
+
+    def set_conditions(self, conditions):
+        logging.warning("Currently TorchLinearODE does not parse the conditions")
+        pass
