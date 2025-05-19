@@ -27,6 +27,9 @@ class ExpressionData:
     def genes(self) -> List:
         return list(self.df.index)
 
+    def scale_time_series(self):
+        self.df.columns = self.df.columns / self.df.columns.max()
+
     def _get_time_points(self) -> np.ndarray:
         """Return the time points of the samples"""
         return self.df.columns.values.astype(float)

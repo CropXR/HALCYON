@@ -9,6 +9,7 @@ from typing import Callable
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Models.Model import Model
 from torch.nn.functional import mse_loss
+import seaborn as sns
 
 
 class Trainer:
@@ -41,6 +42,8 @@ class Trainer:
             optimizer_kwargs = dict()
         self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
         self.model.to(self.model.device)
+        # Loss history after training. Is empty initially (because no training has been performed yet).
+        self.loss_history = []
 
     def get_time_points(self) -> torch.Tensor:
         """Get time points at which the expressions were measured."""
@@ -48,14 +51,11 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
-    def train(self, n_epochs: int) -> list[float]:
+    def train(self, n_epochs: int):
         """Perform model training on batches.
 
         Args:
             n_epochs (int): Number of epochs to train
-
-        Returns:
-            list[float]: History of mean epoch loss during training.
         """
         loss_history = []
         for epoch in range(n_epochs):
@@ -73,9 +73,19 @@ class Trainer:
                 epoch_loss += loss.item()
             mean_epoch_loss = epoch_loss / len(self.dataloader)
             loss_history.append(mean_epoch_loss)
-            # logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
-            print(f"Epoch {epoch}, loss {mean_epoch_loss}")
-        return loss_history
+            logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+        self.loss_history = loss_history
+
+    def plot_loss_history(self):
+        """After training the model, plot the loss history"""
+        assert (
+            len(self.loss_history) > 0
+        ), "No loss history available. Train the model first."
+        sns.lineplot(self.loss_history)
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.ylim((0, 1.5 * max(self.loss_history)))
+        plt.show()
 
     def calculate_loss(
         self, expression_true: torch.Tensor, expression_pred: torch.Tensor
