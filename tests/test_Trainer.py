@@ -4,7 +4,8 @@ import numpy as np
 from pytest import approx
 import torch
 
-from halcyon.Models.MachineLearningModel import CellBox, NeuralODE
+from halcyon.Models.CellBox import CellBox
+from halcyon.Models.NeuralODE import NeuralODE
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
 from tests.create_dummy_data import (
@@ -44,14 +45,24 @@ def test_integrate_model():
 
 def test_train_neural_ode():
     expressions = create_synthetic_expressions()
-    neural_ode_model = NeuralODE(
-        expressions.genes, expressions.conditions[0].all_environments
-    )
+    neural_ode_model = NeuralODE(expressions.genes, expressions.all_environments)
     my_trainer = Trainer(neural_ode_model, expressions, batch_size=1)
-    loss_history = my_trainer.train(5)
+    init_weights = torch.cat(
+        [i.clone().detach().flatten() for i in neural_ode_model.neural_net.parameters()]
+    )
+    init_decay = neural_ode_model.decay_params.clone().detach()
+    my_trainer.train(5)
     # Assert loss is decreasing
-    assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
-    # assert torch.allclose(wrong_model.weight_matrix, correct_model.weight_matrix, atol=0.1)
+    assert all(
+        x > y for x, y in zip(my_trainer.loss_history, my_trainer.loss_history[1:])
+    )
+    assert not torch.allclose(
+        init_weights,
+        torch.cat(
+            [i.detach().flatten() for i in neural_ode_model.neural_net.parameters()]
+        ),
+    )
+    assert not torch.allclose(init_decay, neural_ode_model.decay_params.detach())
 
 
 def test_train_cellbox():
@@ -62,9 +73,11 @@ def test_train_cellbox():
     init_epsilon = deepcopy(cellbox.epsilon)
     init_decay = deepcopy(cellbox.decay_params)
     my_trainer = Trainer(cellbox, expressions)
-    loss_history = my_trainer.train(5)
+    my_trainer.train(5)
     # Assert loss is decreasing
-    assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
+    assert all(
+        x > y for x, y in zip(my_trainer.loss_history, my_trainer.loss_history[1:])
+    )
     # Check if epsilon and decay rate changes
     assert not torch.allclose(cellbox.epsilon, init_epsilon)
     assert not torch.allclose(cellbox.decay_params, init_decay)
@@ -79,9 +92,11 @@ def test_train_cellbox_ko_data():
     init_decay = deepcopy(cellbox.decay_params)
     init_w = deepcopy(cellbox.W)
     my_trainer = Trainer(cellbox, expressions, batch_size=2)
-    loss_history = my_trainer.train(3)
+    my_trainer.train(3)
     # Assert loss is decreasing
-    assert all(x > y for x, y in zip(loss_history, loss_history[1:]))
+    assert all(
+        x > y for x, y in zip(my_trainer.loss_history, my_trainer.loss_history[1:])
+    )
     # Check if epsilon and decay rate changes
     assert not torch.allclose(cellbox.epsilon, init_epsilon)
     assert not torch.allclose(cellbox.decay_params, init_decay)

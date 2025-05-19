@@ -1,8 +1,19 @@
 from pathlib import Path
 
-import numpy as np
 import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+
+
+def test_scale_time_data():
+    input_path = Path(
+        "tests/grnsimdummydata/InSilicoSize10-Yeast1_knockout_timeseries.tsv"
+    )
+    ko_expression_data = (
+        ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(input_path)
+    )
+    ko_expression_data.scale_time_series()
+    assert ko_expression_data._get_time_points().max() == 1
+    assert ko_expression_data._get_time_points().min() == 0
 
 
 def test_parse_from_genenetweaver_output():

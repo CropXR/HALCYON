@@ -1,5 +1,6 @@
 import torch
-from halcyon.Models.MachineLearningModel import CellBox, NeuralODE
+from halcyon.Models.CellBox import CellBox
+from halcyon.Models.NeuralODE import NeuralODE
 
 
 def test_create_neuralODE():
@@ -21,7 +22,7 @@ def test_create_neuralODE():
     # Knockout gene
     my_neural_ode.set_conditions(torch.tensor([[0.0, 1.0, 0.0, 0.0]]))
     forward_pass_with_ko = my_neural_ode.forward(torch.tensor([0]), init_values)
-    assert torch.allclose(forward_pass_with_ko[0, 1], torch.tensor([0.0]))
+    assert forward_pass_with_ko[0, 1] < 0
 
 
 def test_cellbox_forward():
