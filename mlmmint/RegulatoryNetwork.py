@@ -1,5 +1,6 @@
 from typing import List
 import networkx as nx
+import matplotlib.pyplot as plt
 
 
 class RegulatoryNetwork:
@@ -32,7 +33,7 @@ class RegulatoryNetwork:
     def node_names(self):
         """Note: these might differ from the order of ExpressionData.genes."""
         return list(self._graph.nodes)
-    
+
     @property
     def nodes(self):
         """Get all nodes in the network."""
@@ -63,3 +64,21 @@ class RegulatoryNetwork:
             subset_network (RegulatoryNetwork): Network that contains only the specified nodes
         """
         return RegulatoryNetwork(self._graph.subgraph(nodes).copy())
+
+    def plot(self, **kwargs):
+        """Plot the network using networkx's draw function."""
+        plt.figure(figsize=(10, 8))
+        pos = nx.spring_layout(self._graph)
+        # nx.draw(self._graph, pos, with_labels=True, **kwargs)
+        nx.draw(
+            self._graph,
+            with_labels=True,
+            node_size=2000,
+            node_color="lightblue",
+            font_size=10,
+            font_weight="bold",
+            edge_color="gray",
+        )
+        edge_labels = nx.get_edge_attributes(self._graph, "influence")
+        nx.draw_networkx_edge_labels(self._graph, pos, edge_labels=edge_labels)
+        plt.show()
