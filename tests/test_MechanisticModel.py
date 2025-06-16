@@ -1,7 +1,7 @@
 import torch
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from mlmmint.Models.Model import Model
-from mlmmint.Models.MechanisticModel import ComplexMechanisticModel
+from mlmmint.Models.MechanisticModel import ComplexODEMechanisticModel
 from sympy import symbols, sympify
 import networkx as nx
 
@@ -74,4 +74,4 @@ for var, deps in dependencies.items():
         nx_net.add_edge(dep, var)
 
 # Create the regulatory network and Mechanistic model from the graph
-mechanistic_model = ComplexMechanisticModel(RegulatoryNetwork(nx_net), param_dict)
+mechanistic_model = ComplexODEMechanisticModel(RegulatoryNetwork(nx_net), param_dict)

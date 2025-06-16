@@ -1,24 +1,30 @@
 import torch
 from mlmmint.RegulatoryNetwork import RegulatoryNetwork
 from mlmmint.Models.Model import Model
-
+from typing import List
 from torch import nn
+import networkx as nx
+from sympy import symbols, sympify
 
 
 class MechanisticModel(Model):
-    def __init__(self, network: RegulatoryNetwork):
-        super().__init__(network.nodes)
+    def __init__(self, modelled_gene_labels: List[str]):
+        super().__init__(modelled_gene_labels)
 
-class ComplexMechanisticModel(MechanisticModel):
-    def __init__(self, regulatory_network: RegulatoryNetwork, parameter_dict: dict):
+class ComplexODEMechanisticModel(MechanisticModel):
+    def __init__(self, ODE_dict: dict, input_dict: dict, param_dict: dict):
         """
         Initialize a complex mechanistic model.
         param regulatory_network The regulatory network to use.
         param parameter_dict A dictionary of parameters to use in the model.
         """
-        super().__init__(regulatory_network)
-        self.parameter_dict = parameter_dict
-        self.regulatory_network = regulatory_network
+        # regulatory_network = self.build_network_from_ODE_dict(ODE_DICT)
+        super().__init__(list(ODE_dict.keys()))
+        
+        self.ODE_dict = ODE_dict
+        self.input_dict = input_dict
+        self.param_dict = param_dict
+        # self.regulatory_network = regulatory_network
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
@@ -32,25 +38,73 @@ class ComplexMechanisticModel(MechanisticModel):
         # Initialize the derivatives
         derivatives = torch.zeros_like(state)
 
+        # Prepare state dict with gene and input values as tensors
+        state_dict = dict(zip(self.ODE_dict.keys(), torch.unbind(state)))
+        # Update state_dict with input values at time t (ensure tensor output)
+        for input_name, input_func in self.input_dict.items():
+            input_val = input_func(t)
+            # If input_val is not a tensor, convert it
+            if not isinstance(input_val, torch.Tensor):
+                input_val = torch.tensor(input_val, dtype=state.dtype, device=state.device)
+            state_dict[input_name] = input_val
+        # Compute derivatives for each ODE variable
+        for i, (var, ode_func) in enumerate(self.ODE_dict.items()):
+            derivatives[i] = ode_func(state_dict)
+        
+        
 
-        # Add inputs to the state
-        state = torch.cat((state, torch.tensor([self.regulatory_network.nodes[node_name]["time_series_func"](t) for node_name in self.regulatory_network.nodes if self.regulatory_network.nodes[node_name]["type"] == "input"])))
 
-        # convert the state to a dictionary for easier access
-        state_dict = {gene: state[i] for i, gene in enumerate(self.modelled_gene_labels)}
+        # # Add inputs to the state
+        # state = torch.cat((state, torch.tensor([self.regulatory_network.nodes[node_name]["time_series_func"](t) for node_name in self.regulatory_network.nodes if self.regulatory_network.nodes[node_name]["type"] == "input"])))
 
-        # print("state_dict",state_dict)
+        # # convert the state to a dictionary for easier access
+        # state_dict = {gene: state[i] for i, gene in enumerate(self.modelled_gene_labels)}
 
-        # Iterate over all nodes in the regulatory network
-        # for i, node in enumerate(self.regulatory_network.nodes()):
-        #     # Calculate the derivative using the Nodes' ODE function and the current state
-        #     derivatives[node] = self.regulatory_network.nodes[node]["ODE"](state_dict)
-        for i, node in enumerate(self.regulatory_network.nodes):
-            # print(i,node)
-            # Check if the node is a Network node
-            if self.regulatory_network.nodes[node]["type"] == "network":
-                derivatives[i] = self.regulatory_network.nodes[node]["ODE"](state_dict) #calculate the ODE output for each ODE node
+        # # print("state_dict",state_dict)
+
+        # # Iterate over all nodes in the regulatory network
+        # # for i, node in enumerate(self.regulatory_network.nodes()):
+        # #     # Calculate the derivative using the Nodes' ODE function and the current state
+        # #     derivatives[node] = self.regulatory_network.nodes[node]["ODE"](state_dict)
+        # for i, node in enumerate(self.regulatory_network.nodes):
+        #     # print(i,node)
+        #     # Check if the node is a Network node
+        #     if self.regulatory_network.nodes[node]["type"] == "network":
+        #         derivatives[i] = self.regulatory_network.nodes[node]["ODE"](state_dict) #calculate the ODE output for each ODE node
         return derivatives
+    
+    def build_network_from_ODE_dict(self):
+        dependencies = {}
+        gene_names = list(self.ODE_dict.keys())
+        input_names = list(self.input_dict.keys()) if self.input_dict is not None else ["light", "heat", "drought"]
+        for var, ODE in self.ODE_dict.items():
+            symbolic_vars = symbols(gene_names + input_names)
+            symbolic_expr = sympify(
+                ODE({v: symbolic_vars[i] for i, v in enumerate(gene_names)} |
+                    {name: symbolic_vars[len(gene_names) + j] for j, name in enumerate(input_names)})
+            )
+            dependencies[var] = [
+                str(sym) for sym in symbolic_expr.free_symbols
+                if str(sym) in gene_names or str(sym) in input_names
+            ]
+
+        net = nx.DiGraph()
+        for var, ODE in self.ODE_dict.items():
+            net.add_node(var, ODE=ODE, type="network")
+
+        for input_node, time_series_func in self.input_dict.items():
+            net.add_node(input_node, time_series_func=time_series_func, type="input")
+        
+        for var, deps in dependencies.items():
+            for d in deps:
+                net.add_edge(d, var)
+        return net
+    
+    @property
+    def regulatory_network(self):
+        """Return the regulatory network of the model."""
+        return RegulatoryNetwork(self.build_network_from_ODE_dict())
+
 
         
     
