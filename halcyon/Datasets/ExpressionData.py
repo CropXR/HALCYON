@@ -1,13 +1,15 @@
-from typing import List
-from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
-import torch
 import seaborn as sns
+import torch
+from matplotlib.axes import Axes
+
+
+from typing import List
 
 
 class ExpressionData:
-    """Store RNA seq expression data (from simulator)"""
+    """Store RNA seq expression data (from a single simulation run)"""
 
     time_name = "Time"
     gene_name = "Gene"
@@ -24,19 +26,6 @@ class ExpressionData:
     @property
     def genes(self) -> List:
         return list(self.df.index)
-
-    def _add_one_gene_expression(self, gene_name: str, expression: float):
-        """Add an exra gene with a constant expression to the DF. Mainly for testing purposes"""
-        new_df = self.df.copy()
-        new_df.loc[gene_name] = expression
-        return ExpressionData(new_df)
-
-    def _get_initial_states(self) -> np.ndarray:
-        """Return the initial states of the genes
-
-        Is assumed to be in first column of the dataframe
-        """
-        return self.df.iloc[:, 0].values  # type: ignore
 
     def _get_time_points(self) -> np.ndarray:
         """Return the time points of the samples"""
