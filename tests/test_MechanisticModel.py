@@ -1,11 +1,11 @@
 import torch
-from mlmmint.RegulatoryNetwork import RegulatoryNetwork
-from mlmmint.Models.Model import Model
-from mlmmint.Models.MechanisticModel import ComplexODEMechanisticModel
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Models.Model import Model
+from halcyon.Models.MechanisticModel import ComplexODEModel
 from sympy import symbols, sympify
 import networkx as nx
 import pytest
-from mlmmint.Models.MechanisticModel import ComplexODEMechanisticModel
+from halcyon.Models.MechanisticModel import ComplexODEModel
 
 # Define parameter dictionary
 param_dict = {
@@ -59,7 +59,7 @@ input_dict = {
 # test complex ODE mechanistic model
 @pytest.fixture
 def complex_model():
-    return ComplexODEMechanisticModel(
+    return ComplexODEModel(
         ODE_dict=ODE_dict,
         input_dict=input_dict,
         param_dict={

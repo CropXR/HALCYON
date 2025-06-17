@@ -23,7 +23,7 @@ class MechanisticModel(Model):
     #     pass
 
 
-class ComplexODEMechanisticModel(MechanisticModel):
+class ComplexODEModel(MechanisticModel):
     def __init__(self, ODE_dict: dict, input_dict: dict, param_dict: dict):
         """
         Initialize a complex mechanistic model.
@@ -108,6 +108,10 @@ class ComplexODEMechanisticModel(MechanisticModel):
     def regulatory_network(self):
         """Return the regulatory network of the model."""
         return RegulatoryNetwork(self._build_network_from_self())
+    
+    def set_conditions(self, conditions):
+        logging.warning("Currently ComplexODEModel does not parse the conditions")
+        pass
 
 
 class TorchLinearODE(MechanisticModel):
