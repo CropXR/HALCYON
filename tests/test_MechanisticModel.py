@@ -6,6 +6,15 @@ from sympy import symbols, sympify
 import networkx as nx
 import pytest
 from halcyon.Models.MechanisticModel import ComplexODEModel
+from halcyon.Models.MechanisticModel import SBMLImportClassDummy
+
+
+def test_import_from_sbml():
+    sbml_path = "tests/genenetweaver_outputs/test_scalefree.xml"
+    my_importclass_test = SBMLImportClassDummy.from_sbml(sbml_path)
+    # assert isinstance(my_importclass_test, SBMLImportClassDummy)
+    # assert my_importclass_test != None
+
 
 # Define parameter dictionary
 param_dict = {
