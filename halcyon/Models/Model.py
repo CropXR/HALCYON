@@ -31,9 +31,7 @@ class Model(ABC, nn.Module):
         self,
         initial_state: torch.Tensor,
         t_eval: torch.Tensor,
-        stress=None,
     ) -> torch.Tensor:
         """Solve the system over time. Provide initial state in form of [Batch, Genes]. Returns tensor with [Batch, Genes, Time]."""
         output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
-        # Permute dimensions for some reason
         return output.permute(1, 2, 0)
