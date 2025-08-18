@@ -9,13 +9,17 @@ from torch import nn
 import logging
 
 
+class PhoenixSumActivation(nn.Module):
+    def forward(self, y: torch.Tensor) -> torch.Tensor:
+        return (y - 0.5) / (1 + torch.abs(y - 0.5))
+
+
 class NeuralODE(MachineLearningModel):
     def __init__(
         self,
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
-        additional_hidden_layers=1,
-        hidden_size=32,
+        activation_function=PhoenixSumActivation,
     ):
         """Create neuralODE, i.e. a neural network that takes the gene expression and the environment as input and returns the change in gene expression.
 
@@ -25,18 +29,16 @@ class NeuralODE(MachineLearningModel):
         """
         super().__init__(modelled_gene_labels)
         self.n_conditions = len(condition_names)
-        layers = []
-        # First layer
-        layers.append(nn.Linear(self.n_genes + self.n_conditions, hidden_size))
-        layers.append(nn.ReLU())
-        for _ in range(additional_hidden_layers):
-            layers.append(nn.Linear(hidden_size, hidden_size))
-            layers.append(nn.ReLU())
-        # Final layer
-        layers.append(nn.Linear(hidden_size, self.n_genes))
-        self.neural_net = nn.Sequential(*layers)
+        # Architecture inspired by PHOENIX
+        self.neural_net = nn.Sequential(
+            activation_function(),
+            nn.Linear(self.n_genes + self.n_conditions, self.n_genes),
+        )
         self.decay_params = nn.Parameter(
             torch.full(size=(self.n_genes,), fill_value=0.1)
+        )
+        self.per_gene_multipliers = nn.Parameter(
+            torch.full(size=(self.n_genes,), fill_value=1.0)
         )
         self.reset_conditions()
 
@@ -63,12 +65,11 @@ class NeuralODE(MachineLearningModel):
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
         decay = self._get_decay(state)
-        output = self.neural_net(nn_input) * self.ko_masks.squeeze(2) - decay  # type: ignore
+        output = (self.neural_net(nn_input) * self.ko_masks.squeeze(2) - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
     def _get_decay(self, state):
-        # return nn.functional.relu(self.decay_params * state)
         return nn.functional.relu(self.decay_params * state)
 
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
