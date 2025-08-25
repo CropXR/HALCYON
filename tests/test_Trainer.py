@@ -9,10 +9,10 @@ from halcyon.Models.NeuralODE import NeuralODE
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
 from tests.create_dummy_data import (
-    create_ko_from_sample_data,
     create_synthetic_expressions,
     get_synthetic_data,
 )
+from tests.test_KnockedOutExpressionData import expression_data_from_gnw
 
 
 def test_calculate_loss():
@@ -83,15 +83,14 @@ def test_train_cellbox():
     assert not torch.allclose(cellbox.decay_params, init_decay)
 
 
-def test_train_cellbox_ko_data():
-    expressions = create_ko_from_sample_data()
-    cellbox = CellBox(expressions.genes)
+def test_train_cellbox_ko_data(expression_data_from_gnw):
+    cellbox = CellBox(expression_data_from_gnw.genes)
     # cellbox._set_epsilon_to_zero()
     cellbox._set_weight_matrix_to_ones()
     init_epsilon = deepcopy(cellbox.epsilon)
     init_decay = deepcopy(cellbox.decay_params)
     init_w = deepcopy(cellbox.W)
-    my_trainer = Trainer(cellbox, expressions, batch_size=2)
+    my_trainer = Trainer(cellbox, expression_data_from_gnw, batch_size=2)
     my_trainer.train(3)
     # Assert loss is decreasing
     assert all(

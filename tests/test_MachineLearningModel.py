@@ -1,27 +1,38 @@
 import torch
 from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import NeuralODE
+import pytest
 
 
-def test_create_neuralODE():
+@pytest.fixture
+def neural_ode():
     gene_labels = ["a", "b", "c"]
     my_neural_ode = NeuralODE(gene_labels, ("test_cond",))
-    # Simulate batch
-    init_values = torch.tensor(
+    return my_neural_ode
+
+
+@pytest.fixture
+def init_values():
+    return torch.tensor(
         [
             1.0,
             2.0,
             3.0,
         ]
     ).unsqueeze(0)
-    my_neural_ode.set_conditions(torch.tensor([[0.0] * 4]))
+
+
+def test_create_neuralODE(neural_ode, init_values):
+    neural_ode.set_conditions(torch.tensor([[0.0] * 4]))
     t = torch.tensor([0.0, 0.5, 1.0, 1.5])
-    output = my_neural_ode.integrate(init_values, t)
+    output = neural_ode.integrate(init_values, t)
     assert output.shape == (1, 3, 4)
 
+
+def test_ko_neural_ode(neural_ode, init_values):
     # Knockout gene
-    my_neural_ode.set_conditions(torch.tensor([[0.0, 1.0, 0.0, 0.0]]))
-    forward_pass_with_ko = my_neural_ode.forward(torch.tensor([0]), init_values)
+    neural_ode.set_conditions(torch.tensor([[0.0, 1.0, 0.0, 0.0]]))
+    forward_pass_with_ko = neural_ode.forward(torch.tensor([0]), init_values)
     assert forward_pass_with_ko[0, 1] < 0
 
 
