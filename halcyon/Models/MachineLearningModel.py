@@ -1,11 +1,11 @@
 import torch
 from halcyon.Models.Model import Model
-from abc import abstractmethod
+from abc import abstractmethod, ABC
 
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
-class MachineLearningModel(Model):
+class MachineLearningModel(Model, ABC):
     def __init__(self, modelled_gene_labels):
         super().__init__(modelled_gene_labels)
 

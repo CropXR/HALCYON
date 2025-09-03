@@ -1,13 +1,13 @@
 import torch
 from halcyon.Models.CellBox import CellBox
-from halcyon.Models.NeuralODE import NeuralODE
+from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 import pytest
 
 
 @pytest.fixture
 def neural_ode():
     gene_labels = ["a", "b", "c"]
-    my_neural_ode = NeuralODE(gene_labels, ("test_cond",))
+    my_neural_ode = PhoenixOnlyAddLayers(gene_labels, ("test_cond",))
     return my_neural_ode
 
 

@@ -5,14 +5,14 @@ from pytest import approx
 import torch
 
 from halcyon.Models.CellBox import CellBox
-from halcyon.Models.NeuralODE import NeuralODE
+from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
 from tests.create_dummy_data import (
     create_synthetic_expressions,
     get_synthetic_data,
 )
-from tests.test_KnockedOutExpressionData import expression_data_from_gnw
+from tests.create_dummy_data import expression_data_from_gnw
 
 
 def test_calculate_loss():
@@ -45,7 +45,9 @@ def test_integrate_model():
 
 def test_train_neural_ode():
     expressions = create_synthetic_expressions()
-    neural_ode_model = NeuralODE(expressions.genes, expressions.all_environments)
+    neural_ode_model = PhoenixOnlyAddLayers(
+        expressions.genes, expressions.all_environments
+    )
     my_trainer = Trainer(neural_ode_model, expressions, batch_size=1)
     init_weights = torch.cat(
         [i.clone().detach().flatten() for i in neural_ode_model.neural_net.parameters()]

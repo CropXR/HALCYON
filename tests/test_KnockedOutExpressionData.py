@@ -1,19 +1,6 @@
-from pathlib import Path
-
 import numpy as np
-import pytest
 import torch
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-
-
-@pytest.fixture
-def expression_data_from_gnw():
-    expressions = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
-        Path(
-            "tests/expected_output/integration_test_network_nonoise_knockout_timeseries.tsv"
-        )
-    )
-    return expressions
+from tests.create_dummy_data import expression_data_from_gnw
 
 
 def test_scale_time_series(expression_data_from_gnw):
