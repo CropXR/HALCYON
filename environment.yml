@@ -1,6 +1,8 @@
 name: halcyon
 channels:
   - conda-forge
+  - bioconda
+  - defaults
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
@@ -196,7 +198,6 @@ dependencies:
   - python-json-logger=2.0.7=pyhd8ed1ab_0
   - python-tzdata=2025.1=pyhd8ed1ab_0
   - python_abi=3.10=5_cp310
-  - pytorch=2.6.0=cpu_generic_py310_hb0ad038_0
   - pytz=2024.1=pyhd8ed1ab_0
   - pyyaml=6.0.2=py310h89163eb_2
   - pyzmq=26.2.1=py310h71f11fc_0
@@ -226,7 +227,6 @@ dependencies:
   - tk=8.6.13=noxft_h4845f30_101
   - toml=0.10.2=pyhd8ed1ab_1
   - tomli=2.2.1=pyhd8ed1ab_1
-  - torchdiffeq=0.2.2=pyhd8ed1ab_0
   - tornado=6.4.2=py310ha75aee5_0
   - traitlets=5.14.3=pyhd8ed1ab_1
   - types-python-dateutil=2.9.0.20241206=pyhd8ed1ab_0
@@ -262,4 +262,24 @@ dependencies:
   - zipp=3.21.0=pyhd8ed1ab_1
   - zstandard=0.19.0=py310h5764c6d_0
   - zstd=1.5.7=hb8e6e7a_1
-prefix: /home/bnoordijk/mambaforge/envs/halcyon
+  - pip:
+      - halcyon==0.1
+      - nvidia-cublas-cu12==12.9.1.4
+      - nvidia-cuda-cupti-cu12==12.9.79
+      - nvidia-cuda-nvrtc-cu12==12.9.86
+      - nvidia-cuda-runtime-cu12==12.9.79
+      - nvidia-cudnn-cu12==9.10.2.21
+      - nvidia-cufft-cu12==11.4.1.4
+      - nvidia-cufile-cu12==1.14.1.1
+      - nvidia-curand-cu12==10.3.10.19
+      - nvidia-cusolver-cu12==11.7.5.82
+      - nvidia-cusparse-cu12==12.5.10.65
+      - nvidia-cusparselt-cu12==0.7.1
+      - nvidia-nccl-cu12==2.27.3
+      - nvidia-nvjitlink-cu12==12.9.86
+      - nvidia-nvtx-cu12==12.9.79
+      - torch==2.8.0+cu129
+      - torchdiffeq==0.2.5
+      - torchvision==0.23.0+cu129
+      - triton==3.4.0
+prefix: /home/noord087/lustre_link/miniforge3/envs/halcyon
