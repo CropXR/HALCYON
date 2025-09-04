@@ -263,7 +263,7 @@ dependencies:
   - zstandard=0.19.0=py310h5764c6d_0
   - zstd=1.5.7=hb8e6e7a_1
   - pip:
-      - torch=2.8.0
+      - torch==2.8.0
       - torchdiffeq==0.2.5
       - torchvision==0.23.0+cu129
       - triton==3.4.0
