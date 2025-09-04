@@ -265,6 +265,6 @@ dependencies:
   - pip:
       - torch==2.8.0
       - torchdiffeq==0.2.5
-      - torchvision==0.23.0+cu129
+      - torchvision==0.23.0
       - triton==3.4.0
 prefix: /home/noord087/lustre_link/miniforge3/envs/halcyon
