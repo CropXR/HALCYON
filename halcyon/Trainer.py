@@ -62,6 +62,9 @@ class Trainer:
             epoch_loss = 0.0
             for batch in self.dataloader:
                 experiment_data, expression_data = batch
+                experiment_data = experiment_data.to(self.model.device)
+                expression_data = expression_data.to(self.model.device)
+                
                 self.optimizer.zero_grad()
                 self.model.set_conditions(experiment_data)
                 output = self.integrate_model(
