@@ -37,7 +37,7 @@ class Trainer:
         # Ensure that expressions match the order of the modelled genes
         self.dataset = dataset
         self.dataset.match_genes_to_list(model.modelled_gene_labels)
-        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
         if optimizer_kwargs is None:
             optimizer_kwargs = dict()
         self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
