@@ -58,9 +58,26 @@ def test_add_one_equation(one_equation_synthesis, one_equation_degradation):
 def test_import_from_sbml():
     sbml_path = "tests/6_gene_testv2/test_scalefree.xml"
     my_model = PyTorchODE.from_sbml(sbml_path)
-    steady_state_values = torch.tensor(
-        [0.1780818, 0.9222381, 0.1129278, 1.0, 0.1310036, 0.8210416]
-    )
+    
+    ss_dict = {
+        "Node_0": 0.1780818,
+        "Node_1": 0.9222381,
+        "Node_2": 0.1129278,
+        "Node_3": 1.0,
+        "Node_4": 0.1310036,
+        "Node_5": 0.8210416,
+        "cell": 1,
+    }
+    for node_name in my_model.modelled_gene_labels:
+        synthesis_formula = my_model.synthesis_dict[node_name]
+        degradation_formula = my_model.decay_dict[node_name]
+
+        synthesis_value = synthesis_formula.subs(my_model.param_dict | ss_dict)
+        degradation_value = degradation_formula.subs(my_model.param_dict | ss_dict)
+        print(node_name, synthesis_value, degradation_value)
+        net = synthesis_value - degradation_value
+        assert np.allclose(net, 0, atol=1e-5)
+
     forward_results = my_model.forward(torch.tensor([0]), steady_state_values)
 
     assert np.allclose(

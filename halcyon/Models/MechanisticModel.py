@@ -32,8 +32,11 @@ class MechanisticModel(Model):
 class PyTorchODE(MechanisticModel):
     alternative_max_name = "max_rate"
 
-    def __init__(self, modelled_gene_labels):
+    def __init__(self, modelled_gene_labels, synthesis_dict, decay_dict, param_dict):
         super().__init__(modelled_gene_labels)
+        self.synthesis_dict = synthesis_dict
+        self.decay_dict = decay_dict
+        self.param_dict = param_dict
 
     @classmethod
     def from_sbml(cls, sbml_path) -> Self:
@@ -46,12 +49,15 @@ class PyTorchODE(MechanisticModel):
         param_dict = dict()
         decay_expression_dict = dict()
         synthesis_expression_dict = dict()
+        base_node_names = []
 
         for i in range(model.getNumReactions()):
             reaction = model.getReaction(i)
             base_node_name, sympy_formula, one_reactions_parameters = (
                 cls.parse_one_reaction(reaction)
             )
+            if base_node_name not in base_node_names:
+                base_node_names.append(base_node_name)
 
             assert set(param_dict.keys()).isdisjoint(
                 one_reactions_parameters.keys()
@@ -66,7 +72,7 @@ class PyTorchODE(MechanisticModel):
                     f"Reaction {reaction.getId()} does not end with _synthesis or _degradation."
                 )
 
-        return synthesis_expression_dict, decay_expression_dict, param_dict
+        return cls(base_node_names, synthesis_expression_dict, decay_expression_dict, param_dict)
 
     @classmethod
     def parse_one_reaction(cls, reaction: libsbml.Reaction):
@@ -103,7 +109,17 @@ class PyTorchODE(MechanisticModel):
 
         sympy_formula = sp.parse_expr(formula)
 
-        sympy_formula.subs(param_dict | ss_dict)
+
+        # ss_dict = {
+        #         "Node_0": 0.1780818,
+        #         "Node_1": 0.9222381,
+        #         "Node_2": 0.1129278,
+        #         "Node_3": 1.0,
+        #         "Node_4": 0.1310036,
+        #         "Node_5": 0.8210416,
+        #         "cell": 1,
+        #     }
+        # sympy_formula.subs(param_dict | ss_dict)
 
         return base_node_name, sympy_formula, param_dict
 
