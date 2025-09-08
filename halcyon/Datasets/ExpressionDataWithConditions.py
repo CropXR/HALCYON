@@ -1,7 +1,6 @@
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionData import ExpressionData
 
-
 import numpy as np
 import pandas as pd
 import torch
@@ -17,43 +16,66 @@ class ExpressionDataWithConditions(Dataset):
 
     def __init__(self, ko_dict: dict[ExperimentCondition, ExpressionData]):
         self._ko_dict = ko_dict
-        # Assert that all ExpressionData contain the same genes
-        assert (
-            len(
-                set(
-                    [
-                        tuple(expression_data.genes)
-                        for expression_data in ko_dict.values()
-                    ]
-                )
-            )
-            == 1
-        ), "All ExpressionData objects must contain the same genes."
+        self._check_if_all_genes_same()
+        self._check_if_all_timepoints_same()
+
+    def _check_if_all_timepoints_same(self):
         # Assert that all timepoints are the same
         assert (
             len(
                 set(
                     [
                         tuple(expression_data._get_time_points())
-                        for expression_data in ko_dict.values()
+                        for expression_data in self._ko_dict.values()
                     ]
                 )
             )
             == 1
         ), "All ExpressionData objects must contain the same time points."
 
+    def get_time_points(self) -> np.ndarray:
+        self._check_if_all_timepoints_same()
+        return next(iter(self._ko_dict.values()))._get_time_points()
+
+    def _check_if_all_genes_same(self):
+        # Assert that all ExpressionData contain the same genes
+        assert (
+            len(
+                set(
+                    [
+                        tuple(expression_data.genes)
+                        for expression_data in self._ko_dict.values()
+                    ]
+                )
+            )
+            == 1
+        ), "All ExpressionData objects must contain the same genes."
+
     @property
     def genes(self) -> list:
         """Return the genes in the expression data"""
+        self._check_if_all_genes_same()
         return self._ko_dict[list(self._ko_dict.keys())[0]].genes
 
     @property
     def conditions(self) -> list[ExperimentCondition]:
-        """Return the list of ExperimentConditions"""
+        """Return the list of ExperimentConditions where each item belongs to one expression dataset"""
         return list(self._ko_dict.keys())
+
+    @property
+    def all_environments(self) -> tuple[str, ...]:
+        """Return the list of all environments"""
+        return list(self._ko_dict.keys())[0].all_environments
+
+    def scale_time_series(self):
+        """Scale time series so it spans from 0 to 1. Can be used to prevent ODEs from exploding."""
+        self._check_if_all_timepoints_same()
+        for expression_data in self._ko_dict.values():
+            expression_data.scale_time_series()
 
     def _get_time_points(self) -> np.ndarray:
         """Return the time points of the samples"""
+        self._check_if_all_timepoints_same()
         return self._ko_dict[list(self._ko_dict.keys())[0]]._get_time_points()
 
     def __len__(self) -> int:

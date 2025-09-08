@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import torch
 from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.MachineLearningModel import NeuralODE
+from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
 from tests.create_dummy_data import get_synthetic_data
@@ -25,8 +25,8 @@ def test_hybrid_model_gene_split():
     # imitate batch
     env_conditions, expressions = env_conditions.unsqueeze(0), expressions.unsqueeze(0)
 
-    ml_model = NeuralODE(
-        expression_dataset.genes, expression_dataset.conditions[0].all_environments
+    ml_model = PhoenixOnlyAddLayers(
+        expression_dataset.genes, expression_dataset.all_environments
     )
     mm_model = TorchLinearODE(subset_regulatory_network)
     hybrid_model = HybridModel(mm_model, ml_model)
