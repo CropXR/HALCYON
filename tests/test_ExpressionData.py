@@ -1,7 +1,10 @@
 from matplotlib.axes import Axes
 import numpy as np
 import torch
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from tests.create_dummy_data import create_synthetic_expressions, get_synthetic_data
+from pathlib import Path
+import pytest
 
 
 def test_extract_info():

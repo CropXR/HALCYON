@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Tuple
 import networkx as nx
 import pandas as pd
+import pytest
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.ExpressionData import ExpressionData
@@ -73,3 +74,13 @@ def create_ko_from_sample_data() -> ExpressionDataWithConditions:
     return ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
         input_path
     )
+
+
+@pytest.fixture
+def expression_data_from_gnw():
+    expressions = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+        Path(
+            "tests/expected_output/integration_test_network_nonoise_knockout_timeseries.tsv"
+        )
+    )
+    return expressions
