@@ -33,6 +33,7 @@ class GNWSimRunner:
         network_name: str,
         output_path: Path,
         keep_self_interactions: bool = True,
+        network_type: int = 1,
     ):
         """Perform a genenetweaver network generation + simulation run.
 
@@ -42,14 +43,17 @@ class GNWSimRunner:
             num_modules (int): Modularity; number of modules in the network.
             network_name (str): File name to use for outputting the files
             output_path (Path): Directory where files should be stored.
+            network_type (int): Specifies the type of network to create (0=Random,
+                1=Modular-Scale-Free). (default: 1)
             keep_self_interactions (bool, optional): _description_. Defaults to True.
         """
+        assert network_type in [0, 1], "network_type must be 0 or 1"
         # Step 1: generate network
         logging.info("Generating network")
         output_path.mkdir(parents=True, exist_ok=True)
         step_1_args = list(self.start_of_arg) + [
             "--create",
-            "--network-type=1",
+            f"--network-type={network_type}",
             "--output-net-format=4",
             "--num-genes",
             str(n_genes),
@@ -64,6 +68,8 @@ class GNWSimRunner:
         ]
         if keep_self_interactions:
             step_1_args.append("--keep-self-interactions")
+        if sparsity == 0:
+            raise ValueError("Sparsity cannot be zero.")
         step1_process = subprocess.run(step_1_args, check=True)
 
         # Step 2 run simulation

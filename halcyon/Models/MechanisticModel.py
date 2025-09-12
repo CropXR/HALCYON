@@ -12,6 +12,9 @@ from abc import abstractmethod
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.Model import Model
 from typing_extensions import Self
+import tellurium as te
+
+from sympy.core.parameters import evaluate
 
 from torch import nn
 import networkx as nx
@@ -42,6 +45,10 @@ class PyTorchODE(MechanisticModel):
     def from_sbml(cls, sbml_path) -> Self:
         # Read sbml path
         # Import SBML file
+        # We need the ODE string for the model, but the sbml for the parameter values
+        # TODO I think you can change this back to reading from libsbml directly
+        ode_list = te.getODEsFromSBMLFile(sbml_path)  
+
         reader = libsbml.SBMLReader()
         document = reader.readSBML(sbml_path)  # type: ignore
         model = document.getModel()
@@ -51,10 +58,18 @@ class PyTorchODE(MechanisticModel):
         synthesis_expression_dict = dict()
         base_node_names = []
 
-        for i in range(model.getNumReactions()):
-            reaction = model.getReaction(i)
+        for ode_string in ode_list.split('\n'):
+            if ode_string == '':
+                continue
+            if ode_string.startswith('d'):
+                continue
+            elif ode_string.startswith('v'):
+                ode_string = ode_string[1:]  
+            name, formula = ode_string.split(' = ')
+            libsbml_parameters = model.getReaction(name).getKineticLaw().getListOfParameters()
+
             base_node_name, sympy_formula, one_reactions_parameters = (
-                cls.parse_one_reaction(reaction)
+                cls.parse_one_reaction(name, formula, libsbml_parameters)
             )
             if base_node_name not in base_node_names:
                 base_node_names.append(base_node_name)
@@ -63,69 +78,68 @@ class PyTorchODE(MechanisticModel):
                 one_reactions_parameters.keys()
             ), "Parameter duplicates"
             param_dict.update(one_reactions_parameters)
-            if reaction.getId().endswith("_degradation"):
+            if name.endswith("_degradation"):
                 decay_expression_dict[base_node_name] = sympy_formula
-            elif reaction.getId().endswith("_synthesis"):
+            elif name.endswith("_synthesis"):
                 synthesis_expression_dict[base_node_name] = sympy_formula
             else:
                 raise NameError(
-                    f"Reaction {reaction.getId()} does not end with _synthesis or _degradation."
+                    f"Reaction {name} does not end with _synthesis or _degradation."
                 )
 
         return cls(base_node_names, synthesis_expression_dict, decay_expression_dict, param_dict)
 
     @classmethod
-    def parse_one_reaction(cls, reaction: libsbml.Reaction):
+    def parse_one_reaction(cls, name: str, formula_string: str, libsbml_parameters: libsbml.ListOfParameters):
         base_node_name = (
-            reaction.getId().replace("_degradation", "").replace("_synthesis", "")
+            name.replace("_degradation", "").replace("_synthesis", "")
         )
-        kinetic_law = reaction.getKineticLaw()
-        params = kinetic_law.getListOfParameters()
-        formula = kinetic_law.getFormula()
+        formula_string = re.sub(r'\bmax\b', cls.alternative_max_name, formula_string)
+
         param_dict = dict()
-        for param in params:
-            if param.getId().startswith("binds") or param.getId().startswith("num"):
+        # This way the order of the terms is preserved, eases readability
+        with evaluate(0):
+            sympy_formula = sp.parse_expr(formula_string, evaluate=False)
+
+        replacement_dict = dict()
+
+        for old_param_name in sympy_formula.free_symbols:
+            old_param_name = str(old_param_name)
+            if old_param_name.startswith('Node'):
                 continue
-
-            # Get original parameter name
-            param_id = param.getId()
-            # if param_id == "max":
-            #     param_id = cls.alternative_max_name
-            #     # Replace 'max' with alternative_max_name in formula
-            #     formula = re.sub(r'\bmax\b', cls.alternative_max_name, formula)
-
-            if not param_id.endswith(base_node_name):
-                original_name = param_id
-                param_id = f"{param_id}_{base_node_name}"
-            # Store parameter in dictionary
-            assert (
-                param_id not in param_dict
-            ), f"Parameter {param_id} already exists in param_dict. Check for naming conflicts."
-            param_dict[param_id] = param.getValue()
-            # TODO check if this works properly
-            formula = re.sub(
-                r"\b" + re.escape(original_name) + r"\b", param_id, formula
-            )
-
-        sympy_formula = sp.parse_expr(formula)
-
-
-        # ss_dict = {
-        #         "Node_0": 0.1780818,
-        #         "Node_1": 0.9222381,
-        #         "Node_2": 0.1129278,
-        #         "Node_3": 1.0,
-        #         "Node_4": 0.1310036,
-        #         "Node_5": 0.8210416,
-        #         "cell": 1,
-        #     }
-        # sympy_formula.subs(param_dict | ss_dict)
-
+            elif old_param_name == 'cell':
+                continue
+            new_param_name = f'{old_param_name}_{base_node_name}'
+            replacement_dict[old_param_name] = new_param_name
+            # Also figure out the value of the parameter
+            assert new_param_name not in param_dict, f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
+            if old_param_name == cls.alternative_max_name:
+                old_param_name = 'max'
+            param_dict[new_param_name] = libsbml_parameters.get(old_param_name).getValue()
+        sympy_formula = sympy_formula.subs(replacement_dict)
+        
         return base_node_name, sympy_formula, param_dict
 
-    def forward(self, t: torch.Tensor, state: torch.Tensor):
-        for index, name in zip(self.modelled_gene_labels, self.gene_index):
-            ...
+
+
+
+
+    def forward(self, t: torch.Tensor, state: torch.Tensor, impute_cell_to_1: bool = True) -> torch.Tensor:
+        output = torch.zeros_like(state)
+        state_dict = dict(zip(self.modelled_gene_labels, torch.unbind(state)))
+        if impute_cell_to_1:
+            state_dict['cell'] = torch.tensor(1.0)
+        for i, node_name in enumerate(self.modelled_gene_labels):
+            synthesis_formula = self.synthesis_dict[node_name]
+            degradation_formula = self.decay_dict[node_name]
+
+            synthesis_value = torch.tensor(synthesis_formula.subs(self.param_dict | state_dict), dtype=torch.float32)
+            degradation_value = torch.tensor(degradation_formula.subs(self.param_dict | state_dict), dtype=torch.float32)
+            logging.debug(node_name, synthesis_value, degradation_value)
+            net = synthesis_value - degradation_value
+            output[i] = net
+        return output
+
 
     def set_conditions(self, conditions: torch.Tensor) -> None:
         raise NotImplementedError("PyTorchODE does not implement set_conditions yet.")
