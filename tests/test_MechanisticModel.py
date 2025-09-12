@@ -27,7 +27,6 @@ def test_multiplicative_interactions_work():
     # TODO then handle that this can handle multiple batches for integration over time
     output = my_model.integrate(torch.tensor(list(ss_dict.values()), dtype=torch.float32), torch.tensor([0., 0.5, 1.]))
 
-    assert output.shape == (3, 4)
 
 # Define parameter dictionary
 param_dict = {

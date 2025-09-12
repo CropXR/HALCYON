@@ -97,8 +97,11 @@ class PyTorchODE(MechanisticModel):
         formula_string = re.sub(r'\bmax\b', cls.alternative_max_name, formula_string)
 
         param_dict = dict()
+        
+        
         # This way the order of the terms is preserved, eases readability
         with evaluate(0):
+            # TODO THIJS: here the formula string for Node_1_synthesis needs the brackets added just after the division. Ideally check if this method would also generalise for three or more genes.
             sympy_formula = sp.parse_expr(formula_string, evaluate=False)
 
         replacement_dict = dict()
@@ -119,9 +122,6 @@ class PyTorchODE(MechanisticModel):
         sympy_formula = sympy_formula.subs(replacement_dict)
         
         return base_node_name, sympy_formula, param_dict
-
-
-
 
 
     def forward(self, t: torch.Tensor, state: torch.Tensor, impute_cell_to_1: bool = True) -> torch.Tensor:
