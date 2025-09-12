@@ -1,0 +1,3 @@
+[submodule "GRNSimulator"]
+	path = GRNSimulator
+	url = https://github.com/CropXR/GRNSimulator.git

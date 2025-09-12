@@ -1,0 +1,737 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sbml xmlns="http://www.sbml.org/sbml/level2" xmlns:html="http://www.w3.org/1999/xhtml" xmlns:jigcell="http://www.sbml.org/2001/ns/jigcell" xmlns:math="http://www.w3.org/1998/Math/MathML" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:sbml="http://www.sbml.org/sbml/level2" xmlns:xlink="http://www.w3.org/1999/xlink" level="2" version="1">
+  <model name="integration_test_network">
+<notes><p xmlns="http://www.w3.org/1999/xhtml"></p></notes>
+    <listOfCompartments>
+      <compartment id="cell" name="cell" size="1.0" />
+    </listOfCompartments>
+    <listOfSpecies>
+      <species id="Node_0" name="Node_0" compartment="cell" />
+      <species id="Node_1" name="Node_1" compartment="cell" />
+      <species id="Node_2" name="Node_2" compartment="cell" />
+      <species id="Node_3" name="Node_3" compartment="cell" />
+      <species id="_void_" name="_void_" compartment="cell" initialAmount="0.0" boundaryCondition="true" constant="true" />
+    </listOfSpecies>
+    <listOfReactions>
+      <reaction id="Node_0_synthesis" name="Node_0_synthesis: ~(Node_1) + ~(Node_2)" reversible="false">
+        <listOfReactants>
+          <speciesReference species="_void_" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="Node_0" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference species="Node_1" />
+          <modifierSpeciesReference species="Node_2" />
+        </listOfModifiers>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply><times/>
+				<ci> cell</ci>
+				<ci>max</ci>
+				<apply><plus/>
+					<apply><times/>
+						<ci>a_0</ci>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_1</ci>
+											<ci>k_1</ci>
+										</apply>
+										<ci>n_1</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_2</ci>
+											<ci>k_2</ci>
+										</apply>
+										<ci>n_2</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_1</ci>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_1</ci>
+									<ci>k_1</ci>
+								</apply>
+								<ci>n_1</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+							</apply>
+						</apply>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_2</ci>
+											<ci>k_2</ci>
+										</apply>
+										<ci>n_2</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_2</ci>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_1</ci>
+											<ci>k_1</ci>
+										</apply>
+										<ci>n_1</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_2</ci>
+									<ci>k_2</ci>
+								</apply>
+								<ci>n_2</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_3</ci>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_1</ci>
+									<ci>k_1</ci>
+								</apply>
+								<ci>n_1</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+							</apply>
+						</apply>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_2</ci>
+									<ci>k_2</ci>
+								</apply>
+								<ci>n_2</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+				</apply>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="max" name="max" value="0.020572694142634455" />
+            <parameter id="bindsAsComplex_1" name="bindsAsComplex_1" value="0.0" />
+            <parameter id="numActivators_1" name="numActivators_1" value="1.0" />
+            <parameter id="numDeactivators_1" name="numDeactivators_1" value="0.0" />
+            <parameter id="bindsAsComplex_2" name="bindsAsComplex_2" value="0.0" />
+            <parameter id="numActivators_2" name="numActivators_2" value="1.0" />
+            <parameter id="numDeactivators_2" name="numDeactivators_2" value="0.0" />
+            <parameter id="a_0" name="a_0" value="1.0" />
+            <parameter id="a_1" name="a_1" value="0.23198635741519757" />
+            <parameter id="a_2" name="a_2" value="0.32482851919567013" />
+            <parameter id="a_3" name="a_3" value="0.0" />
+            <parameter id="k_1" name="k_1" value="0.43443413549801335" />
+            <parameter id="k_2" name="k_2" value="0.4145167003013194" />
+            <parameter id="n_1" name="n_1" value="3.9976559374469933" />
+            <parameter id="n_2" name="n_2" value="1.428198326625063" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_0_degradation" name="Node_0_degradation" reversible="false">
+        <listOfReactants>
+          <speciesReference species="Node_0" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="_void_" />
+        </listOfProducts>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply>
+				<times/>
+					<ci> cell</ci>
+					<ci> delta</ci>
+					<ci> Node_0</ci>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="delta" name="delta" value="0.020572694142634455" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_1_synthesis" name="Node_1_synthesis: (Node_2*Node_0)" reversible="false">
+        <listOfReactants>
+          <speciesReference species="_void_" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="Node_1" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference species="Node_2" />
+          <modifierSpeciesReference species="Node_0" />
+        </listOfModifiers>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply><times/>
+				<ci> cell</ci>
+				<ci>max</ci>
+				<apply><plus/>
+					<apply><times/>
+						<ci>a_0</ci>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><times/>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_2</ci>
+											<ci>k_1</ci>
+										</apply>
+										<ci>n_1</ci>
+									</apply>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_0</ci>
+											<ci>k_2</ci>
+										</apply>
+										<ci>n_2</ci>
+									</apply>
+								</apply>
+								<apply><plus/>
+									<apply><times/>
+										<apply><plus/>
+											<cn>1</cn>
+											<apply><power/>
+												<apply><divide/>
+													<ci>Node_2</ci>
+													<ci>k_1</ci>
+												</apply>
+												<ci>n_1</ci>
+											</apply>
+										</apply>
+										<apply><plus/>
+											<cn>1</cn>
+											<apply><power/>
+												<apply><divide/>
+													<ci>Node_0</ci>
+													<ci>k_2</ci>
+												</apply>
+												<ci>n_2</ci>
+											</apply>
+										</apply>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_1</ci>
+						<apply><divide/>
+							<apply><times/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_0</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+							</apply>
+							<apply><plus/>
+								<apply><times/>
+									<apply><plus/>
+										<cn>1</cn>
+										<apply><power/>
+											<apply><divide/>
+												<ci>Node_2</ci>
+												<ci>k_1</ci>
+											</apply>
+											<ci>n_1</ci>
+										</apply>
+									</apply>
+									<apply><plus/>
+										<cn>1</cn>
+										<apply><power/>
+											<apply><divide/>
+												<ci>Node_0</ci>
+												<ci>k_2</ci>
+											</apply>
+											<ci>n_2</ci>
+										</apply>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+				</apply>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="max" name="max" value="0.021031327524037267" />
+            <parameter id="bindsAsComplex_1" name="bindsAsComplex_1" value="0.0" />
+            <parameter id="numActivators_1" name="numActivators_1" value="2.0" />
+            <parameter id="numDeactivators_1" name="numDeactivators_1" value="0.0" />
+            <parameter id="a_0" name="a_0" value="0.04635956182725541" />
+            <parameter id="a_1" name="a_1" value="1.0" />
+            <parameter id="k_1" name="k_1" value="0.6103760358830914" />
+            <parameter id="k_2" name="k_2" value="0.11961616809712722" />
+            <parameter id="n_1" name="n_1" value="3.834771578436379" />
+            <parameter id="n_2" name="n_2" value="4.602099607651134" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_1_degradation" name="Node_1_degradation" reversible="false">
+        <listOfReactants>
+          <speciesReference species="Node_1" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="_void_" />
+        </listOfProducts>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply>
+				<times/>
+					<ci> cell</ci>
+					<ci> delta</ci>
+					<ci> Node_1</ci>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="delta" name="delta" value="0.021031327524037267" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_2_synthesis" name="Node_2_synthesis: (Node_0) + (Node_1)" reversible="false">
+        <listOfReactants>
+          <speciesReference species="_void_" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="Node_2" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference species="Node_0" />
+          <modifierSpeciesReference species="Node_1" />
+        </listOfModifiers>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply><times/>
+				<ci> cell</ci>
+				<ci>max</ci>
+				<apply><plus/>
+					<apply><times/>
+						<ci>a_0</ci>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_0</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_0</ci>
+											<ci>k_1</ci>
+										</apply>
+										<ci>n_1</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_1</ci>
+											<ci>k_2</ci>
+										</apply>
+										<ci>n_2</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_1</ci>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_0</ci>
+									<ci>k_1</ci>
+								</apply>
+								<ci>n_1</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_0</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+							</apply>
+						</apply>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_1</ci>
+											<ci>k_2</ci>
+										</apply>
+										<ci>n_2</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_2</ci>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_0</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_0</ci>
+											<ci>k_1</ci>
+										</apply>
+										<ci>n_1</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_1</ci>
+									<ci>k_2</ci>
+								</apply>
+								<ci>n_2</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_3</ci>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_0</ci>
+									<ci>k_1</ci>
+								</apply>
+								<ci>n_1</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_0</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+							</apply>
+						</apply>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_1</ci>
+									<ci>k_2</ci>
+								</apply>
+								<ci>n_2</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_1</ci>
+										<ci>k_2</ci>
+									</apply>
+									<ci>n_2</ci>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+				</apply>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="max" name="max" value="0.038925005700761975" />
+            <parameter id="bindsAsComplex_1" name="bindsAsComplex_1" value="0.0" />
+            <parameter id="numActivators_1" name="numActivators_1" value="1.0" />
+            <parameter id="numDeactivators_1" name="numDeactivators_1" value="0.0" />
+            <parameter id="bindsAsComplex_2" name="bindsAsComplex_2" value="0.0" />
+            <parameter id="numActivators_2" name="numActivators_2" value="1.0" />
+            <parameter id="numDeactivators_2" name="numDeactivators_2" value="0.0" />
+            <parameter id="a_0" name="a_0" value="0.020531339553294732" />
+            <parameter id="a_1" name="a_1" value="0.610193607216683" />
+            <parameter id="a_2" name="a_2" value="0.4107945213187136" />
+            <parameter id="a_3" name="a_3" value="1.0" />
+            <parameter id="k_1" name="k_1" value="0.6700308989151381" />
+            <parameter id="k_2" name="k_2" value="0.03238749109674245" />
+            <parameter id="n_1" name="n_1" value="1.7517725347792659" />
+            <parameter id="n_2" name="n_2" value="2.080116511770414" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_2_degradation" name="Node_2_degradation" reversible="false">
+        <listOfReactants>
+          <speciesReference species="Node_2" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="_void_" />
+        </listOfProducts>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply>
+				<times/>
+					<ci> cell</ci>
+					<ci> delta</ci>
+					<ci> Node_2</ci>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="delta" name="delta" value="0.038925005700761975" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_3_synthesis" name="Node_3_synthesis: (Node_2)" reversible="false">
+        <listOfReactants>
+          <speciesReference species="_void_" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="Node_3" />
+        </listOfProducts>
+        <listOfModifiers>
+          <modifierSpeciesReference species="Node_2" />
+        </listOfModifiers>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply><times/>
+				<ci> cell</ci>
+				<ci>max</ci>
+				<apply><plus/>
+					<apply><times/>
+						<ci>a_0</ci>
+						<apply><minus/>
+							<cn>1</cn>
+							<apply><divide/>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+								<apply><plus/>
+									<cn>1</cn>
+									<apply><power/>
+										<apply><divide/>
+											<ci>Node_2</ci>
+											<ci>k_1</ci>
+										</apply>
+										<ci>n_1</ci>
+									</apply>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+					<apply><times/>
+						<ci>a_1</ci>
+						<apply><divide/>
+							<apply><power/>
+								<apply><divide/>
+									<ci>Node_2</ci>
+									<ci>k_1</ci>
+								</apply>
+								<ci>n_1</ci>
+							</apply>
+							<apply><plus/>
+								<cn>1</cn>
+								<apply><power/>
+									<apply><divide/>
+										<ci>Node_2</ci>
+										<ci>k_1</ci>
+									</apply>
+									<ci>n_1</ci>
+								</apply>
+							</apply>
+						</apply>
+					</apply>
+				</apply>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="max" name="max" value="0.026703237071788753" />
+            <parameter id="bindsAsComplex_1" name="bindsAsComplex_1" value="0.0" />
+            <parameter id="numActivators_1" name="numActivators_1" value="1.0" />
+            <parameter id="numDeactivators_1" name="numDeactivators_1" value="0.0" />
+            <parameter id="a_0" name="a_0" value="0.03958802569737484" />
+            <parameter id="a_1" name="a_1" value="1.0" />
+            <parameter id="k_1" name="k_1" value="0.5472724648797884" />
+            <parameter id="n_1" name="n_1" value="2.2587065194929616" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+      <reaction id="Node_3_degradation" name="Node_3_degradation" reversible="false">
+        <listOfReactants>
+          <speciesReference species="Node_3" />
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="_void_" />
+        </listOfProducts>
+        <kineticLaw>
+		<math xmlns="http://www.w3.org/1998/Math/MathML">
+			<apply>
+				<times/>
+					<ci> cell</ci>
+					<ci> delta</ci>
+					<ci> Node_3</ci>
+			</apply>
+		</math>
+          <listOfParameters>
+            <parameter id="delta" name="delta" value="0.026703237071788753" />
+          </listOfParameters>
+        </kineticLaw>
+      </reaction>
+    </listOfReactions>
+  </model>
+</sbml>

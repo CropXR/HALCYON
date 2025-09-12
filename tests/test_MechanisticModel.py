@@ -1,19 +1,31 @@
+from pathlib import Path
+import libsbml
 import torch
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.Model import Model
-from halcyon.Models.MechanisticModel import ComplexODEModel
+from halcyon.Models.MechanisticModel import ComplexODEModel, PyTorchODE
 from sympy import symbols, sympify
 import networkx as nx
 import pytest
-from halcyon.Models.MechanisticModel import ComplexODEModel
-from halcyon.Models.MechanisticModel import SBMLImportClassDummy
+import pandas as pd
+import numpy as np
 
 
-def test_import_from_sbml():
-    sbml_path = "tests/genenetweaver_outputs/test_scalefree.xml"
-    my_importclass_test = SBMLImportClassDummy.from_sbml(sbml_path)
-    # assert isinstance(my_importclass_test, SBMLImportClassDummy)
-    # assert my_importclass_test != None
+def test_multiplicative_interactions_work():
+    in_folder = Path("tests/4_genes_multplicative_interactions")
+    sbml_path = in_folder / 'integration_test_network.xml'
+    my_model = PyTorchODE.from_sbml(sbml_path)
+    
+    ss_values = pd.read_csv(in_folder / 'integration_test_network_nonoise_wildtype.tsv', sep='\t')
+    ss_dict = ss_values.to_dict('records')[0]
+
+    forward_results = my_model.forward(torch.tensor([0]), torch.tensor(list(ss_dict.values()), dtype=torch.float32))
+
+    assert np.allclose(
+        forward_results.detach().numpy(), np.array([0, 0, 0, 0 ]), atol=1e-5
+    )
+    # TODO then handle that this can handle multiple batches for integration over time
+    output = my_model.integrate(torch.tensor(list(ss_dict.values()), dtype=torch.float32), torch.tensor([0., 0.5, 1.]))
 
 
 # Define parameter dictionary

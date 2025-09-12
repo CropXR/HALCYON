@@ -1,0 +1,91 @@
+import logging
+from pathlib import Path
+import shutil
+import subprocess
+
+
+class GNWSimRunner:
+    def __init__(
+        self,
+        settings_path: Path,
+        jar_path: Path = Path("GRNSimulator/CropXRSimulator.jar"),
+    ):
+        """Create GeneNetweaver simulation runner. Point to settings file for settings, and jar file for running the simulations (default = 'GRNSimulator/CropXRSimulator.jar')"""
+        self.settings_path = settings_path
+        self.jar_path = jar_path
+        assert self.jar_path.exists(), f"Jar file {self.jar_path} does not exist"
+        assert (
+            self.settings_path.exists()
+        ), f"Settings file {self.settings_path} does not exist"
+        self.start_of_arg = (
+            "java",
+            "-jar",
+            str(self.jar_path),
+            "-c",
+            str(self.settings_path),
+        )
+
+    def run_simulation(
+        self,
+        n_genes: int,
+        sparsity: float,
+        num_modules: int,
+        network_name: str,
+        output_path: Path,
+        keep_self_interactions: bool = True,
+        network_type: int = 1,
+    ):
+        """Perform a genenetweaver network generation + simulation run.
+
+        Args:
+            n_genes (int): Number of genes in the network
+            sparsity (float): How sparse the network should be (higher values will result in fewer connections)
+            num_modules (int): Modularity; number of modules in the network.
+            network_name (str): File name to use for outputting the files
+            output_path (Path): Directory where files should be stored.
+            network_type (int): Specifies the type of network to create (0=Random,
+                1=Modular-Scale-Free). (default: 1)
+            keep_self_interactions (bool, optional): _description_. Defaults to True.
+        """
+        assert network_type in [0, 1], "network_type must be 0 or 1"
+        # Step 1: generate network
+        logging.info("Generating network")
+        output_path.mkdir(parents=True, exist_ok=True)
+        step_1_args = list(self.start_of_arg) + [
+            "--create",
+            f"--network-type={network_type}",
+            "--output-net-format=4",
+            "--num-genes",
+            str(n_genes),
+            "--sparsity",
+            str(sparsity),
+            "--num-modules",
+            str(num_modules),
+            "--output-path",
+            str(output_path),
+            "--network-name",
+            network_name,
+        ]
+        if keep_self_interactions:
+            step_1_args.append("--keep-self-interactions")
+        if sparsity == 0:
+            raise ValueError("Sparsity cannot be zero.")
+        step1_process = subprocess.run(step_1_args, check=True)
+
+        # Step 2 run simulation
+        logging.info("Simulating network expression over time")
+        step_2_args = list(self.start_of_arg) + [
+            "--simulate",
+            "--input-net",
+            f"{output_path}/{network_name}.xml",
+        ]
+        step2_process = subprocess.run(
+            step_2_args, check=True, capture_output=True, text=True
+        )
+
+        # Step 3 -> move the files to the correct directory because simulation step cannot seem to do it
+        for line in step2_process.stderr.splitlines():
+            if line.startswith("Writing file"):
+                file_name = Path(line.split("file ")[1].strip())
+                dest = output_path / file_name.name
+                shutil.move(str(file_name), str(dest))

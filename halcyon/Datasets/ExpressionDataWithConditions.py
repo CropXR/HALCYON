@@ -1,7 +1,6 @@
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionData import ExpressionData
 
-
 import numpy as np
 import pandas as pd
 import torch
@@ -33,6 +32,10 @@ class ExpressionDataWithConditions(Dataset):
             )
             == 1
         ), "All ExpressionData objects must contain the same time points."
+
+    def get_time_points(self) -> np.ndarray:
+        self._check_if_all_timepoints_same()
+        return next(iter(self._ko_dict.values()))._get_time_points()
 
     def _check_if_all_genes_same(self):
         # Assert that all ExpressionData contain the same genes
