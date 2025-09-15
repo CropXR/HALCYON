@@ -112,9 +112,11 @@ class Trainer:
         gene_labels = self.dataset.genes
         for i in range(n):
             env, expressions = self.dataset[i]
+            env = env.to(self.model.device)
+            expressions = expressions.to(self.model.device)
             # Plot ground truth
             df_real = pd.DataFrame(
-                expressions.detach().numpy(), columns=timepoints, index=gene_labels
+                expressions.detach().cpu().numpy(), columns=timepoints, index=gene_labels
             )
             ExpressionData(df_real).plot_expressions(axis=axs[i, 0])
             axs[i, 0].set_title(f"Measured (Sample {i})")
@@ -125,7 +127,7 @@ class Trainer:
                 initial_states_tensor=expressions[:, 0].unsqueeze(0)
             )
             df_pred = pd.DataFrame(
-                output.squeeze(0).detach().numpy(),
+                output.squeeze(0).detach().cpu().numpy(),
                 columns=timepoints,
                 index=gene_labels,
             )

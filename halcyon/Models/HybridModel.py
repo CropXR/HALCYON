@@ -26,13 +26,14 @@ class HybridModel(Model):
         super().__init__(modelled_gene_labels=list(all_modelled_genes))
         self.mm = mm
         self.ml = ml
-
+        self.mm.to(self.device)
+        self.ml.to(self.device)
         # Precompute indices
         self.mm_indices = torch.tensor(
-            [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels]
+            [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels], device=self.device
         )
         self.ml_indices = torch.tensor(
-            [self.modelled_gene_labels.index(g) for g in ml.modelled_gene_labels]
+            [self.modelled_gene_labels.index(g) for g in ml.modelled_gene_labels], device=self.device
         )
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -48,7 +49,7 @@ class HybridModel(Model):
         mm_output = self._get_mm_forward(t, state)
         ml_output = self._get_ml_forward(t, state)
 
-        output = torch.zeros_like(state)
+        output = torch.zeros_like(state, device=self.device)
         output.index_add_(dim=1, index=self.mm_indices, source=mm_output)
         output.index_add_(dim=1, index=self.ml_indices, source=ml_output)
         return output

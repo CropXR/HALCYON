@@ -17,10 +17,10 @@ class CellBox(MachineLearningModel):
         """
         super().__init__(modelled_gene_labels)
         self.W = nn.Parameter(
-            torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32)
+            torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32, device=self.device)
         )
-        self.decay_params = nn.Parameter(torch.zeros(self.n_genes))
-        self.epsilon = nn.Parameter(torch.ones(self.n_genes, dtype=torch.float32))
+        self.decay_params = nn.Parameter(torch.zeros(self.n_genes, dtype=torch.float32, device=self.device))
+        self.epsilon = nn.Parameter(torch.ones(self.n_genes, dtype=torch.float32, device=self.device))
         self.phi = phi
         self.reset_conditions()
 
@@ -31,7 +31,7 @@ class CellBox(MachineLearningModel):
 
     def reset_conditions(self):
         """Reset the mask to the default values, i.e. no knockouts, only no self-interactions."""
-        mask_self_interaction = ~torch.eye(self.n_genes, dtype=torch.bool)
+        mask_self_interaction = ~torch.eye(self.n_genes, dtype=torch.bool, device=self.device)
         self.register_buffer("w_mask", mask_self_interaction)
 
     def set_conditions(self, environment_data: torch.Tensor):
@@ -61,20 +61,20 @@ class CellBox(MachineLearningModel):
 
     def _set_weight_matrix_to_random(self):
         """Initialise the weight matrix to be sampled from N(0,1)"""
-        self.W = nn.Parameter(torch.randn_like(self.W))
+        self.W = nn.Parameter(torch.randn_like(self.W, device=self.device))
 
     def _set_weight_matrix_to_ones(self):
         """For unit testing mainly"""
-        self.W = nn.Parameter(torch.ones_like(self.W))
+        self.W = nn.Parameter(torch.ones_like(self.W, device=self.device))
 
     def _set_decay_matrix_to_ones(self):
         """For unit testing mainly"""
-        self.decay_params = nn.Parameter(torch.ones_like(self.decay_params))
+        self.decay_params = nn.Parameter(torch.ones_like(self.decay_params, device=self.device))
 
     def _set_epsilon_to_zero(self):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
         self.epsilon = nn.Parameter(
-            torch.full_like(self.epsilon, 1e-6, dtype=torch.float32)
+            torch.full_like(self.epsilon, 1e-6, dtype=torch.float32, device=self.device)
         )
 
     def get_inferred_network(self, threshold: float | None = None) -> RegulatoryNetwork:

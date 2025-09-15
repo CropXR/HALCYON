@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 from torchdiffeq import odeint_adjoint as odeint
 
-torch.set_default_device("cuda" if torch.cuda.is_available() else "cpu")
-
 class Model(ABC, nn.Module):
     def __init__(self, modelled_gene_labels: List[str]):
         super().__init__()

@@ -29,7 +29,9 @@ class TorchLinearODE(MechanisticModel):
                 from_idx = self.gene_index[from_gene]
                 to_idx = self.gene_index[to_gene]
                 self.weight_matrix[to_idx, from_idx] = property_dict["influence"]
+        self.weight_matrix = self.weight_matrix.to(self.device)
         self.weight_matrix = nn.Parameter(self.weight_matrix, requires_grad=True)
+        
 
     def forward(self, t, state) -> torch.Tensor:
         return torch.bmm(
