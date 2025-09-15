@@ -94,7 +94,7 @@ class Trainer:
         self, expression_true: torch.Tensor, expression_pred: torch.Tensor
     ) -> torch.Tensor:
         """Calculate the loss between a given model output and the actual expressions."""
-        return self.loss_fn(expression_true, expression_pred)
+        return self.loss_fn(expression_pred, expression_true)
 
     def plot_fit_vs_real(self):
         """Plot fitted model vs measured data"""

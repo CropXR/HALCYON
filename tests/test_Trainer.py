@@ -38,7 +38,7 @@ def test_integrate_model():
     init_conditions = gt_expressions[:, 0].unsqueeze(0)
     output = my_trainer.integrate_model(init_conditions)
     assert torch.allclose(
-        my_trainer.calculate_loss(output, gt_expressions.unsqueeze(0)),
+        my_trainer.calculate_loss(output, gt_expressions.unsqueeze(0).to(correct_model.device)),
         torch.tensor([0.0]),
     )
 
