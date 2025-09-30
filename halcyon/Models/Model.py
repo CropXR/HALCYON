@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List
-
+from natsort import natsorted
 import torch
 import torch.nn as nn
 from torchdiffeq import odeint_adjoint as odeint
@@ -8,7 +8,7 @@ from torchdiffeq import odeint_adjoint as odeint
 class Model(ABC, nn.Module):
     def __init__(self, modelled_gene_labels: List[str]):
         super().__init__()
-        self.modelled_gene_labels = sorted(modelled_gene_labels)
+        self.modelled_gene_labels = natsorted(modelled_gene_labels)
         self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
