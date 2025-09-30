@@ -39,7 +39,7 @@ def test_integrate_model():
     output = my_trainer.integrate_model(init_conditions)
     assert torch.allclose(
         my_trainer.calculate_loss(output, gt_expressions.unsqueeze(0).to(correct_model.device)),
-        torch.tensor([0.0]),
+        torch.tensor([0.0], device=correct_model.device),
     )
 
 

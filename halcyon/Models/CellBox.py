@@ -87,7 +87,7 @@ class CellBox(MachineLearningModel):
         Returns:
             RegulatoryNetwork
         """
-        w_masked = self.w_masked.detach().numpy()
+        w_masked = self.w_masked.detach().cpu().numpy()
         G = nx.DiGraph()
         for i, gene_to in enumerate(self.modelled_gene_labels):
             for j, gene_from in enumerate(self.modelled_gene_labels):

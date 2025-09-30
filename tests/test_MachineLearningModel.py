@@ -40,8 +40,8 @@ def test_cellbox_forward():
     # Test nonlinear envelope
     gene_labels = ["a", "b", "c"]
     my_cellbox = CellBox(gene_labels)
-    init_expr = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(0)  # Imitate being one batch
-    env_conditions = torch.tensor([0, 0, 0, 0, 0]).unsqueeze(
+    init_expr = torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device).unsqueeze(0)  # Imitate being one batch
+    env_conditions = torch.tensor([0, 0, 0, 0, 0], device=my_cellbox.device).unsqueeze(
         0
     )  # Imitate being one batch
     my_cellbox._set_weight_matrix_to_ones()
@@ -50,17 +50,17 @@ def test_cellbox_forward():
     forward_pass = my_cellbox.forward(t=torch.tensor([0]), state=init_expr)
     assert torch.allclose(
         forward_pass,
-        torch.tanh(torch.tensor([5.0, 4.0, 3.0]).unsqueeze(0))
+        torch.tanh(torch.tensor([5.0, 4.0, 3.0], device=my_cellbox.device).unsqueeze(0))
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
-        * torch.tensor([1.0, 2.0, 3.0]).unsqueeze(0),
+        * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device).unsqueeze(0),
     )
 
 
 def test_cellbox_integrate():
     gene_labels = ["a", "b", "c"]
     my_cellbox = CellBox(gene_labels)
-    init_values = torch.tensor([1.0, 2.0, 3.0]).unsqueeze(0)  # Imitate being one batch
-    env_values = torch.tensor([0, 0, 0, 0, 0]).unsqueeze(0)  # Imitate being one batch
+    init_values = torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device).unsqueeze(0)  # Imitate being one batch
+    env_values = torch.tensor([0, 0, 0, 0, 0], device=my_cellbox.device).unsqueeze(0)  # Imitate being one batch
     my_cellbox._set_weight_matrix_to_ones()
     my_cellbox.set_conditions(env_values)
     output = my_cellbox.integrate(init_values, t_eval=torch.tensor([0.0, 1.0, 2.0]))
@@ -71,8 +71,7 @@ def test_cellbox_integrate():
                 [1.0000, 1.8991, 2.7381],
                 [2.0000, 2.8320, 3.6085],
                 [3.0000, 3.7639, 4.4780],
-            ]
-        ).unsqueeze(0),
+            ], device=my_cellbox.device).unsqueeze(0),
         atol=1e-4,
     )
 
@@ -105,24 +104,24 @@ def test_cellbox_gene_knockout():
     # Test nonlinear envelope
     gene_labels = ["a", "b", "c"]
     my_cellbox = CellBox(gene_labels)
-    init_values = torch.tensor([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]])
-    env_values = torch.tensor([[0, 0, 0, 0, 0], [0, 1, 0, 0, 0]])
+    init_values = torch.tensor([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]], device=my_cellbox.device)
+    env_values = torch.tensor([[0, 0, 0, 0, 0], [0, 1, 0, 0, 0]], device=my_cellbox.device)
     my_cellbox._set_weight_matrix_to_ones()
     my_cellbox.set_conditions(env_values)
     # Time not important
     forward_pass = my_cellbox.forward(t=torch.tensor([0]), state=init_values)
     assert torch.allclose(
         forward_pass[0, :],
-        torch.tanh(torch.tensor([5.0, 4.0, 3.0]))
+        torch.tanh(torch.tensor([5.0, 4.0, 3.0], device=my_cellbox.device))
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
-        * torch.tensor([1.0, 2.0, 3.0]),
+        * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device),
     )
 
     assert torch.allclose(
         forward_pass[1, :],
-        torch.tanh(torch.tensor([5.0, 0.0, 3.0]))
+        torch.tanh(torch.tensor([5.0, 0.0, 3.0], device=my_cellbox.device))
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
-        * torch.tensor([1.0, 2.0, 3.0]),
+        * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device),
     )
 
 
