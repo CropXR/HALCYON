@@ -8,11 +8,15 @@ class GNWSimRunner:
     def __init__(
         self,
         settings_path: Path,
-        jar_path: Path = Path("GRNSimulator/CropXRSimulator.jar"),
+        jar_path = None
     ):
         """Create GeneNetweaver simulation runner. Point to settings file for settings, and jar file for running the simulations (default = 'GRNSimulator/CropXRSimulator.jar')"""
         self.settings_path = settings_path
-        self.jar_path = jar_path
+        if jar_path is None:
+            # Default jar path relative to this file
+            self.jar_path = Path(__file__).parents[2] / "GRNSimulator" / "CropXRSimulator.jar"
+        else:
+            self.jar_path = jar_path
         assert self.jar_path.exists(), f"Jar file {self.jar_path} does not exist"
         assert (
             self.settings_path.exists()

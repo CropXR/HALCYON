@@ -96,12 +96,14 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(expression_pred, expression_true)
 
-    def plot_fit_vs_real(self):
+    def plot_fit_vs_real(self, top_n = None):
         """Plot fitted model vs measured data"""
         if len(self.dataset) == 0:
             raise ValueError("Dataset is empty.")
-
-        n = len(self.dataset)
+        if top_n is not None:
+            n = top_n
+        else:
+            n = len(self.dataset)
         fig, axs = plt.subplots(n, 2, sharey=True, figsize=(10, 4 * n))
         if n == 1:
             axs = np.expand_dims(
