@@ -30,10 +30,12 @@ class HybridModel(Model):
         self.ml.to(self.device)
         # Precompute indices
         self.mm_indices = torch.tensor(
-            [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels], device=self.device
+            [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels],
+            device=self.device,
         )
         self.ml_indices = torch.tensor(
-            [self.modelled_gene_labels.index(g) for g in ml.modelled_gene_labels], device=self.device
+            [self.modelled_gene_labels.index(g) for g in ml.modelled_gene_labels],
+            device=self.device,
         )
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:

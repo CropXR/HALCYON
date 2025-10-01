@@ -24,7 +24,7 @@ def test_hybrid_model_gene_split():
 
     # imitate batch
     env_conditions, expressions = env_conditions.unsqueeze(0), expressions.unsqueeze(0)
-    
+
     ml_model = PhoenixOnlyAddLayers(
         expression_dataset.genes, expression_dataset.all_environments
     )
@@ -33,8 +33,13 @@ def test_hybrid_model_gene_split():
     env_conditions = env_conditions.to(hybrid_model.device)
     expressions = expressions.to(hybrid_model.device)
     # Ensure that they handle the different order of genes well
-    assert torch.allclose(hybrid_model.mm_indices, torch.tensor([0, 3, 4], device=hybrid_model.device))
-    assert torch.allclose(hybrid_model.ml_indices, torch.tensor([0, 1, 2, 3, 4], device=hybrid_model.device))
+    assert torch.allclose(
+        hybrid_model.mm_indices, torch.tensor([0, 3, 4], device=hybrid_model.device)
+    )
+    assert torch.allclose(
+        hybrid_model.ml_indices,
+        torch.tensor([0, 1, 2, 3, 4], device=hybrid_model.device),
+    )
     assert [
         hybrid_model.modelled_gene_labels[i] for i in hybrid_model.mm_indices.tolist()
     ] == ["G1", "G4", "G5"]
@@ -44,7 +49,9 @@ def test_hybrid_model_gene_split():
         torch.tensor([0.1000, 0.0000, -0.0800], device=hybrid_model.device),
     )
 
-    one_forward = hybrid_model.forward(t=torch.tensor([0], device=hybrid_model.device), state=expressions[:, :, 0])
+    one_forward = hybrid_model.forward(
+        t=torch.tensor([0], device=hybrid_model.device), state=expressions[:, :, 0]
+    )
     assert one_forward.shape == (1, 5)
 
     trainer = Trainer(hybrid_model, expression_dataset)
@@ -54,5 +61,7 @@ def test_hybrid_model_gene_split():
     assert tuple(integration_output.shape) == (1, 5, 4)
     assert torch.allclose(
         integration_output[0, :, 0],
-        torch.tensor([0.1000, 0.2000, 0.3000, 0.4000, 0.5000], device=hybrid_model.device),
+        torch.tensor(
+            [0.1000, 0.2000, 0.3000, 0.4000, 0.5000], device=hybrid_model.device
+        ),
     )

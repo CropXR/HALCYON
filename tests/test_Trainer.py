@@ -1,6 +1,7 @@
 from copy import deepcopy
 from unittest.mock import MagicMock
 import numpy as np
+import pytest
 from pytest import approx
 import torch
 
@@ -13,6 +14,12 @@ from tests.create_dummy_data import (
     get_synthetic_data,
 )
 from tests.create_dummy_data import expression_data_from_gnw
+
+
+@pytest.fixture
+def cellbox_from_expression():
+    expressions = create_synthetic_expressions()
+    return CellBox(expressions.genes, ("test", "test2"))
 
 
 def test_calculate_loss():
@@ -38,7 +45,9 @@ def test_integrate_model():
     init_conditions = gt_expressions[:, 0].unsqueeze(0)
     output = my_trainer.integrate_model(init_conditions)
     assert torch.allclose(
-        my_trainer.calculate_loss(output, gt_expressions.unsqueeze(0).to(correct_model.device)),
+        my_trainer.calculate_loss(
+            output, gt_expressions.unsqueeze(0).to(correct_model.device)
+        ),
         torch.tensor([0.0], device=correct_model.device),
     )
 
@@ -67,27 +76,28 @@ def test_train_neural_ode():
     assert not torch.allclose(init_decay, neural_ode_model.decay_params.detach())
 
 
-def test_train_cellbox():
-    expressions = create_synthetic_expressions()
-    cellbox = CellBox(expressions.genes)
-    cellbox._set_weight_matrix_to_ones()
-    cellbox._set_epsilon_to_zero()
-    init_epsilon = deepcopy(cellbox.epsilon)
-    init_decay = deepcopy(cellbox.decay_params)
-    my_trainer = Trainer(cellbox, expressions)
+def test_train_cellbox(cellbox_from_expression):
+
+    cellbox_from_expression._set_weight_matrix_to_ones()
+    cellbox_from_expression._set_epsilon_to_zero()
+    init_epsilon = deepcopy(cellbox_from_expression.epsilon)
+    init_decay = deepcopy(cellbox_from_expression.decay_params)
+    my_trainer = Trainer(cellbox_from_expression, create_synthetic_expressions())
     my_trainer.train(5)
     # Assert loss is decreasing
     assert all(
         x > y for x, y in zip(my_trainer.loss_history, my_trainer.loss_history[1:])
     )
     # Check if epsilon and decay rate changes
-    assert not torch.allclose(cellbox.epsilon, init_epsilon)
-    assert not torch.allclose(cellbox.decay_params, init_decay)
+    assert not torch.allclose(cellbox_from_expression.epsilon, init_epsilon)
+    assert not torch.allclose(cellbox_from_expression.decay_params, init_decay)
 
 
 def test_train_cellbox_ko_data(expression_data_from_gnw):
-    cellbox = CellBox(expression_data_from_gnw.genes)
-    # cellbox._set_epsilon_to_zero()
+    cellbox = CellBox(
+        expression_data_from_gnw.genes, expression_data_from_gnw.all_environments
+    )
+    # cellbox_from_expression._set_epsilon_to_zero()
     cellbox._set_weight_matrix_to_ones()
     init_epsilon = deepcopy(cellbox.epsilon)
     init_decay = deepcopy(cellbox.decay_params)
@@ -104,10 +114,9 @@ def test_train_cellbox_ko_data(expression_data_from_gnw):
     assert not torch.allclose(cellbox.W, init_w)
 
 
-def test_plot_fit_vs_real_data():
+def test_plot_fit_vs_real_data(cellbox_from_expression):
     gt_regulatory_network, _, expressions = get_synthetic_data()
-    correct_model = CellBox(expressions.genes)
-    my_trainer = Trainer(correct_model, expressions)
+    my_trainer = Trainer(cellbox_from_expression, expressions)
     out_fig, out_axs = my_trainer.plot_fit_vs_real()
     assert out_fig is not None
 

@@ -11,6 +11,8 @@ from halcyon.Models.Model import Model
 from torch.nn.functional import mse_loss
 import seaborn as sns
 
+from halcyon.Simulators.GNWSimRunner import SimulationResult
+
 
 class Trainer:
     def __init__(
@@ -37,7 +39,9 @@ class Trainer:
         # Ensure that expressions match the order of the modelled genes
         self.dataset = dataset
         self.dataset.match_genes_to_list(model.modelled_gene_labels)
-        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
+        self.dataloader = DataLoader(
+            self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True
+        )
         if optimizer_kwargs is None:
             optimizer_kwargs = dict()
         self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
@@ -64,7 +68,7 @@ class Trainer:
                 experiment_data, expression_data = batch
                 experiment_data = experiment_data.to(self.model.device)
                 expression_data = expression_data.to(self.model.device)
-                
+
                 self.optimizer.zero_grad()
                 self.model.set_conditions(experiment_data)
                 output = self.integrate_model(
@@ -96,7 +100,7 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(expression_pred, expression_true)
 
-    def plot_fit_vs_real(self, top_n = None):
+    def plot_fit_vs_real(self, top_n=None):
         """Plot fitted model vs measured data"""
         if len(self.dataset) == 0:
             raise ValueError("Dataset is empty.")
@@ -118,7 +122,9 @@ class Trainer:
             expressions = expressions.to(self.model.device)
             # Plot ground truth
             df_real = pd.DataFrame(
-                expressions.detach().cpu().numpy(), columns=timepoints, index=gene_labels
+                expressions.detach().cpu().numpy(),
+                columns=timepoints,
+                index=gene_labels,
             )
             ExpressionData(df_real).plot_expressions(axis=axs[i, 0])
             axs[i, 0].set_title(f"Measured (Sample {i})")
@@ -165,3 +171,75 @@ class Trainer:
             initial_state=initial_states_tensor, t_eval=time_points_tensor
         )
         return output
+
+
+class TrainingJob:
+    def __init__(
+        self,
+        model_cls: Model,
+        sim_result: SimulationResult,
+        nr_training_steps: int,
+        model_kwargs: dict | None = None,
+        optimizer_kwargs: dict | None = None,
+    ):
+        """Training job that can be used to run training in parallel.
+
+        Args:
+            model_cls (Model): Class that can be used to construct the model. Should inherit from Model
+            sim_result (SimulationResult): Simulator output that the model should be trained on.
+            nr_training_steps (int): How many epochs to run the training
+            model_kwargs (dict, optional): Kwargs to pass to model (e.g. device). Defaults to None.
+            optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
+        """
+        self.sim_result = sim_result
+        self.nr_training_steps = nr_training_steps
+        self.expressions = (
+            ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+                self.sim_result.data_path
+                / f"{self.sim_result.network_name}_nonoise_knockout_timeseries.tsv"
+            )
+        )
+        self.expressions.scale_time_series()
+        model = model_cls(
+            self.expressions.genes, self.expressions.all_environments, **model_kwargs
+        )
+        self.trainer = Trainer(
+            model, self.expressions, batch_size=32, optimizer_kwargs=optimizer_kwargs
+        )
+        self.model_path = (
+            self.sim_result.data_path
+            / f"trained_{self.trainer.model.__class__.__name__}.pt"
+        )
+
+    def run(self):
+        self.trainer.train(self.nr_training_steps)
+        torch.save(self.trainer.model.state_dict(), self.model_path)
+        logging.info(
+            f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
+        )
+        return self.summary()
+
+    @property
+    def final_loss(self):
+        return self.trainer.loss_history[-1]
+
+    def summary(self) -> dict:
+        output_dict = {}
+        output_dict["final_loss"] = self.final_loss
+        output_dict["nr_training_steps"] = self.nr_training_steps
+        output_dict["model_path"] = str(self.model_path)
+        output_dict["model_cls"] = self.trainer.model.__class__.__name__
+        for key, value in self.sim_result.items():
+            output_dict[key] = value
+
+        return output_dict
+
+
+def run_training_job(job: TrainingJob):
+    """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(processName)s] %(message)s",
+        force=True,
+    )
+    return job.run()

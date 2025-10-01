@@ -16,11 +16,14 @@ import logging
 
 class PhoenixABC(MachineLearningModel, ABC):
     def __init__(
-        self, modelled_gene_labels: list[str], condition_names: tuple[str, ...]
+        self,
+        modelled_gene_labels: list[str],
+        condition_names: tuple[str, ...],
+        **kwargs,
     ):
         """Class that is inherited, so shouldn't be called on its own."""
-        super().__init__(modelled_gene_labels)
-        self.n_conditions = len(condition_names)
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
+
         self.decay_params = nn.Parameter(
             torch.full(size=(self.n_genes,), fill_value=0.1)
         )
@@ -36,10 +39,6 @@ class PhoenixABC(MachineLearningModel, ABC):
         Args:
             env_data (torch.Tensor): Tensor of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions.
         """
-
-        assert (
-            env_data.shape[1] == self.n_genes + self.n_conditions
-        ), "Environment data should be of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions"
         # Knockouts should be used as mask after the forwards pass
         ko_masks, env_flags = self.parse_env_data(env_data)
         self.register_buffer("env_flags", env_flags)
@@ -65,14 +64,15 @@ class PhoenixOnlyAddLayers(PhoenixABC):
         self,
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
+        **kwargs,
     ):
         """Create Phoenix model; a neural network that takes the gene expression and the environment as input and returns the change in gene expression. This version only has additive layers, so no interactive effects are modelled.
 
         Args:
             modelled_gene_labels (list[str]): List of genes that the model models.
-            condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes for the neural network.
+            condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes.
         """
-        super().__init__(modelled_gene_labels, condition_names)
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.neural_net = nn.Sequential(
             PhoenixSumActivation(),
             nn.Linear(self.n_genes + self.n_conditions, self.n_genes),
@@ -95,16 +95,17 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
         hidden_size: int,
+        **kwargs,
     ):
         """Create Phoenix model; a neural network that takes the gene expression and the environment as input and returns the change in gene expression.
         This version has both additive and multiplicative layers.
 
         Args:
             modelled_gene_labels (list[str]): List of genes that the model models.
-            condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes for the neural network.
+            condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes.
             hidden_size (int): size of the hidden state.
         """
-        super().__init__(modelled_gene_labels, condition_names)
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.sum_nn = nn.Sequential(
             PhoenixSumActivation(),
             nn.Linear(self.n_genes + self.n_conditions, hidden_size),

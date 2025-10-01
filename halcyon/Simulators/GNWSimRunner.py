@@ -2,19 +2,44 @@ import logging
 from pathlib import Path
 import shutil
 import subprocess
+from dataclasses import dataclass, fields
+
+
+@dataclass
+class SimulationResult:
+    """Container for storing the results of a simulated gene network.
+
+    Attributes:
+        data_path (Path): Directory for output files.
+        network_name (str): File name to use for outputting the files.
+        nr_genes (int): Number of genes in the network.
+        nr_modules (int): Number of modules in the network.
+        sparsity (float): How sparse the network is 
+            (higher values mean fewer connections).
+        keep_self_interactions (bool): Whether self-interactions are kept.
+    """
+    data_path: Path
+    network_name: str
+    nr_genes: int
+    nr_modules: int
+    sparsity: float
+    keep_self_interactions: bool
+
+    def items(self):
+        """Iterate over field names and their values (as if this were a dict)"""
+        for field in fields(self):
+            yield field.name, getattr(self, field.name)
 
 
 class GNWSimRunner:
-    def __init__(
-        self,
-        settings_path: Path,
-        jar_path = None
-    ):
-        """Create GeneNetweaver simulation runner. Point to settings file for settings, and jar file for running the simulations (default = 'GRNSimulator/CropXRSimulator.jar')"""
+    def __init__(self, settings_path: Path, jar_path=None):
+        """Create GeneNetweaver simulation runner. Point to settings file for settings, and jar file for running the simulations (default = '../../GRNSimulator/CropXRSimulator.jar' relative to this file)"""
         self.settings_path = settings_path
         if jar_path is None:
             # Default jar path relative to this file
-            self.jar_path = Path(__file__).parents[2] / "GRNSimulator" / "CropXRSimulator.jar"
+            self.jar_path = (
+                Path(__file__).parents[2] / "GRNSimulator" / "CropXRSimulator.jar"
+            )
         else:
             self.jar_path = jar_path
         assert self.jar_path.exists(), f"Jar file {self.jar_path} does not exist"
@@ -37,7 +62,7 @@ class GNWSimRunner:
         network_name: str,
         output_path: Path,
         keep_self_interactions: bool = True,
-    ):
+    ) -> SimulationResult:
         """Perform a genenetweaver network generation + simulation run.
 
         Args:
@@ -87,3 +112,12 @@ class GNWSimRunner:
                 file_name = Path(line.split("file ")[1].strip())
                 dest = output_path / file_name.name
                 shutil.move(str(file_name), str(dest))
+
+        return SimulationResult(
+            data_path=output_path.resolve(),
+            network_name=network_name,
+            nr_genes=n_genes,
+            nr_modules=num_modules,
+            sparsity=sparsity,
+            keep_self_interactions=keep_self_interactions,
+        )

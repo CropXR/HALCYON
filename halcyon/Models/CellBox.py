@@ -8,19 +8,32 @@ from torch import nn
 
 
 class CellBox(MachineLearningModel):
-    def __init__(self, modelled_gene_labels: list[str], phi=torch.tanh):
+    def __init__(
+        self,
+        modelled_gene_labels: list[str],
+        condition_names: tuple[str, ...],
+        phi=torch.tanh,
+        **kwargs,
+    ):
         """Create a cellbox model; a linear ODE with a nonlinear activation function.
 
         Args:
             modelled_gene_labels (list[str]): list of all modelled genes
+            condition_names (tuple[str, ...]): names of the conditions
             phi: Activation function. Defaults to torch.tanh.
         """
-        super().__init__(modelled_gene_labels)
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.W = nn.Parameter(
-            torch.zeros((self.n_genes, self.n_genes), dtype=torch.float32, device=self.device)
+            torch.zeros(
+                (self.n_genes, self.n_genes), dtype=torch.float32, device=self.device
+            )
         )
-        self.decay_params = nn.Parameter(torch.zeros(self.n_genes, dtype=torch.float32, device=self.device))
-        self.epsilon = nn.Parameter(torch.ones(self.n_genes, dtype=torch.float32, device=self.device))
+        self.decay_params = nn.Parameter(
+            torch.zeros(self.n_genes, dtype=torch.float32, device=self.device)
+        )
+        self.epsilon = nn.Parameter(
+            torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
+        )
         self.phi = phi
         self.reset_conditions()
 
@@ -31,7 +44,9 @@ class CellBox(MachineLearningModel):
 
     def reset_conditions(self):
         """Reset the mask to the default values, i.e. no knockouts, only no self-interactions."""
-        mask_self_interaction = ~torch.eye(self.n_genes, dtype=torch.bool, device=self.device)
+        mask_self_interaction = ~torch.eye(
+            self.n_genes, dtype=torch.bool, device=self.device
+        )
         self.register_buffer("w_mask", mask_self_interaction)
 
     def set_conditions(self, environment_data: torch.Tensor):
@@ -69,7 +84,9 @@ class CellBox(MachineLearningModel):
 
     def _set_decay_matrix_to_ones(self):
         """For unit testing mainly"""
-        self.decay_params = nn.Parameter(torch.ones_like(self.decay_params, device=self.device))
+        self.decay_params = nn.Parameter(
+            torch.ones_like(self.decay_params, device=self.device)
+        )
 
     def _set_epsilon_to_zero(self):
         """For unit testing mainly. Do not fully initialise at 0 because then the gradient can disappear"""
