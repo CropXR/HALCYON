@@ -3,7 +3,7 @@ from typing import List
 from natsort import natsorted
 import torch
 import torch.nn as nn
-from torchdiffeq import odeint_adjoint as odeint
+from torchdiffeq import odeint
 
 
 class Model(ABC, nn.Module):
