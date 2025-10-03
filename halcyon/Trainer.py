@@ -5,6 +5,9 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+
+from torch.profiler import profile, record_function, ProfilerActivity
+
 from typing import Callable
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Models.Model import Model
@@ -55,32 +58,48 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
-    def train(self, n_epochs: int):
+    def train(self, n_epochs: int, do_profiling=False):
         """Perform model training on batches.
 
         Args:
             n_epochs (int): Number of epochs to train
         """
         loss_history = []
-        for epoch in range(n_epochs):
-            epoch_loss = 0.0
-            for batch in self.dataloader:
-                experiment_data, expression_data = batch
-                experiment_data = experiment_data.to(self.model.device)
-                expression_data = expression_data.to(self.model.device)
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            record_shapes=False,
+            with_stack=False,
+            profile_memory=False,
+        ) as prof:
 
-                self.optimizer.zero_grad()
-                self.model.set_conditions(experiment_data)
-                output = self.integrate_model(
-                    initial_states_tensor=expression_data[:, :, 0]
-                )
-                loss = self.calculate_loss(expression_data, output)
-                loss.backward()
-                self.optimizer.step()
-                epoch_loss += loss.item()
-            mean_epoch_loss = epoch_loss / len(self.dataloader)
-            loss_history.append(mean_epoch_loss)
-            logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+            for epoch in range(n_epochs):
+                epoch_loss = 0.0
+                for batch in self.dataloader:
+                    with record_function("data_loading"):
+                        experiment_data, expression_data = batch
+                        experiment_data = experiment_data.to(self.model.device)
+                        expression_data = expression_data.to(self.model.device)
+                    with record_function("zero_grad"):
+                        self.optimizer.zero_grad()
+                    with record_function("set_conditions"):
+                        self.model.set_conditions(experiment_data)
+                    with record_function("integrate_model"):
+                        output = self.integrate_model(
+                            initial_states_tensor=expression_data[:, :, 0]
+                        )
+                    with record_function("calculate_loss"):
+                        loss = self.calculate_loss(expression_data, output)
+                    with record_function("backward"):
+                        loss.backward()
+                    with record_function("optim_step"):
+                        self.optimizer.step()
+                    epoch_loss += loss.item()
+                mean_epoch_loss = epoch_loss / len(self.dataloader)
+                loss_history.append(mean_epoch_loss)
+                logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=20))
+        prof.export_chrome_trace("trace.json")
         self.loss_history = loss_history
 
     def plot_loss_history(self):
