@@ -155,3 +155,28 @@ def test_train_job_and_load_model(sim_result):
         assert torch.allclose(
             og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
         ), f"Mismatch in {weight_key}"
+
+
+def test_train_job_and_load_cellbox(sim_result):
+    train_job = TrainingJob(
+        CellBox,
+        sim_result,
+        nr_training_steps=2,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.run()
+    og_model_state_dicts = {
+        k: v.clone().detach() for k, v in train_job.trainer.model.state_dict().items()
+    }
+    train_job = TrainingJob(
+        CellBox,
+        sim_result,
+        nr_training_steps=1,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.load_if_exists()
+    loaded_state_dict = train_job.trainer.model.state_dict()
+    for weight_key in og_model_state_dicts:
+        assert torch.allclose(
+            og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
+        ), f"Mismatch in {weight_key}"

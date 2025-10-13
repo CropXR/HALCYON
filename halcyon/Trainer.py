@@ -106,7 +106,7 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(expression_pred, expression_true)
 
-    def plot_fit_vs_real(self, top_n=None):
+    def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
         if len(self.dataset) == 0:
             raise ValueError("Dataset is empty.")
@@ -132,7 +132,7 @@ class Trainer:
                 columns=timepoints,
                 index=gene_labels,
             )
-            ExpressionData(df_real).plot_expressions(axis=axs[i, 0])
+            ExpressionData(df_real).plot_expressions(axis=axs[i, 0], legend=show_legend)
             axs[i, 0].set_title(f"Measured (Sample {i})")
 
             # Simulate and plot prediction
@@ -145,9 +145,8 @@ class Trainer:
                 columns=timepoints,
                 index=gene_labels,
             )
-            ExpressionData(df_pred).plot_expressions(axis=axs[i, 1])
+            ExpressionData(df_pred).plot_expressions(axis=axs[i, 1], legend=show_legend)
             axs[i, 1].set_title(f"Model (Sample {i})")
-
         plt.tight_layout()
         return fig, axs
 

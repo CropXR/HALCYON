@@ -25,7 +25,7 @@ def init_values():
 @pytest.fixture
 def my_cellbox():
     gene_labels = ["a", "b", "c"]
-    return CellBox(gene_labels, ["test1", "test2"])
+    return CellBox(gene_labels, ["test1", "test2"], self_activations=False)
 
 
 def test_create_neuralODE(neural_ode, init_values):
@@ -62,15 +62,14 @@ def test_cellbox_forward(my_cellbox):
 
 
 def test_cellbox_integrate(my_cellbox):
-    init_values = torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device).unsqueeze(
-        0
-    )  # Imitate being one batch
-    env_values = torch.tensor([0, 0, 0, 0, 0], device=my_cellbox.device).unsqueeze(
-        0
-    )  # Imitate being one batch
+    init_values = torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device).unsqueeze(0)
+    env_values = torch.tensor([0, 0, 0, 0, 0], device=my_cellbox.device).unsqueeze(0)
     my_cellbox._set_weight_matrix_to_ones()
+    my_cellbox._set_decay_matrix_to_zeros()
     my_cellbox.set_conditions(env_values)
-    output = my_cellbox.integrate(init_values, t_eval=torch.tensor([0.0, 1.0, 2.0]))
+    output = my_cellbox.integrate(
+        init_values, t_eval=torch.tensor([0.0, 1.0, 2.0], device=my_cellbox.device)
+    )
     assert torch.allclose(
         output,
         torch.tensor(

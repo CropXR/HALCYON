@@ -13,6 +13,7 @@ class CellBox(MachineLearningModel):
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
         phi=torch.tanh,
+        self_activations: bool = True,
         **kwargs,
     ):
         """Create a cellbox model; a linear ODE with a nonlinear activation function.
@@ -24,17 +25,19 @@ class CellBox(MachineLearningModel):
         """
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.W = nn.Parameter(
-            torch.zeros(
+            torch.randn(
                 (self.n_genes, self.n_genes), dtype=torch.float32, device=self.device
             )
         )
+        # Init as 1 as decribed in paper
         self.decay_params = nn.Parameter(
-            torch.zeros(self.n_genes, dtype=torch.float32, device=self.device)
+            torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
         )
         self.epsilon = nn.Parameter(
             torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
         )
         self.phi = phi
+        self.self_activations = self_activations
         self.reset_conditions()
 
     @property
@@ -43,11 +46,11 @@ class CellBox(MachineLearningModel):
         return self.W * self.w_mask  # type: ignore
 
     def reset_conditions(self):
-        """Reset the mask to the default values, i.e. no knockouts, only no self-interactions."""
-        mask_self_interaction = ~torch.eye(
-            self.n_genes, dtype=torch.bool, device=self.device
-        )
-        self.register_buffer("w_mask", mask_self_interaction)
+        """Reset the mask to the default values. In case of no-self interactions, keep the main diagonal zero."""
+        if self.self_activations:
+            self.w_mask = torch.ones(self.n_genes, device=self.device)
+        else:
+            self.w_mask = ~torch.eye(self.n_genes, dtype=torch.bool, device=self.device)
 
     def set_conditions(self, environment_data: torch.Tensor):
         """Set the conditions for the model. This is used to set the knockout masks for the ODE.
@@ -61,7 +64,7 @@ class CellBox(MachineLearningModel):
         knockout_masks, _ = self.parse_env_data(environment_data)
         new_w_masked = self.w_masked.unsqueeze(0) * knockout_masks  # [B, G, G]
         assert not torch.isnan(new_w_masked).any(), "NaN in w_masked"
-        self.register_buffer("w_mask", new_w_masked)
+        self.w_mask = new_w_masked
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         # Batch matrix multiplication: w_masked [B, G, G] @ state [B, G, 1] -> change_in_state [B, G]
@@ -86,6 +89,12 @@ class CellBox(MachineLearningModel):
         """For unit testing mainly"""
         self.decay_params = nn.Parameter(
             torch.ones_like(self.decay_params, device=self.device)
+        )
+
+    def _set_decay_matrix_to_zeros(self):
+        """For unit testing mainly"""
+        self.decay_params = nn.Parameter(
+            torch.zeros_like(self.decay_params, device=self.device)
         )
 
     def _set_epsilon_to_zero(self):
