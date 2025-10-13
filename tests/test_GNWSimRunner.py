@@ -1,5 +1,8 @@
+from dataclasses import asdict
 from pathlib import Path
-from halcyon.Simulators.GNWSimRunner import GNWSimRunner
+
+import pytest
+from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
 
 import hashlib
 
@@ -13,22 +16,41 @@ def create_file_hash(path: Path):
     return hasher.hexdigest()
 
 
-def test_gnw_generation():
+@pytest.fixture
+def sim_result():
     gnw_sim = GNWSimRunner(
         settings_path=Path("setting_files/gnw_testing_runs_settings.txt")
     )
     generated_data_path = Path("tests/generated_test_data")
-    expected_data_path = Path("tests/expected_output")
-    gnw_sim.run_simulation(
+
+    sim_result = gnw_sim.run_simulation(
         n_genes=10,
         sparsity=0.1,
         num_modules=2,
         network_name="integration_test_network",
         output_path=generated_data_path,
     )
+    return sim_result
+
+
+def test_gnw_reproducible(sim_result):
+    expected_data_path = Path("tests/expected_output")
     gt_files = expected_data_path.iterdir()
-    generated_files = generated_data_path.iterdir()
-    for gt_file, expected_file in zip(gt_files, generated_files):
+    # generated_files = sim_result.data_path.iterdir()
+    for expected_file in gt_files:
+        gt_file = sim_result.data_path / expected_file.name
         assert create_file_hash(gt_file) == create_file_hash(
             expected_file
-        ), f"File {gt_file} does not match expected output"
+        ), f"File {gt_file} does not match hash of {expected_file}"
+
+    expected_sim_result = SimulationResult(
+        data_path=Path(
+            "/lustre/BIF/nobackup/noord087/phd/HALCYON/tests/generated_test_data"
+        ),
+        network_name="integration_test_network",
+        nr_genes=10,
+        nr_modules=2,
+        sparsity=0.1,
+        keep_self_interactions=True,
+    )
+    assert asdict(sim_result) == asdict(expected_sim_result)

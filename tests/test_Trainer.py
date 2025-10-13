@@ -1,18 +1,27 @@
 from copy import deepcopy
 from unittest.mock import MagicMock
 import numpy as np
+import pytest
 from pytest import approx
 import torch
 
 from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
-from halcyon.Trainer import Trainer
+from halcyon.Simulators.GNWSimRunner import SimulationResult
+from halcyon.Trainer import Trainer, TrainingJob
 from tests.create_dummy_data import (
     create_synthetic_expressions,
     get_synthetic_data,
 )
 from tests.create_dummy_data import expression_data_from_gnw
+from tests.test_GNWSimRunner import sim_result
+
+
+@pytest.fixture
+def cellbox_from_expression():
+    expressions = create_synthetic_expressions()
+    return CellBox(expressions.genes, ("test", "test2"))
 
 
 def test_calculate_loss():
@@ -38,8 +47,10 @@ def test_integrate_model():
     init_conditions = gt_expressions[:, 0].unsqueeze(0)
     output = my_trainer.integrate_model(init_conditions)
     assert torch.allclose(
-        my_trainer.calculate_loss(output, gt_expressions.unsqueeze(0)),
-        torch.tensor([0.0]),
+        my_trainer.calculate_loss(
+            output, gt_expressions.unsqueeze(0).to(correct_model.device)
+        ),
+        torch.tensor([0.0], device=correct_model.device),
     )
 
 
@@ -67,27 +78,28 @@ def test_train_neural_ode():
     assert not torch.allclose(init_decay, neural_ode_model.decay_params.detach())
 
 
-def test_train_cellbox():
-    expressions = create_synthetic_expressions()
-    cellbox = CellBox(expressions.genes)
-    cellbox._set_weight_matrix_to_ones()
-    cellbox._set_epsilon_to_zero()
-    init_epsilon = deepcopy(cellbox.epsilon)
-    init_decay = deepcopy(cellbox.decay_params)
-    my_trainer = Trainer(cellbox, expressions)
+def test_train_cellbox(cellbox_from_expression):
+
+    cellbox_from_expression._set_weight_matrix_to_ones()
+    cellbox_from_expression._set_epsilon_to_zero()
+    init_epsilon = deepcopy(cellbox_from_expression.epsilon)
+    init_decay = deepcopy(cellbox_from_expression.decay_params)
+    my_trainer = Trainer(cellbox_from_expression, create_synthetic_expressions())
     my_trainer.train(5)
     # Assert loss is decreasing
     assert all(
         x > y for x, y in zip(my_trainer.loss_history, my_trainer.loss_history[1:])
     )
     # Check if epsilon and decay rate changes
-    assert not torch.allclose(cellbox.epsilon, init_epsilon)
-    assert not torch.allclose(cellbox.decay_params, init_decay)
+    assert not torch.allclose(cellbox_from_expression.epsilon, init_epsilon)
+    assert not torch.allclose(cellbox_from_expression.decay_params, init_decay)
 
 
 def test_train_cellbox_ko_data(expression_data_from_gnw):
-    cellbox = CellBox(expression_data_from_gnw.genes)
-    # cellbox._set_epsilon_to_zero()
+    cellbox = CellBox(
+        expression_data_from_gnw.genes, expression_data_from_gnw.all_environments
+    )
+    # cellbox_from_expression._set_epsilon_to_zero()
     cellbox._set_weight_matrix_to_ones()
     init_epsilon = deepcopy(cellbox.epsilon)
     init_decay = deepcopy(cellbox.decay_params)
@@ -104,10 +116,9 @@ def test_train_cellbox_ko_data(expression_data_from_gnw):
     assert not torch.allclose(cellbox.W, init_w)
 
 
-def test_plot_fit_vs_real_data():
+def test_plot_fit_vs_real_data(cellbox_from_expression):
     gt_regulatory_network, _, expressions = get_synthetic_data()
-    correct_model = CellBox(expressions.genes)
-    my_trainer = Trainer(correct_model, expressions)
+    my_trainer = Trainer(cellbox_from_expression, expressions)
     out_fig, out_axs = my_trainer.plot_fit_vs_real()
     assert out_fig is not None
 
@@ -119,3 +130,53 @@ def test_with_regularisation():
         correct_model, expressions, optimizer_kwargs={"weight_decay": 1}
     )
     assert my_trainer.optimizer.state_dict()["param_groups"][0]["weight_decay"] == 1
+
+
+def test_train_job_and_load_model(sim_result):
+    train_job = TrainingJob(
+        PhoenixOnlyAddLayers,
+        sim_result,
+        nr_training_steps=2,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.run()
+    og_model_state_dicts = {
+        k: v.clone().detach() for k, v in train_job.trainer.model.state_dict().items()
+    }
+    train_job = TrainingJob(
+        PhoenixOnlyAddLayers,
+        sim_result,
+        nr_training_steps=1,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.load_if_exists()
+    loaded_state_dict = train_job.trainer.model.state_dict()
+    for weight_key in og_model_state_dicts:
+        assert torch.allclose(
+            og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
+        ), f"Mismatch in {weight_key}"
+
+
+def test_train_job_and_load_cellbox(sim_result):
+    train_job = TrainingJob(
+        CellBox,
+        sim_result,
+        nr_training_steps=2,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.run()
+    og_model_state_dicts = {
+        k: v.clone().detach() for k, v in train_job.trainer.model.state_dict().items()
+    }
+    train_job = TrainingJob(
+        CellBox,
+        sim_result,
+        nr_training_steps=1,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.load_if_exists()
+    loaded_state_dict = train_job.trainer.model.state_dict()
+    for weight_key in og_model_state_dicts:
+        assert torch.allclose(
+            og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
+        ), f"Mismatch in {weight_key}"

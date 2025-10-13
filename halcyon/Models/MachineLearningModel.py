@@ -6,8 +6,9 @@ from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 class MachineLearningModel(Model, ABC):
-    def __init__(self, modelled_gene_labels):
-        super().__init__(modelled_gene_labels)
+    def __init__(self, modelled_gene_labels, condition_names, **kwargs):
+        super().__init__(modelled_gene_labels, **kwargs)
+        self.n_conditions = len(condition_names)
 
     @abstractmethod
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
@@ -26,6 +27,9 @@ class MachineLearningModel(Model, ABC):
         Returns:
             tuple[torch.Tensor, torch.Tensor]: tuple of knockout masks and environment flags.
         """
+        assert (
+            environment_data.shape[1] == self.n_genes + self.n_conditions
+        ), "Environment data should be of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions"
         knockout_flags = environment_data[:, : self.n_genes]
         env_flags = environment_data[:, self.n_genes :]
         knockout_masks = 1.0 - knockout_flags.unsqueeze(2)

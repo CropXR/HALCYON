@@ -7,3 +7,4 @@ notebooks/.ipynb_checkpoints/
 .coverage
 *.egg-info/
 tests/generated_test_data/*
+data/
