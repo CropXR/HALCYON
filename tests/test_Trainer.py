@@ -8,12 +8,14 @@ import torch
 from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
-from halcyon.Trainer import Trainer
+from halcyon.Simulators.GNWSimRunner import SimulationResult
+from halcyon.Trainer import Trainer, TrainingJob
 from tests.create_dummy_data import (
     create_synthetic_expressions,
     get_synthetic_data,
 )
 from tests.create_dummy_data import expression_data_from_gnw
+from tests.test_GNWSimRunner import sim_result
 
 
 @pytest.fixture
@@ -128,3 +130,28 @@ def test_with_regularisation():
         correct_model, expressions, optimizer_kwargs={"weight_decay": 1}
     )
     assert my_trainer.optimizer.state_dict()["param_groups"][0]["weight_decay"] == 1
+
+
+def test_train_job_and_load_model(sim_result):
+    train_job = TrainingJob(
+        PhoenixOnlyAddLayers,
+        sim_result,
+        nr_training_steps=2,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.run()
+    og_model_state_dicts = {
+        k: v.clone().detach() for k, v in train_job.trainer.model.state_dict().items()
+    }
+    train_job = TrainingJob(
+        PhoenixOnlyAddLayers,
+        sim_result,
+        nr_training_steps=1,
+        optimizer_kwargs={"lr": 0.1},
+    )
+    train_job.load_model_if_exists()
+    loaded_state_dict = train_job.trainer.model.state_dict()
+    for weight_key in og_model_state_dicts:
+        assert torch.allclose(
+            og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
+        ), f"Mismatch in {weight_key}"

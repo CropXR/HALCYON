@@ -30,7 +30,8 @@ class PhoenixABC(MachineLearningModel, ABC):
         self.per_gene_multipliers = nn.Parameter(
             torch.full(size=(self.n_genes,), fill_value=1.0)
         )
-        self.reset_conditions()
+        self.ko_masks = torch.ones(self.n_genes, device=self.device)  # type: ignore
+        self.env_flags = torch.zeros(self.n_conditions, device=self.device)  # type: ignore
 
     def set_conditions(self, env_data: torch.Tensor):
         """Use the env_data tensor to set the condition (i.e. knockouts and environment flags) for the model.
@@ -41,9 +42,9 @@ class PhoenixABC(MachineLearningModel, ABC):
         """
         # Knockouts should be used as mask after the forwards pass
         ko_masks, env_flags = self.parse_env_data(env_data)
-        self.register_buffer("env_flags", env_flags)
+        self.env_flags = env_flags
         # Environments should be appended to the forward pass but not returned (Because they do not change over time)
-        self.register_buffer("ko_masks", ko_masks)
+        self.ko_masks = ko_masks
 
     def _get_decay(self, state):
         return nn.functional.relu(self.decay_params * state)
@@ -52,7 +53,7 @@ class PhoenixABC(MachineLearningModel, ABC):
         raise NotImplementedError
 
     def reset_conditions(self):
-        self.register_buffer("ko_masks", torch.ones(self.n_genes))  # type: ignore
+        self.ko_masks = torch.ones(self.n_genes)  # type: ignore
 
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:

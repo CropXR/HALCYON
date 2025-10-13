@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -177,6 +178,14 @@ class Trainer:
         )
         return output
 
+    def save_model(self, model_path: Path):
+        torch.save(self.model.state_dict(), model_path)
+
+    def load_model(self, model_path: Path):
+        self.model.load_state_dict(
+            torch.load(model_path, weights_only=True, map_location=self.model.device)
+        )
+
 
 class TrainingJob:
     def __init__(
@@ -205,20 +214,40 @@ class TrainingJob:
             )
         )
         self.expressions.scale_time_series()
+        self.model_kwargs = model_kwargs or {}
         model = model_cls(
-            self.expressions.genes, self.expressions.all_environments, **model_kwargs
+            self.expressions.genes,
+            self.expressions.all_environments,
+            **self.model_kwargs,
         )
         self.trainer = Trainer(
             model, self.expressions, batch_size=32, optimizer_kwargs=optimizer_kwargs
         )
-        self.model_path = (
-            self.sim_result.data_path
-            / f"trained_{self.trainer.model.__class__.__name__}.pt"
-        )
+
+        file_name = f"trained_{model.__class__.__name__}"
+        if self.model_kwargs:
+            for kwarg_name, value in self.model_kwargs.items():
+                if kwarg_name == "device":
+                    continue
+                file_name += f"_{kwarg_name}_{value}"
+        file_name += ".pt"
+
+        self.model_path = self.sim_result.data_path / file_name
+
+    def __repr__(self):
+        return f"Training {self.trainer.model} on {self.sim_result} with {self.model_kwargs}"
+
+    def load_model_if_exists(self):
+        if self.model_path.exists():
+            logging.info(f"Loading model from {self.model_path}")
+            self.trainer.load_model(self.model_path)
+        else:
+            raise FileNotFoundError(f"No existing model found at {self.model_path}.")
 
     def run(self):
         self.trainer.train(self.nr_training_steps)
-        torch.save(self.trainer.model.state_dict(), self.model_path)
+        self.trainer.save_model(self.model_path)
+
         logging.info(
             f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
         )
@@ -236,7 +265,9 @@ class TrainingJob:
         output_dict["model_cls"] = self.trainer.model.__class__.__name__
         for key, value in self.sim_result.items():
             output_dict[key] = value
-
+        if self.model_kwargs:
+            for key, value in self.model_kwargs.items():
+                output_dict[key] = value
         return output_dict
 
 
@@ -247,4 +278,9 @@ def run_training_job(job: TrainingJob):
         format="%(asctime)s [%(processName)s] %(message)s",
         force=True,
     )
-    return job.run()
+    try:
+        output = job.run()
+    except AssertionError as e:
+        logging.error(f"Error occurred while running job: {e}")
+        output = {"error": str(e)}
+    return output
