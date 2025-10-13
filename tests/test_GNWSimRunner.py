@@ -44,9 +44,7 @@ def test_gnw_reproducible(sim_result):
         ), f"File {gt_file} does not match hash of {expected_file}"
 
     expected_sim_result = SimulationResult(
-        data_path=Path(
-            "/lustre/BIF/nobackup/noord087/phd/HALCYON/tests/generated_test_data"
-        ),
+        data_path=Path("tests/generated_test_data").resolve(),
         network_name="integration_test_network",
         nr_genes=10,
         nr_modules=2,
