@@ -149,7 +149,7 @@ def test_train_job_and_load_model(sim_result):
         nr_training_steps=1,
         optimizer_kwargs={"lr": 0.1},
     )
-    train_job.load_model_if_exists()
+    train_job.load_if_exists()
     loaded_state_dict = train_job.trainer.model.state_dict()
     for weight_key in og_model_state_dicts:
         assert torch.allclose(

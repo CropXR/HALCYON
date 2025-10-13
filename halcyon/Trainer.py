@@ -178,13 +178,19 @@ class Trainer:
         )
         return output
 
-    def save_model(self, model_path: Path):
-        torch.save(self.model.state_dict(), model_path)
+    def save(self, checkpoint_path: Path):
+        checkpoint = {
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "loss_history": self.loss_history,  # e.g. a list of floats
+        }
+        torch.save(checkpoint, checkpoint_path)
 
-    def load_model(self, model_path: Path):
-        self.model.load_state_dict(
-            torch.load(model_path, weights_only=True, map_location=self.model.device)
-        )
+    def load(self, checkpoint_path: Path):
+        checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
+        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        self.loss_history = checkpoint["loss_history"]
+        self.model.load_state_dict(checkpoint["model_state_dict"])
 
 
 class TrainingJob:
@@ -224,7 +230,7 @@ class TrainingJob:
             model, self.expressions, batch_size=32, optimizer_kwargs=optimizer_kwargs
         )
 
-        file_name = f"trained_{model.__class__.__name__}"
+        file_name = f"trained_trainer_{model.__class__.__name__}"
         if self.model_kwargs:
             for kwarg_name, value in self.model_kwargs.items():
                 if kwarg_name == "device":
@@ -232,21 +238,21 @@ class TrainingJob:
                 file_name += f"_{kwarg_name}_{value}"
         file_name += ".pt"
 
-        self.model_path = self.sim_result.data_path / file_name
+        self.save_path = self.sim_result.data_path / file_name
 
     def __repr__(self):
-        return f"Training {self.trainer.model} on {self.sim_result} with {self.model_kwargs}"
+        return f"Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs}"
 
-    def load_model_if_exists(self):
-        if self.model_path.exists():
-            logging.info(f"Loading model from {self.model_path}")
-            self.trainer.load_model(self.model_path)
+    def load_if_exists(self):
+        if self.save_path.exists():
+            logging.info(f"Loading from {self.save_path}")
+            self.trainer.load(self.save_path)
         else:
-            raise FileNotFoundError(f"No existing model found at {self.model_path}.")
+            raise FileNotFoundError(f"No existing model found at {self.save_path}.")
 
     def run(self):
         self.trainer.train(self.nr_training_steps)
-        self.trainer.save_model(self.model_path)
+        self.trainer.save(self.save_path)
 
         logging.info(
             f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
@@ -261,7 +267,7 @@ class TrainingJob:
         output_dict = {}
         output_dict["final_loss"] = self.final_loss
         output_dict["nr_training_steps"] = self.nr_training_steps
-        output_dict["model_path"] = str(self.model_path)
+        output_dict["model_path"] = str(self.save_path)
         output_dict["model_cls"] = self.trainer.model.__class__.__name__
         for key, value in self.sim_result.items():
             output_dict[key] = value
