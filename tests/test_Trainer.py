@@ -6,7 +6,7 @@ from pytest import approx
 import torch
 
 from halcyon.Models.CellBox import CellBox
-from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
+from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers, PhoenixAddAndProdLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 from halcyon.Trainer import Trainer, TrainingJob
@@ -132,22 +132,32 @@ def test_with_regularisation():
     assert my_trainer.optimizer.state_dict()["param_groups"][0]["weight_decay"] == 1
 
 
-def test_train_job_and_load_model(sim_result):
+@pytest.mark.parametrize(
+    "model_class, model_args",
+    [
+        (CellBox, None),
+        (PhoenixOnlyAddLayers, None),
+        (PhoenixAddAndProdLayers, {"hidden_size": 2}),
+    ],
+)
+def test_train_job_and_load_model(model_class, model_args, sim_result):
     train_job = TrainingJob(
-        PhoenixOnlyAddLayers,
+        model_class,
         sim_result,
         nr_training_steps=2,
         optimizer_kwargs={"lr": 0.1},
+        model_kwargs=model_args,
     )
     train_job.run()
     og_model_state_dicts = {
         k: v.clone().detach() for k, v in train_job.trainer.model.state_dict().items()
     }
     train_job = TrainingJob(
-        PhoenixOnlyAddLayers,
+        model_class,
         sim_result,
         nr_training_steps=1,
         optimizer_kwargs={"lr": 0.1},
+        model_kwargs=model_args,
     )
     train_job.load_if_exists()
     loaded_state_dict = train_job.trainer.model.state_dict()
@@ -157,7 +167,8 @@ def test_train_job_and_load_model(sim_result):
         ), f"Mismatch in {weight_key}"
 
 
-def test_train_job_and_load_cellbox(sim_result):
+@pytest.fixture
+def train_job_with_loaded_cellbox(sim_result):
     train_job = TrainingJob(
         CellBox,
         sim_result,
@@ -165,18 +176,9 @@ def test_train_job_and_load_cellbox(sim_result):
         optimizer_kwargs={"lr": 0.1},
     )
     train_job.run()
-    og_model_state_dicts = {
-        k: v.clone().detach() for k, v in train_job.trainer.model.state_dict().items()
-    }
-    train_job = TrainingJob(
-        CellBox,
-        sim_result,
-        nr_training_steps=1,
-        optimizer_kwargs={"lr": 0.1},
-    )
-    train_job.load_if_exists()
-    loaded_state_dict = train_job.trainer.model.state_dict()
-    for weight_key in og_model_state_dicts:
-        assert torch.allclose(
-            og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
-        ), f"Mismatch in {weight_key}"
+    return train_job
+
+
+def test_verify_on_double_ko(train_job_with_loaded_cellbox):
+    trainer = train_job_with_loaded_cellbox.trainer
+    trainer.verify_on_double_ko()

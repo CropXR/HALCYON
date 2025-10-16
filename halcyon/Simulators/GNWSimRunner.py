@@ -14,10 +14,11 @@ class SimulationResult:
         network_name (str): File name to use for outputting the files.
         nr_genes (int): Number of genes in the network.
         nr_modules (int): Number of modules in the network.
-        sparsity (float): How sparse the network is 
+        sparsity (float): How sparse the network is
             (higher values mean fewer connections).
         keep_self_interactions (bool): Whether self-interactions are kept.
     """
+
     data_path: Path
     network_name: str
     nr_genes: int

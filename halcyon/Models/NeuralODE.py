@@ -33,6 +33,11 @@ class PhoenixABC(MachineLearningModel, ABC):
         self.ko_masks = torch.ones(self.n_genes, device=self.device)  # type: ignore
         self.env_flags = torch.zeros(self.n_conditions, device=self.device)  # type: ignore
 
+    def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
+        for layer in model:
+            if isinstance(layer, nn.Linear):
+                nn.init.sparse_(layer.weight, sparsity=sparsity, std=0.05)
+
     def set_conditions(self, env_data: torch.Tensor):
         """Use the env_data tensor to set the condition (i.e. knockouts and environment flags) for the model.
 
@@ -78,6 +83,7 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             PhoenixSumActivation(),
             nn.Linear(self.n_genes + self.n_conditions, self.n_genes),
         )
+        self.init_sparse_weights(self.neural_net)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         logging.debug(f"State\t {state}")
@@ -117,6 +123,8 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         )
 
         self.combine_layer_nn = nn.Sequential(nn.Linear(2 * hidden_size, self.n_genes))
+        for model in [self.sum_nn, self.prod_nn, self.combine_layer_nn]:
+            self.init_sparse_weights(model)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         logging.debug(f"State\t {state}")
