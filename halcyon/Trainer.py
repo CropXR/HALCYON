@@ -1,5 +1,7 @@
+from collections import UserList
 import logging
 from pathlib import Path
+from typing_extensions import Self
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -7,7 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
-from typing import Callable
+from typing import Callable, Generic, TypeVar
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Models.Model import Model
 from torch.nn.functional import mse_loss
@@ -106,6 +108,25 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(expression_pred, expression_true)
 
+    def _from_expressions_to_plot(
+        self, expressions, title: str | None, axs, show_legend
+    ):
+        df_real = pd.DataFrame(
+            expressions,
+            columns=self.dataset._get_time_points(),
+            index=self.dataset.genes,
+        )
+        ExpressionData(df_real).plot_expressions(axis=axs, legend=show_legend)
+        if title is not None:
+            axs.set_title(title)
+
+    def _plot_one_prediction(self, initial_condition, title, env, axs, show_legend):
+        # Simulate and plot prediction
+        self.model.set_conditions(env.unsqueeze(0))
+        predictions = self.integrate_model(initial_states_tensor=initial_condition)
+        predictions = predictions.squeeze(0).detach().cpu().numpy()
+        self._from_expressions_to_plot(predictions, title, axs, show_legend)
+
     def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
         if len(self.dataset) == 0:
@@ -114,39 +135,31 @@ class Trainer:
             n = top_n
         else:
             n = len(self.dataset)
-        fig, axs = plt.subplots(n, 2, sharey=True, figsize=(10, 4 * n))
+        fig, axs = plt.subplots(n, 2, sharey=True, sharex="col", figsize=(7, 3 * n))
         if n == 1:
             axs = np.expand_dims(
                 axs, axis=0
             )  # ensure consistent indexing for single row
 
-        timepoints = self.dataset._get_time_points()
-        gene_labels = self.dataset.genes
         for i in range(n):
             env, expressions = self.dataset[i]
             env = env.to(self.model.device)
             expressions = expressions.to(self.model.device)
             # Plot ground truth
-            df_real = pd.DataFrame(
+            self._from_expressions_to_plot(
                 expressions.detach().cpu().numpy(),
-                columns=timepoints,
-                index=gene_labels,
+                f"Measured (Sample {i})",
+                axs[i, 0],
+                show_legend,
             )
-            ExpressionData(df_real).plot_expressions(axis=axs[i, 0], legend=show_legend)
-            axs[i, 0].set_title(f"Measured (Sample {i})")
+            self._plot_one_prediction(
+                initial_condition=expressions[:, 0].unsqueeze(0),
+                title=f"Model fit (Sample {i})",
+                env=env,
+                axs=axs[i, 1],
+                show_legend=show_legend,
+            )
 
-            # Simulate and plot prediction
-            self.model.set_conditions(env.unsqueeze(0))
-            output = self.integrate_model(
-                initial_states_tensor=expressions[:, 0].unsqueeze(0)
-            )
-            df_pred = pd.DataFrame(
-                output.squeeze(0).detach().cpu().numpy(),
-                columns=timepoints,
-                index=gene_labels,
-            )
-            ExpressionData(df_pred).plot_expressions(axis=axs[i, 1], legend=show_legend)
-            axs[i, 1].set_title(f"Model (Sample {i})")
         plt.tight_layout()
         return fig, axs
 
@@ -181,7 +194,7 @@ class Trainer:
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
-            "loss_history": self.loss_history,  # e.g. a list of floats
+            "loss_history": self.loss_history,
         }
         torch.save(checkpoint, checkpoint_path)
 
@@ -220,13 +233,17 @@ class TrainingJob:
         )
         self.expressions.scale_time_series()
         self.model_kwargs = model_kwargs or {}
+        self.optimizer_kwargs = optimizer_kwargs or {}
         model = model_cls(
             self.expressions.genes,
             self.expressions.all_environments,
             **self.model_kwargs,
         )
         self.trainer = Trainer(
-            model, self.expressions, batch_size=32, optimizer_kwargs=optimizer_kwargs
+            model,
+            self.expressions,
+            batch_size=32,
+            optimizer_kwargs=self.optimizer_kwargs,
         )
 
         file_name = f"trained_trainer_{model.__class__.__name__}"
@@ -235,12 +252,15 @@ class TrainingJob:
                 if kwarg_name == "device":
                     continue
                 file_name += f"_{kwarg_name}_{value}"
+        if self.optimizer_kwargs:
+            for kwarg_name, value in self.optimizer_kwargs.items():
+                file_name += f"_{kwarg_name}_{value}"
         file_name += ".pt"
 
         self.save_path = self.sim_result.data_path / file_name
 
     def __repr__(self):
-        return f"Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs}"
+        return f"Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs} and {self.optimizer_kwargs}"
 
     def load_if_exists(self):
         if self.save_path.exists():
@@ -273,6 +293,9 @@ class TrainingJob:
         if self.model_kwargs:
             for key, value in self.model_kwargs.items():
                 output_dict[key] = value
+        if self.optimizer_kwargs:
+            for key, value in self.optimizer_kwargs.items():
+                output_dict[key] = value
         return output_dict
 
 
@@ -289,3 +312,75 @@ def run_training_job(job: TrainingJob):
         logging.error(f"Error occurred while running job: {e}")
         output = {"error": str(e)}
     return output
+
+
+T = TypeVar("T", bound="TrainingJob")
+
+
+class ResultList(UserList[T], Generic[T]):
+    @classmethod
+    def from_train_jobs(cls, train_jobs: list[TrainingJob]) -> Self:
+        results = []
+        for job in train_jobs:
+            try:
+                job.load_if_exists()
+                results.append(job)
+            except FileNotFoundError as e:
+                logging.error(f"Error loading model for job {job.save_path}: {e}")
+        return cls(results)
+
+    def summary_dataframe(self) -> pd.DataFrame:
+        return pd.DataFrame([i.summary() for i in self.data])
+
+    def __getitem__(self, index):
+        """Copy numpy-like indexing, where you can select mulitple items via a list or array of indices."""
+        if isinstance(index, list) or isinstance(index, np.ndarray):
+            return ResultList([self.data[i] for i in index])
+        return super().__getitem__(index)
+
+    def plot_all_model_fits_into_one_fig(
+        self,
+        top_n_genes: int | None = None,
+        model_subset_indices: list[int] | None = None,
+        model_title_func: Callable[
+            [pd.Series], str
+        ] = lambda summary: f"{summary['model_cls']}_hidden_{summary.get('hidden_size', 0)}",
+    ):
+        model_list = (
+            self[model_subset_indices] if model_subset_indices is not None else self
+        )
+        n_cols = len(model_list) + 1
+        n_rows = top_n_genes if top_n_genes else len(model_list[0].trainer.dataset)
+        fig, axs = plt.subplots(
+            n_rows, n_cols, sharey=True, sharex="col", figsize=(4 * n_cols, 3 * n_rows)
+        )
+        for i, train_job in enumerate(model_list):
+            # print(train_job.summary()["model_path"])
+            trainer = train_job.trainer
+
+            for j in range(n_rows):
+                env, expressions = trainer.dataset[j]
+                env = env.to(trainer.model.device)
+                expressions = expressions.to(trainer.model.device)
+                if i == 0:
+                    # Plot ground truth in first column
+                    model_title = "Ground truth"
+                    trainer._from_expressions_to_plot(
+                        expressions.detach().cpu().numpy(),
+                        f"{model_title} (KO {j})",
+                        axs[j, 0],
+                        show_legend=False,
+                    )
+                if j == 0:
+                    # First row should have titles
+                    model_title = model_title_func(train_job.summary())
+                else:
+                    model_title = None
+                trainer._plot_one_prediction(
+                    expressions[:, 0].unsqueeze(0),
+                    model_title,
+                    env,
+                    axs[j, i + 1],
+                    show_legend=False,
+                )
+        plt.show()
