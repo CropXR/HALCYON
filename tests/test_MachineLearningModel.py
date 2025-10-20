@@ -7,7 +7,7 @@ import pytest
 @pytest.fixture
 def neural_ode():
     gene_labels = ["a", "b", "c"]
-    my_neural_ode = PhoenixOnlyAddLayers(gene_labels, ("test_cond",))
+    my_neural_ode = PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
     return my_neural_ode
 
 

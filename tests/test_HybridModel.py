@@ -26,7 +26,9 @@ def test_hybrid_model_gene_split():
     env_conditions, expressions = env_conditions.unsqueeze(0), expressions.unsqueeze(0)
 
     ml_model = PhoenixOnlyAddLayers(
-        expression_dataset.genes, expression_dataset.all_environments
+        expression_dataset.genes,
+        expression_dataset.all_environments,
+        hidden_size=2,
     )
     mm_model = TorchLinearODE(subset_regulatory_network)
     hybrid_model = HybridModel(mm_model, ml_model)

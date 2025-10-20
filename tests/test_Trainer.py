@@ -57,7 +57,7 @@ def test_integrate_model():
 def test_train_neural_ode():
     expressions = create_synthetic_expressions()
     neural_ode_model = PhoenixOnlyAddLayers(
-        expressions.genes, expressions.all_environments
+        expressions.genes, expressions.all_environments, hidden_size=2
     )
     my_trainer = Trainer(neural_ode_model, expressions, batch_size=1)
     init_weights = torch.cat(
@@ -136,7 +136,7 @@ def test_with_regularisation():
     "model_class, model_args",
     [
         (CellBox, None),
-        (PhoenixOnlyAddLayers, None),
+        (PhoenixOnlyAddLayers, {"hidden_size": 2}),
         (PhoenixAddAndProdLayers, {"hidden_size": 2}),
     ],
 )

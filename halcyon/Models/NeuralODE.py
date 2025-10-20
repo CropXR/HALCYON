@@ -70,6 +70,7 @@ class PhoenixOnlyAddLayers(PhoenixABC):
         self,
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
+        hidden_size: int,
         **kwargs,
     ):
         """Create Phoenix model; a neural network that takes the gene expression and the environment as input and returns the change in gene expression. This version only has additive layers, so no interactive effects are modelled.
@@ -81,7 +82,8 @@ class PhoenixOnlyAddLayers(PhoenixABC):
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.neural_net = nn.Sequential(
             PhoenixSumActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, self.n_genes),
+            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
+            nn.Linear(hidden_size, self.n_genes),
         )
         self.init_sparse_weights(self.neural_net)
 
