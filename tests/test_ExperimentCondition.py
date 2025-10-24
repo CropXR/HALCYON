@@ -5,7 +5,7 @@ from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 def test_create_ExperimentCondition():
     experiment_condition = ExperimentCondition(
         all_genes=("G1", "G2", "G3"),
-        ko_gene="G2",
+        ko_gene=("G2",),
         all_environments=("test", "test2"),
         environment="test2",
     )
