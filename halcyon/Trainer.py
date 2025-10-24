@@ -59,7 +59,19 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
-    def train(self, n_epochs: int, do_profiling=False):
+    def _calculate_loss_from_batch(self, batch):
+        experiment_data, expression_data = batch
+        experiment_data = experiment_data.to(self.model.device)
+        expression_data = expression_data.to(self.model.device)
+
+        self.optimizer.zero_grad()
+        self.model.set_conditions(experiment_data)
+        output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
+
+        loss = self.calculate_loss_expression_vs_pred(expression_data, output)
+        return loss
+
+    def train(self, n_epochs: int):
         """Perform model training on batches.
 
         Args:
@@ -70,17 +82,7 @@ class Trainer:
         for epoch in range(n_epochs):
             epoch_loss = 0.0
             for batch in self.dataloader:
-                experiment_data, expression_data = batch
-                experiment_data = experiment_data.to(self.model.device)
-                expression_data = expression_data.to(self.model.device)
-
-                self.optimizer.zero_grad()
-                self.model.set_conditions(experiment_data)
-                output = self.integrate_model(
-                    initial_states_tensor=expression_data[:, :, 0]
-                )
-
-                loss = self.calculate_loss(expression_data, output)
+                loss = self._calculate_loss_from_batch(batch)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
@@ -102,7 +104,7 @@ class Trainer:
         plt.ylim((0, 1.5 * max(self.loss_history)))
         plt.show()
 
-    def calculate_loss(
+    def calculate_loss_expression_vs_pred(
         self, expression_true: torch.Tensor, expression_pred: torch.Tensor
     ) -> torch.Tensor:
         """Calculate the loss between a given model output and the actual expressions."""
@@ -203,6 +205,25 @@ class Trainer:
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.loss_history = checkpoint["loss_history"]
         self.model.load_state_dict(checkpoint["model_state_dict"])
+
+    def verify_on_double_ko(
+        self, double_ko_expression_data: ExpressionDataWithConditions
+    ):
+        assert (
+            double_ko_expression_data.genes == self.model.modelled_gene_labels
+        ), "Gene labels do not match"
+        self.model.eval()
+        double_ko_expression_data.scale_time_series()
+        my_dataloader = DataLoader(
+            double_ko_expression_data, batch_size=1, shuffle=False, pin_memory=True
+        )
+        all_losses = []
+        for batch in my_dataloader:
+            loss = self._calculate_loss_from_batch(batch)
+            all_losses.append(loss.detach().cpu().item())
+        self.model.train()
+        # TODO plot predictions if we want
+        return all_losses
 
 
 class TrainingJob:

@@ -8,13 +8,13 @@ class ExperimentCondition:
     """Dataclass to store experimental conditions (both knockout and environment)
 
     Args:
-        ko_gene (str | None): Gene that is knocked out. If None, no gene is knocked out.
+        ko_gene (tuple[str] | None): Gene that is knocked out. If None, no gene is knocked out. Can also be a tuple of strings for multiple knockouts.
         all_genes (tuple[str, ...]): All genes in the dataset.
         environment (str | None): Environment in which the experiment was conducted. If None, no environment is specified.
         all_environments (tuple[str, ...]): All environments in the dataset.
     """
 
-    ko_gene: str | None
+    ko_gene: tuple[str] | None
     all_genes: tuple[str, ...]
     environment: str | None
     all_environments: tuple[str, ...]
@@ -26,7 +26,8 @@ class ExperimentCondition:
         """
         ko_tensor = torch.zeros(len(self.all_genes))
         if self.ko_gene is not None:
-            ko_tensor[self.all_genes.index(self.ko_gene)] = 1
+            gene_indices = [self.all_genes.index(gene) for gene in self.ko_gene]
+            ko_tensor[gene_indices] = 1
         env_tensor = torch.zeros(len(self.all_environments))
         if self.environment is not None:
             env_tensor[self.all_environments.index(self.environment)] = 1

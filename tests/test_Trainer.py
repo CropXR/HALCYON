@@ -5,6 +5,7 @@ import pytest
 from pytest import approx
 import torch
 
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers, PhoenixAddAndProdLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
@@ -36,7 +37,9 @@ def test_calculate_loss():
             [0.3, 0.30463339, 0.34882503, 0.43889286],
         ]
     )
-    assert my_trainer.calculate_loss(expressions_gt, expressions_gt) == approx(0.0)
+    assert my_trainer.calculate_loss_expression_vs_pred(
+        expressions_gt, expressions_gt
+    ) == approx(0.0)
 
 
 def test_integrate_model():
@@ -47,7 +50,7 @@ def test_integrate_model():
     init_conditions = gt_expressions[:, 0].unsqueeze(0)
     output = my_trainer.integrate_model(init_conditions)
     assert torch.allclose(
-        my_trainer.calculate_loss(
+        my_trainer.calculate_loss_expression_vs_pred(
             output, gt_expressions.unsqueeze(0).to(correct_model.device)
         ),
         torch.tensor([0.0], device=correct_model.device),
@@ -168,7 +171,7 @@ def test_train_job_and_load_model(model_class, model_args, sim_result):
 
 
 @pytest.fixture
-def train_job_with_loaded_cellbox(sim_result):
+def train_job_with_loaded_cellbox(sim_result) -> TrainingJob:
     train_job = TrainingJob(
         CellBox,
         sim_result,
@@ -179,6 +182,252 @@ def train_job_with_loaded_cellbox(sim_result):
     return train_job
 
 
-def test_verify_on_double_ko(train_job_with_loaded_cellbox):
+def test_verify_on_double_ko(train_job_with_loaded_cellbox: TrainingJob):
     trainer = train_job_with_loaded_cellbox.trainer
-    trainer.verify_on_double_ko()
+    double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
+        expression_file_path=train_job_with_loaded_cellbox.sim_result.double_ko_timeseries_nonoise_file(),
+        ko_file_path=train_job_with_loaded_cellbox.sim_result.double_ko_index_file(),
+    )
+    exp_condition, expression_data = double_ko_expressions[0]
+    # Only a 1 at position 0 and 3 because those are the KO genes
+    assert torch.allclose(
+        exp_condition,
+        torch.tensor([1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    )
+    expected_expression = torch.tensor(
+        [
+            [
+                7.2333e-01,
+                2.5859e-01,
+                9.2444e-02,
+                3.3048e-02,
+                1.1815e-02,
+                4.2236e-03,
+                1.5099e-03,
+                5.3980e-04,
+                1.9300e-04,
+                6.9000e-05,
+                2.4700e-05,
+                8.8000e-06,
+                3.2000e-06,
+                1.1000e-06,
+                4.0000e-07,
+                1.0000e-07,
+                1.0000e-07,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+            ],
+            [
+                6.3392e-01,
+                6.3358e-01,
+                6.3338e-01,
+                6.3325e-01,
+                6.3317e-01,
+                6.3313e-01,
+                6.3310e-01,
+                6.3308e-01,
+                6.3307e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3306e-01,
+                6.3305e-01,
+                6.3305e-01,
+                6.3305e-01,
+            ],
+            [
+                9.4803e-01,
+                9.7085e-01,
+                9.8057e-01,
+                9.7110e-01,
+                9.1493e-01,
+                8.5850e-01,
+                8.3716e-01,
+                8.3108e-01,
+                8.2946e-01,
+                8.2903e-01,
+                8.2892e-01,
+                8.2890e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+                8.2889e-01,
+            ],
+            [
+                7.4355e-01,
+                2.1688e-01,
+                6.3262e-02,
+                1.8453e-02,
+                5.3824e-03,
+                1.5700e-03,
+                4.5790e-04,
+                1.3360e-04,
+                3.9000e-05,
+                1.1400e-05,
+                3.3000e-06,
+                1.0000e-06,
+                3.0000e-07,
+                1.0000e-07,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+                0.0000e00,
+            ],
+            [
+                1.3590e-01,
+                1.3195e-01,
+                1.3661e-01,
+                1.3955e-01,
+                1.3996e-01,
+                1.4000e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+                1.4001e-01,
+            ],
+            [
+                9.9317e-01,
+                9.9318e-01,
+                9.9319e-01,
+                9.9319e-01,
+                9.9319e-01,
+                9.9319e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+                9.9320e-01,
+            ],
+            [
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+                1.1174e-02,
+            ],
+            [
+                2.3878e-01,
+                3.6246e-01,
+                6.4116e-01,
+                8.5048e-01,
+                9.4629e-01,
+                9.8198e-01,
+                9.9416e-01,
+                9.9814e-01,
+                9.9941e-01,
+                9.9982e-01,
+                9.9994e-01,
+                9.9998e-01,
+                9.9999e-01,
+                1.0000e00,
+                1.0000e00,
+                1.0000e00,
+                1.0000e00,
+                1.0000e00,
+                1.0000e00,
+                1.0000e00,
+                1.0000e00,
+            ],
+            [
+                2.9734e-01,
+                2.0553e-01,
+                8.6743e-02,
+                4.5236e-02,
+                3.2650e-02,
+                2.8864e-02,
+                2.7725e-02,
+                2.7383e-02,
+                2.7280e-02,
+                2.7249e-02,
+                2.7239e-02,
+                2.7237e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+                2.7236e-02,
+            ],
+            [
+                9.9509e-01,
+                9.9508e-01,
+                9.9508e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+                9.9507e-01,
+            ],
+        ]
+    )
+
+    assert torch.allclose(expression_data, expected_expression, rtol=1e-03, atol=1e-03)
+    trainer.verify_on_double_ko(double_ko_expression_data=double_ko_expressions)

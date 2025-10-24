@@ -17,7 +17,7 @@ def create_file_hash(path: Path):
 
 
 @pytest.fixture
-def sim_result():
+def sim_result() -> SimulationResult:
     gnw_sim = GNWSimRunner(
         settings_path=Path("setting_files/gnw_testing_runs_settings.txt")
     )
