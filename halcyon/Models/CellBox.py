@@ -23,6 +23,8 @@ class CellBox(MachineLearningModel):
             condition_names (tuple[str, ...]): names of the conditions
             phi: Activation function. Defaults to torch.tanh.
         """
+        self.phi = phi
+        self.self_activations = self_activations
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.W = nn.Parameter(
             torch.randn(
@@ -36,9 +38,7 @@ class CellBox(MachineLearningModel):
         self.epsilon = nn.Parameter(
             torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
         )
-        self.phi = phi
-        self.self_activations = self_activations
-        self.reset_conditions()
+        
 
     @property
     def w_masked(self) -> torch.Tensor:
@@ -62,7 +62,9 @@ class CellBox(MachineLearningModel):
         """
         self.reset_conditions()
         knockout_masks, _ = self.parse_env_data(environment_data)
-        new_w_masked = self.w_masked.unsqueeze(0) * knockout_masks  # [B, G, G]
+        # knockout_masks is [B, G], need to expand to [B, G, 1] for broadcasting
+        knockout_masks_expanded = knockout_masks.unsqueeze(2)  # [B, G, 1]
+        new_w_masked = self.w_masked.unsqueeze(0) * knockout_masks_expanded  # [B, G, G]
         assert not torch.isnan(new_w_masked).any(), "NaN in w_masked"
         self.w_mask = new_w_masked
 

@@ -10,7 +10,6 @@ from halcyon.RegulatoryNetwork import RegulatoryNetwork
 import torch
 from torch import nn
 
-
 import logging
 
 
@@ -30,21 +29,7 @@ class PhoenixABC(MachineLearningModel, ABC):
         self.per_gene_multipliers = nn.Parameter(
             torch.full(size=(self.n_genes,), fill_value=1.0)
         )
-        self.ko_masks = torch.ones(self.n_genes, device=self.device)  # type: ignore
-        self.env_flags = torch.zeros(self.n_conditions, device=self.device)  # type: ignore
-
-    def set_conditions(self, env_data: torch.Tensor):
-        """Use the env_data tensor to set the condition (i.e. knockouts and environment flags) for the model.
-
-        On each forward pass the environment flags are used as input to the neural network, and the knockout masks are used to mask the output of the neural network.
-        Args:
-            env_data (torch.Tensor): Tensor of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions.
-        """
-        # Knockouts should be used as mask after the forwards pass
-        ko_masks, env_flags = self.parse_env_data(env_data)
-        self.env_flags = env_flags
-        # Environments should be appended to the forward pass but not returned (Because they do not change over time)
-        self.ko_masks = ko_masks
+        
 
     def _get_decay(self, state):
         return nn.functional.relu(self.decay_params * state)
@@ -52,8 +37,7 @@ class PhoenixABC(MachineLearningModel, ABC):
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
 
-    def reset_conditions(self):
-        self.ko_masks = torch.ones(self.n_genes)  # type: ignore
+
 
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -85,7 +69,7 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
         decay = self._get_decay(state)
-        output = (self.neural_net(nn_input) * self.ko_masks.squeeze(2) - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        output = (self.neural_net(nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
@@ -129,6 +113,6 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         combined_nn_input = torch.cat((sum_out, prod_out), dim=1)
 
         decay = self._get_decay(state)
-        output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks.squeeze(2) - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
-        return output
+        return output 
