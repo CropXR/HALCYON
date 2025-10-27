@@ -281,7 +281,7 @@ class TrainingJob:
         self.save_path = self.sim_result.data_path / file_name
 
     def __repr__(self):
-        return f"Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs} and {self.optimizer_kwargs}"
+        return f"TrainingJob: Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs} and {self.optimizer_kwargs}"
 
     def load_if_exists(self):
         if self.save_path.exists():
