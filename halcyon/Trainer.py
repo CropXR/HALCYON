@@ -1,7 +1,5 @@
-from collections import UserList
 import logging
 from pathlib import Path
-from typing_extensions import Self
 from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,7 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
-from typing import Callable, Generic, TypeVar
+from typing import Callable
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Models.Model import Model
 from torch.nn.functional import mse_loss
@@ -59,15 +57,17 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
+    def _calculate_model_prediction(self, experiment_data, expression_data):
+        self.optimizer.zero_grad()
+        self.model.set_conditions(experiment_data)
+        output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
+        return output
+
     def _calculate_loss_from_batch(self, batch):
         experiment_data, expression_data = batch
         experiment_data = experiment_data.to(self.model.device)
         expression_data = expression_data.to(self.model.device)
-
-        self.optimizer.zero_grad()
-        self.model.set_conditions(experiment_data)
-        output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
-
+        output = self._calculate_model_prediction(experiment_data, expression_data)
         loss = self.calculate_loss_expression_vs_pred(expression_data, output)
         return loss
 
@@ -123,11 +123,12 @@ class Trainer:
             axs.set_title(title)
 
     def _plot_one_prediction(self, initial_condition, title, env, axs, show_legend):
-        # Simulate and plot prediction
+        """Simulate and plot prediction"""
         self.model.set_conditions(env.unsqueeze(0))
-        predictions = self.integrate_model(initial_states_tensor=initial_condition)
-        predictions = predictions.squeeze(0).detach().cpu().numpy()
-        self._from_expressions_to_plot(predictions, title, axs, show_legend)
+        with torch.no_grad():
+            predictions = self.integrate_model(initial_states_tensor=initial_condition)
+            predictions = predictions.squeeze(0).detach().cpu().numpy()
+            self._from_expressions_to_plot(predictions, title, axs, show_legend)
 
     def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
@@ -206,23 +207,26 @@ class Trainer:
         self.loss_history = checkpoint["loss_history"]
         self.model.load_state_dict(checkpoint["model_state_dict"])
 
-    def verify_on_double_ko(
-        self, double_ko_expression_data: ExpressionDataWithConditions
-    ):
+    def predict(self, expressions_to_predict: ExpressionDataWithConditions):
+        """Provide Expressiondata (e.g. with double knockouts) and calculate loss on them.
+
+        Args:
+            expressions_to_predict (ExpressionDataWithConditions): Dataset on which losses should be calculated
+        """
         assert (
-            double_ko_expression_data.genes == self.model.modelled_gene_labels
+            expressions_to_predict.genes == self.model.modelled_gene_labels
         ), "Gene labels do not match"
         self.model.eval()
-        double_ko_expression_data.scale_time_series()
+        expressions_to_predict.scale_time_series()
         my_dataloader = DataLoader(
-            double_ko_expression_data, batch_size=1, shuffle=False, pin_memory=True
+            expressions_to_predict, batch_size=1, shuffle=False, pin_memory=True
         )
         all_losses = []
-        for batch in my_dataloader:
-            loss = self._calculate_loss_from_batch(batch)
-            all_losses.append(loss.detach().cpu().item())
+        with torch.no_grad():
+            for batch in my_dataloader:
+                loss = self._calculate_loss_from_batch(batch)
+                all_losses.append(loss.detach().cpu().item())
         self.model.train()
-        # TODO plot predictions if we want
         return all_losses
 
 
@@ -319,6 +323,18 @@ class TrainingJob:
                 output_dict[key] = value
         return output_dict
 
+    def get_double_ko_files(self) -> ExpressionDataWithConditions:
+        double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
+            expression_file_path=self.sim_result.double_ko_timeseries_nonoise_file(),
+            ko_file_path=self.sim_result.double_ko_index_file(),
+        )
+        return double_ko_expressions
+
+    def losses_on_double_ko(self):
+        double_ko_expressions = self.get_double_ko_files()
+        loss = self.trainer.predict(double_ko_expressions)
+        return loss
+
 
 def run_training_job(job: TrainingJob):
     """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
@@ -333,75 +349,3 @@ def run_training_job(job: TrainingJob):
         logging.error(f"Error occurred while running job: {e}")
         output = {"error": str(e)}
     return output
-
-
-T = TypeVar("T", bound="TrainingJob")
-
-
-class ResultList(UserList[T], Generic[T]):
-    @classmethod
-    def from_train_jobs(cls, train_jobs: list[TrainingJob]) -> Self:
-        results = []
-        for job in train_jobs:
-            try:
-                job.load_if_exists()
-                results.append(job)
-            except FileNotFoundError as e:
-                logging.error(f"Error loading model for job {job.save_path}: {e}")
-        return cls(results)
-
-    def summary_dataframe(self) -> pd.DataFrame:
-        return pd.DataFrame([i.summary() for i in self.data])
-
-    def __getitem__(self, index):
-        """Copy numpy-like indexing, where you can select mulitple items via a list or array of indices."""
-        if isinstance(index, list) or isinstance(index, np.ndarray):
-            return ResultList([self.data[i] for i in index])
-        return super().__getitem__(index)
-
-    def plot_all_model_fits_into_one_fig(
-        self,
-        top_n_genes: int | None = None,
-        model_subset_indices: list[int] | None = None,
-        model_title_func: Callable[
-            [pd.Series], str
-        ] = lambda summary: f"{summary['model_cls']}_hidden_{summary.get('hidden_size', 0)}",
-    ):
-        model_list = (
-            self[model_subset_indices] if model_subset_indices is not None else self
-        )
-        n_cols = len(model_list) + 1
-        n_rows = top_n_genes if top_n_genes else len(model_list[0].trainer.dataset)
-        fig, axs = plt.subplots(
-            n_rows, n_cols, sharey=True, sharex="col", figsize=(4 * n_cols, 3 * n_rows)
-        )
-        for i, train_job in enumerate(model_list):
-            # print(train_job.summary()["model_path"])
-            trainer = train_job.trainer
-
-            for j in range(n_rows):
-                env, expressions = trainer.dataset[j]
-                env = env.to(trainer.model.device)
-                expressions = expressions.to(trainer.model.device)
-                if i == 0:
-                    # Plot ground truth in first column
-                    model_title = "Ground truth"
-                    trainer._from_expressions_to_plot(
-                        expressions.detach().cpu().numpy(),
-                        f"{model_title} (KO {j})",
-                        axs[j, 0],
-                        show_legend=False,
-                    )
-                if j == 0:
-                    # First row should have titles
-                    model_title = model_title_func(train_job.summary())
-                else:
-                    model_title = None
-                trainer._plot_one_prediction(
-                    expressions[:, 0].unsqueeze(0),
-                    model_title,
-                    env,
-                    axs[j, i + 1],
-                    show_legend=False,
-                )
-        plt.show()

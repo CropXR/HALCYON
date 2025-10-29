@@ -138,7 +138,7 @@ def test_with_regularisation():
 @pytest.mark.parametrize(
     "model_class, model_args",
     [
-        (CellBox, None),
+        (CellBox, {"self_activations": True}),
         (PhoenixOnlyAddLayers, {"hidden_size": 2}),
         (PhoenixAddAndProdLayers, {"hidden_size": 2}),
     ],
@@ -182,12 +182,8 @@ def train_job_with_loaded_cellbox(sim_result) -> TrainingJob:
     return train_job
 
 
-def test_verify_on_double_ko(train_job_with_loaded_cellbox: TrainingJob):
-    trainer = train_job_with_loaded_cellbox.trainer
-    double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
-        expression_file_path=train_job_with_loaded_cellbox.sim_result.double_ko_timeseries_nonoise_file(),
-        ko_file_path=train_job_with_loaded_cellbox.sim_result.double_ko_index_file(),
-    )
+def test_load_double_ko_tensors(train_job_with_loaded_cellbox: TrainingJob):
+    double_ko_expressions = train_job_with_loaded_cellbox.get_double_ko_files()
     exp_condition, expression_data = double_ko_expressions[0]
     # Only a 1 at position 0 and 3 because those are the KO genes
     assert torch.allclose(
@@ -430,4 +426,25 @@ def test_verify_on_double_ko(train_job_with_loaded_cellbox: TrainingJob):
     )
 
     assert torch.allclose(expression_data, expected_expression, rtol=1e-03, atol=1e-03)
-    trainer.verify_on_double_ko(double_ko_expression_data=double_ko_expressions)
+
+
+def test_losses_on_double_ko(train_job_with_loaded_cellbox: TrainingJob):
+    losses = train_job_with_loaded_cellbox.losses_on_double_ko()
+    assert np.allclose(
+        losses,
+        np.array(
+            [
+                0.09203624725341797,
+                0.11233041435480118,
+                0.07290700823068619,
+                0.06423024833202362,
+                0.04246918857097626,
+                0.1192648783326149,
+                0.04892643541097641,
+                0.05940413102507591,
+                0.0804734006524086,
+            ]
+        ),
+        rtol=1e-02,
+        atol=1e-02,
+    )
