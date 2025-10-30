@@ -81,10 +81,19 @@ class ExpressionDataWithConditions(Dataset):
     def __len__(self) -> int:
         return len(self._ko_dict)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return tuple of first item KO and environmental condition, and second item the corresponding expression data."""
+    def _get_experiment_and_expression_at_index(
+        self, idx: int
+    ) -> tuple[ExperimentCondition, ExpressionData]:
+        """Get objects of experimental condition and expression data at an index."""
         experiment_condition = list(self._ko_dict.keys())[idx]
         expression_data = self._ko_dict[experiment_condition]
+        return experiment_condition, expression_data
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data."""
+        experiment_condition, expression_data = (
+            self._get_experiment_and_expression_at_index(idx)
+        )
         return experiment_condition.as_tensor(), expression_data.as_tensor()
 
     def match_genes_to_list(self, genes: list[str]):
@@ -138,7 +147,6 @@ class ExpressionDataWithConditions(Dataset):
             ko_file_path (Path): path to tsv file with double KO gene pairs.
         """
         # Load expression data
-        # TODO Check this
         ko_dict = {}
         text_blocks = expression_file_path.read_text().strip().split("\n\n")
         headers = text_blocks.pop(0)
