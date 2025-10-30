@@ -35,13 +35,13 @@ def sim_result() -> SimulationResult:
 
 def test_gnw_reproducible(sim_result):
     expected_data_path = Path("tests/expected_output")
-    gt_files = expected_data_path.iterdir()
-    # generated_files = sim_result.data_path.iterdir()
-    for expected_file in gt_files:
-        gt_file = sim_result.data_path / expected_file.name
-        assert create_file_hash(gt_file) == create_file_hash(
+    generated_files = sim_result.data_path.iterdir()
+
+    for generated_file in generated_files:
+        expected_file = expected_data_path / generated_file.name
+        assert create_file_hash(generated_file) == create_file_hash(
             expected_file
-        ), f"File {gt_file} does not match hash of {expected_file}"
+        ), f"File {generated_file} does not match hash of {expected_file}"
 
     expected_sim_result = SimulationResult(
         data_path=Path("tests/generated_test_data").resolve(),
