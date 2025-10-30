@@ -113,11 +113,6 @@ class PyTorchODE(MechanisticModel):
 
     def _compile_expressions(self) -> None:
         """Pre-compile SymPy expressions into torch modules via sympytorch."""
-        if sympytorch is None:  # pragma: no cover - executed only when missing dependency
-            raise ImportError(
-                "sympytorch is required for MechanisticModel. Install it via 'pip install sympytorch'."
-            )
-
         param_subs = {symbols(name): value for name, value in self.param_dict.items()}
 
         def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
