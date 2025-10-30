@@ -116,9 +116,17 @@ class PyTorchODE(MechanisticModel):
         param_subs = {symbols(name): value for name, value in self.param_dict.items()}
 
         def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
+            """Prepare SymPy expressions for compilation.
+
+            Args:
+                expr_dict (Dict[str, sp.Expr]): A dictionary expression name keys and SymPy expressions values.
+
+            Returns:
+                List[sp.Expr]: A list of prepared SymPy expressions.
+            """
             prepared: List[sp.Expr] = []
             for gene in self.modelled_gene_labels:
-                expr = expr_dict[gene].subs(param_subs)
+                expr = expr_dict[gene].subs(param_subs) # Apply parameter substitutions, take parameter values from param_dict
                 expr = sympytorch.hide_floats(expr)
                 prepared.append(expr)
             return prepared
@@ -134,7 +142,7 @@ class PyTorchODE(MechanisticModel):
                 expressions=decay_exprs
             )
         except KeyError as err:
-            func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown"
+            func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown" # catch error from sympytorch when functions are missing
             raise ValueError(
                 f"Unsupported sympy function '{func_name}' in SBML expression. "
                 "Provide a torch implementation via sympytorch."
