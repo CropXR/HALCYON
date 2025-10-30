@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
 import torch
@@ -111,7 +112,7 @@ class Trainer:
         return self.loss_fn(expression_pred, expression_true)
 
     def _from_expressions_to_plot(
-        self, expressions, title: str | None, axs, show_legend
+        self, expressions: np.ndarray, title: str | None, axs: Axes, show_legend: bool
     ):
         df_real = pd.DataFrame(
             expressions,
@@ -122,7 +123,14 @@ class Trainer:
         if title is not None:
             axs.set_title(title)
 
-    def _plot_one_prediction(self, initial_condition, title, env, axs, show_legend):
+    def _plot_one_prediction(
+        self,
+        initial_condition: torch.Tensor,
+        title: str,
+        env: torch.Tensor,
+        axs: Axes,
+        show_legend: bool,
+    ):
         """Simulate and plot prediction"""
         self.model.set_conditions(env.unsqueeze(0))
         with torch.no_grad():
