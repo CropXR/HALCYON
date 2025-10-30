@@ -14,10 +14,7 @@ from sympy.core.parameters import evaluate
 from torch import nn
 import networkx as nx
 
-try:
-    import sympytorch
-except ImportError:  # pragma: no cover - handled at runtime
-    sympytorch = None  # type: ignore
+import sympytorch
 
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.Model import Model
