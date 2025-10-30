@@ -80,16 +80,18 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
                 dataset = trainer.dataset
 
             for j in range(n_rows):
-                env, expressions = dataset[j]
-                env = env.to(trainer.model.device)
-                expressions = expressions.to(trainer.model.device)
+                exp_condition, _ = dataset._get_experiment_and_expression_at_index(j)
+                env_tensor, expressions_tensor = dataset[j]
+                env_tensor = env_tensor.to(trainer.model.device)
+                expressions_tensor = expressions_tensor.to(trainer.model.device)
+
                 if i == 0:
                     # Plot ground truth in first column
-                    model_title = "Ground truth"
+                    ko_title = f"Ground truth (KO: {', '.join(exp_condition.ko_gene)})"
                     trainer._from_expressions_to_plot(
-                        expressions.detach().cpu().numpy(),
-                        f"{model_title} (KO {j})",
-                        axs[j, 0],
+                        expressions=expressions_tensor.detach().cpu().numpy(),
+                        title=ko_title,
+                        axs=axs[j, 0],
                         show_legend=False,
                     )
                 if j == 0:
@@ -98,9 +100,9 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
                 else:
                     model_title = None
                 trainer._plot_one_prediction(
-                    expressions[:, 0].unsqueeze(0),
+                    expressions_tensor[:, 0].unsqueeze(0),
                     model_title,
-                    env,
+                    env_tensor,
                     axs[j, i + 1],
                     show_legend=False,
                 )
