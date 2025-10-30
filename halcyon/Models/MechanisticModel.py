@@ -19,43 +19,15 @@ import sympytorch
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.Model import Model
 
-
-def _torch_heaviside(*args: torch.Tensor | float) -> torch.Tensor:
-    if not args:
-        raise ValueError("Heaviside requires at least one argument")
-
-    x = args[0]
-    x_tensor = x if torch.is_tensor(x) else torch.as_tensor(x)
-    dtype = x_tensor.dtype if x_tensor.dtype.is_floating_point else torch.get_default_dtype()
-    device = x_tensor.device if torch.is_tensor(x) else torch.device("cpu")
-
-    if len(args) == 1:
-        values = torch.full_like(x_tensor, 0.5, dtype=dtype)
-    else:
-        raw_values = args[1]
-        if torch.is_tensor(raw_values):
-            values = raw_values.to(device=device, dtype=dtype)
-        else:
-            values = torch.full_like(x_tensor, float(raw_values), dtype=dtype)
-
-    return torch.heaviside(x_tensor.to(device=device, dtype=dtype), values)
-
-
-_EXTRA_SYMPY_FUNCS: Dict[sp.FunctionClass, Callable[..., torch.Tensor]] = {
-    sp.Heaviside: _torch_heaviside,
-}
-
-
-
 class MechanisticModel(Model):
     def __init__(self, modelled_gene_labels: List[str]):
         super().__init__(modelled_gene_labels)
 
-    # @property
-    # @abstractmethod
-    # def regulatory_network(self) -> RegulatoryNetwork:
-    #     """Return the regulatory network of the model."""
-    #     pass
+    @property
+    @abstractmethod
+    def regulatory_network(self) -> RegulatoryNetwork:
+        """Return the regulatory network of the model."""
+        pass
 
 
 class PyTorchODE(MechanisticModel):
@@ -70,6 +42,10 @@ class PyTorchODE(MechanisticModel):
         self._synthesis_module: Optional[nn.Module] = None
         self._decay_module: Optional[nn.Module] = None
 
+
+    @property
+    def regulatory_network(self) -> RegulatoryNetwork:
+        raise NotImplementedError("This method needs to be implemented in a subclass.")
 
     @classmethod
     def from_sbml(cls, sbml_path, from_GNW: bool = False) -> Self:
@@ -148,18 +124,16 @@ class PyTorchODE(MechanisticModel):
 
         try:
             self._synthesis_module = sympytorch.SymPyModule(
-                expressions=synthesis_exprs,
-                extra_funcs=_EXTRA_SYMPY_FUNCS,
+                expressions=synthesis_exprs
             )
             self._decay_module = sympytorch.SymPyModule(
-                expressions=decay_exprs,
-                extra_funcs=_EXTRA_SYMPY_FUNCS,
+                expressions=decay_exprs
             )
         except KeyError as err:
             func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown"
             raise ValueError(
                 f"Unsupported sympy function '{func_name}' in SBML expression. "
-                "Provide a torch implementation via _EXTRA_SYMPY_FUNCS or extend sympytorch."
+                "Provide a torch implementation via sympytorch."
             ) from err
 
         self._compiled_ready = True
