@@ -53,6 +53,8 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
         top_n_genes: int | None = None,
         model_subset_indices: list[int] | None = None,
         only_double_ko: bool = False,
+        ymin: float = 0,
+        ymax: float = 1,
     ):
         model_list = (
             self[model_subset_indices] if model_subset_indices is not None else self
@@ -102,6 +104,8 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
                     axs[j, i + 1],
                     show_legend=False,
                 )
+        for ax in np.ravel(axs):
+            ax.set_ylim(ymin, ymax)
         plt.show()
 
     def _get_final_loss_heatmap_data(self, column_name: str = "nr_genes"):
