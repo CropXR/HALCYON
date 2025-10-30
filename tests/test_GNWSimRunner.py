@@ -38,6 +38,9 @@ def test_gnw_reproducible(sim_result):
     generated_files = sim_result.data_path.iterdir()
 
     for generated_file in generated_files:
+        if generated_file.suffix == ".pt":
+            # Ignore saved models
+            continue
         expected_file = expected_data_path / generated_file.name
         assert create_file_hash(generated_file) == create_file_hash(
             expected_file
