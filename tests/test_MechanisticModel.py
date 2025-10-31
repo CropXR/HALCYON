@@ -127,7 +127,13 @@ def test_fix_gnw_division_brackets_groups_denominator():
     fixed = PyTorchODE._fix_gnw_division_brackets(formula)
     assert fixed == "a/(b * c)"
     
-    
+def test_fix_gnw_multiple_division_brackets_groups_denominator():
+    """Test that the _fix_gnw_division_brackets method correctly groups the denominator in division expressions."""
+    formula = "a/b*c + d/e*f*g"
+    fixed = PyTorchODE._fix_gnw_division_brackets(formula)
+    assert fixed == "a/(b * c)+ d/(e * f * g)"
+
+
 def test_zero_parameters_leads_to_zero_derivatives(test_model, ss_initial_values):
     """
     Test that setting all model parameters to zero leads to derivatives of zero.
