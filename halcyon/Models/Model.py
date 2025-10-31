@@ -122,8 +122,16 @@ class Model(ABC, nn.Module):
             logging.info(f"Using GPU: {device_name} (compute capability {major}.{minor})")
             return torch.device('cuda')
             
+        except RuntimeError as e:
+            logging.error(f"Runtime error checking GPU compatibility: {e}")
+            logging.warning("Falling back to CPU.")
+            return torch.device('cpu')
+        except AttributeError as e:
+            logging.error(f"Attribute error accessing CUDA properties: {e}")
+            logging.warning("Falling back to CPU.")
+            return torch.device('cpu')
         except Exception as e:
-            logging.error(f"Error checking GPU compatibility: {e}")
-            logging.error("Falling back to CPU.")
+            logging.error(f"Unexpected error checking GPU compatibility: {e}")
+            logging.warning("Falling back to CPU.")
             return torch.device('cpu')
 
