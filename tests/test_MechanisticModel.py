@@ -28,7 +28,7 @@ def test_steady_state_derivateives_zero():
     in_folder = Path("tests/4_genes_multplicative_interactions")
     sbml_path = in_folder / 'integration_test_network.xml'
     
-    my_model = PyTorchODE.from_sbml(sbml_path, from_GNW=True)
+    my_model = PyTorchODE.from_sbml(sbml_path, from_gnw=True)
     
     ss_values = pd.read_csv(in_folder / 'integration_test_network_nonoise_wildtype.tsv', sep='\t')
     ss_dict = ss_values.to_dict('records')[0]
@@ -46,7 +46,7 @@ def test_steady_state_derivateives_zero():
 def test_model():
     in_folder = Path("tests/4_genes_multplicative_interactions")
     sbml_path = in_folder / "integration_test_network.xml"
-    model = PyTorchODE.from_sbml(sbml_path, from_GNW=True)
+    model = PyTorchODE.from_sbml(sbml_path, from_gnw=True)
     return model
 
 @pytest.fixture
