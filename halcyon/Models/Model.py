@@ -118,9 +118,9 @@ class Model(ABC, nn.Module):
                 logging.warning(f"Supported architectures: {supported_archs}")
                 logging.warning("Using CPU instead.")
                 return torch.device('cpu')
-
-            logging.info(f"Using GPU: {device_name} (compute capability {major}.{minor})")
-            return torch.device('cuda')
+            else:
+                logging.info(f"Using GPU: {device_name} (compute capability {major}.{minor})")
+                return torch.device('cuda')
             
         except Exception as e:
             logging.error(f"Error checking GPU compatibility: {e}")
