@@ -58,7 +58,7 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
-    def _calculate_model_prediction(
+    def _calculate_model_prediction_at_conditions(
         self, experiment_data: torch.Tensor, expression_data: torch.Tensor
     ):
         self.optimizer.zero_grad()
@@ -66,13 +66,19 @@ class Trainer:
         output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
         return output
 
-    def _calculate_loss_from_batch(self, batch):
+    def _calculate_loss_from_batch(self, batch: torch.Tensor):
+        experiment_data, expression_data = self.preprocess_batch(batch)
+        output = self._calculate_model_prediction_at_conditions(
+            experiment_data, expression_data
+        )
+        loss = self.calculate_loss_expression_vs_pred(expression_data, output)
+        return loss
+
+    def preprocess_batch(self, batch):
         experiment_data, expression_data = batch
         experiment_data = experiment_data.to(self.model.device)
         expression_data = expression_data.to(self.model.device)
-        output = self._calculate_model_prediction(experiment_data, expression_data)
-        loss = self.calculate_loss_expression_vs_pred(expression_data, output)
-        return loss
+        return experiment_data, expression_data
 
     def train(self, n_epochs: int):
         """Perform model training on batches.

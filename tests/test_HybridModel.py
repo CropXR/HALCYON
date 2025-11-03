@@ -106,6 +106,15 @@ def ml_model_from_sim_result(expr_data_from_sim):
 def test_mm_and_ml_merging(
     expr_data_from_sim, mech_model_from_sim_result, ml_model_from_sim_result
 ):
+    # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
+    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
     hybrid_model = HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
     my_trainer = Trainer(hybrid_model, expr_data_from_sim, batch_size=2)
-    my_trainer.train(2)
+    test_batch = next(iter(my_trainer.dataloader))
+    experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
+    output = my_trainer._calculate_model_prediction_at_conditions(
+        experiment_data, expression_data
+    )
+
+    assert torch.allclose(expression_data, output, atol=1e-3, rtol=1e-3)
