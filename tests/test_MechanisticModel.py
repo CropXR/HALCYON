@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import numpy as np
-import numpy.testing as npt
 import pandas as pd
 import pytest
 import sympy as sp
@@ -9,11 +8,6 @@ import sympytorch
 import torch
 
 from halcyon.Models.MechanisticModel import PyTorchODE
-# import os
-# import sys
-# # Add the current directory to the Python path
-# sys.path.append(os.path.abspath('.'))
-
 
 def test_steady_state_derivateives_zero():
     """
@@ -38,8 +32,11 @@ def test_steady_state_derivateives_zero():
 
     forward_results = my_model.forward(t = torch.tensor([0]), state = ss_tensor)
     
-    assert np.allclose(
-        forward_results.detach().numpy(), np.array([0, 0, 0, 0 ]), atol=1e-5
+    torch.testing.assert_close(
+        forward_results, 
+        torch.zeros_like(forward_results), 
+        atol=1e-5, 
+        rtol=0
     )
 
 @pytest.fixture
@@ -88,7 +85,7 @@ def test_knockout_masks_zero_synthesis_for_target_gene(test_model, ss_initial_va
     """
    
     baseline = test_model.forward(torch.tensor([0.0]), ss_initial_values).squeeze(0)
-    npt.assert_allclose(baseline.numpy(), 0.0, atol=1e-5)
+    torch.testing.assert_close(baseline, torch.zeros_like(baseline), atol=1e-5, rtol=0)
 
     ko_tensor = torch.zeros(1, test_model.n_genes)
     ko_index = 0
@@ -103,11 +100,17 @@ def test_knockout_masks_zero_synthesis_for_target_gene(test_model, ss_initial_va
     state_dict["cell"] = 1.0
     subs_dict = test_model.param_dict | state_dict
     expected = -float(test_model.decay_dict[target_gene].subs(subs_dict))
-    assert np.isclose(ko_result[ko_index].item(), expected, atol=1e-5)
-    npt.assert_allclose(
-        ko_result[ko_index + 1 :].detach().numpy(),
-        baseline[ko_index + 1 :].detach().numpy(),
+    torch.testing.assert_close(
+        ko_result[ko_index], 
+        torch.tensor(expected), 
+        atol=1e-5, 
+        rtol=0
+    )
+    torch.testing.assert_close(
+        ko_result[ko_index + 1 :],
+        baseline[ko_index + 1 :],
         atol=1e-5,
+        rtol=0,
     )
     test_model.reset_conditions()
 
@@ -151,7 +154,12 @@ def test_zero_parameters_leads_to_zero_derivatives(test_model, ss_initial_values
     derivatives = test_model.forward(torch.tensor([0.0]), ss_initial_values)
 
     # Assert that all derivatives are close to zero
-    assert np.allclose(derivatives.detach().numpy(), 0.0, atol=1e-5)
+    torch.testing.assert_close(
+        derivatives, 
+        torch.zeros_like(derivatives), 
+        atol=1e-5, 
+        rtol=0
+    )
 
 
 def test_forward_compiles_and_uses_torch_ops():
