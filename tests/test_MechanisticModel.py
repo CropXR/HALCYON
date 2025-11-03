@@ -11,6 +11,12 @@ import torch
 from halcyon.Models.MechanisticModel import PyTorchODE
 
 
+def test_select_subset_genes(test_mechanistic_model):
+
+    test_mechanistic_model.select_genes(["Node1", "Node3", "Node4"])
+    test_mechanistic_model.modelled_gene_labels == ["Node1", "Node3", "Node4"]
+
+
 def test_steady_state_derivateives_zero(test_mechanistic_model, in_folder):
     """
     Test the integration of the model with multiplicative interactions.
@@ -43,7 +49,7 @@ def in_folder() -> Path:
 
 
 @pytest.fixture
-def test_mechanistic_model(in_folder):
+def test_mechanistic_model(in_folder) -> PyTorchODE:
     sbml_path = in_folder / "integration_test_network.xml"
     model = PyTorchODE.from_sbml(sbml_path, condition_names=(), from_GNW=True)
     return model

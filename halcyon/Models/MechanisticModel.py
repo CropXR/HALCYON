@@ -83,6 +83,9 @@ class PyTorchODE(MechanisticModel):
         self._synthesis_module: Optional[nn.Module] = None
         self._decay_module: Optional[nn.Module] = None
 
+    def select_genes(self, genes: list[str]):
+        assert all(gene in self.modelled_gene_labels for gene in genes)
+
     @classmethod
     def from_sbml(
         cls, sbml_path, condition_names: List[str], from_GNW: bool = False
