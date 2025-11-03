@@ -128,7 +128,7 @@ class ExpressionDataWithConditions(Dataset):
             experiment_condition = ExperimentCondition(
                 all_genes=tuple(headers),
                 ko_gene=(gene_name,),
-                all_environments=("test", "test2"),
+                all_environments=(),
                 environment=None,
             )
             df = pd.read_csv(StringIO(block), sep="\t", names=headers)
@@ -168,7 +168,7 @@ class ExpressionDataWithConditions(Dataset):
             experiment_condition = ExperimentCondition(
                 all_genes=tuple(headers),
                 ko_gene=tuple(ko_for_this_expression_block),
-                all_environments=("test", "test2"),
+                all_environments=(),
                 environment=None,
             )
 

@@ -1,18 +1,25 @@
 from unittest.mock import MagicMock
 
+import pytest
 import torch
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
-from halcyon.Models.MechanisticModel import TorchLinearODE
+from halcyon.Models.NeuralODE import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
+from halcyon.Models.MechanisticModel import PyTorchODE
 from halcyon.Trainer import Trainer
 from tests.create_dummy_data import get_synthetic_data
+
+from tests.test_MechanisticModel import test_mechanistic_model
+from tests.test_GNWSimRunner import sim_result
 
 
 def test_merge_modelled_genes():
     mm_model = MagicMock()
     mm_model.modelled_gene_labels = ["a", "b", "c"]
+    mm_model.condition_names = ["cond_1", "cond_2"]
     ml_model = MagicMock()
     ml_model.modelled_gene_labels = ["c", "d"]
+    ml_model.condition_names = ["cond_1", "cond_2"]
     hybrid_model = HybridModel(mm_model, ml_model)
     assert set(hybrid_model.modelled_gene_labels) == {"a", "b", "c", "d"}
 
@@ -67,3 +74,38 @@ def test_hybrid_model_gene_split():
             [0.1000, 0.2000, 0.3000, 0.4000, 0.5000], device=hybrid_model.device
         ),
     )
+
+
+@pytest.fixture
+def expr_data_from_sim(sim_result):
+    expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+        sim_result.data_path
+        / f"{sim_result.network_name}_nonoise_knockout_timeseries.tsv"
+    )
+    return expr_data
+
+
+@pytest.fixture
+def mech_model_from_sim_result(sim_result, expr_data_from_sim):
+    model = PyTorchODE.from_sbml(
+        sim_result.data_path / "integration_test_network.xml",
+        condition_names=expr_data_from_sim.all_environments,
+        from_GNW=True,
+    )
+    return model
+
+
+@pytest.fixture
+def ml_model_from_sim_result(expr_data_from_sim):
+    model = PhoenixAddAndProdLayers(
+        expr_data_from_sim.genes, expr_data_from_sim.all_environments, hidden_size=2
+    )
+    return model
+
+
+def test_mm_and_ml_merging(
+    expr_data_from_sim, mech_model_from_sim_result, ml_model_from_sim_result
+):
+    hybrid_model = HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+    my_trainer = Trainer(hybrid_model, expr_data_from_sim, batch_size=2)
+    my_trainer.train(2)

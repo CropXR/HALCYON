@@ -29,7 +29,11 @@ def _torch_heaviside(*args: torch.Tensor | float) -> torch.Tensor:
 
     x = args[0]
     x_tensor = x if torch.is_tensor(x) else torch.as_tensor(x)
-    dtype = x_tensor.dtype if x_tensor.dtype.is_floating_point else torch.get_default_dtype()
+    dtype = (
+        x_tensor.dtype
+        if x_tensor.dtype.is_floating_point
+        else torch.get_default_dtype()
+    )
     device = x_tensor.device if torch.is_tensor(x) else torch.device("cpu")
 
     if len(args) == 1:
@@ -49,10 +53,9 @@ _EXTRA_SYMPY_FUNCS: Dict[sp.FunctionClass, Callable[..., torch.Tensor]] = {
 }
 
 
-
 class MechanisticModel(Model):
-    def __init__(self, modelled_gene_labels: List[str]):
-        super().__init__(modelled_gene_labels)
+    def __init__(self, modelled_gene_labels: List[str], condition_names: List[str]):
+        super().__init__(modelled_gene_labels, condition_names)
 
     # @property
     # @abstractmethod
@@ -64,8 +67,15 @@ class MechanisticModel(Model):
 class PyTorchODE(MechanisticModel):
     alternative_max_name = "max_rate"
 
-    def __init__(self, modelled_gene_labels, synthesis_dict, decay_dict, param_dict):
-        super().__init__(modelled_gene_labels)
+    def __init__(
+        self,
+        modelled_gene_labels,
+        condition_names,
+        synthesis_dict,
+        decay_dict,
+        param_dict,
+    ):
+        super().__init__(modelled_gene_labels, condition_names)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
         self.param_dict = param_dict
@@ -73,11 +83,11 @@ class PyTorchODE(MechanisticModel):
         self._synthesis_module: Optional[nn.Module] = None
         self._decay_module: Optional[nn.Module] = None
 
-
     @classmethod
-    def from_sbml(cls, sbml_path, from_GNW: bool = False) -> Self:
-        # Accept both Path and str for sbml_path
-        
+    def from_sbml(
+        cls, sbml_path, condition_names: List[str], from_GNW: bool = False
+    ) -> Self:
+
         if isinstance(sbml_path, Path):
             sbml_path = str(sbml_path)
         assert isinstance(sbml_path, str)  # Ensure sbml_path is a string
@@ -96,13 +106,15 @@ class PyTorchODE(MechanisticModel):
 
         for i in range(model.getNumReactions()):
             reaction = model.getReaction(i)
-            reaction_id = reaction.getId()#.rstrip("_")
+            reaction_id = reaction.getId()  # .rstrip("_")
             formula = reaction.getKineticLaw().getFormula()
 
             if from_GNW:
                 formula = cls._fix_gnw_division_brackets(formula)
-            
-            libsbml_parameters = model.getReaction(reaction_id).getKineticLaw().getListOfParameters()
+
+            libsbml_parameters = (
+                model.getReaction(reaction_id).getKineticLaw().getListOfParameters()
+            )
 
             base_node_name, sympy_formula, one_reactions_parameters = (
                 cls.parse_one_reaction(reaction_id, formula, libsbml_parameters)
@@ -126,12 +138,20 @@ class PyTorchODE(MechanisticModel):
                 )
         # print("Synthesis expressions:", synthesis_expression_dict)
         # print("Decay expressions:", decay_expression_dict)
-        
-        return cls(base_node_names, synthesis_expression_dict, decay_expression_dict, param_dict)
+
+        return cls(
+            base_node_names,
+            condition_names,
+            synthesis_expression_dict,
+            decay_expression_dict,
+            param_dict,
+        )
 
     def _compile_expressions(self) -> None:
         """Pre-compile SymPy expressions into torch modules via sympytorch."""
-        if sympytorch is None:  # pragma: no cover - executed only when missing dependency
+        if (
+            sympytorch is None
+        ):  # pragma: no cover - executed only when missing dependency
             raise ImportError(
                 "sympytorch is required for MechanisticModel. Install it via 'pip install sympytorch'."
             )
@@ -159,7 +179,11 @@ class PyTorchODE(MechanisticModel):
                 extra_funcs=_EXTRA_SYMPY_FUNCS,
             )
         except KeyError as err:
-            func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown"
+            func_name = (
+                getattr(err.args[0], "__name__", str(err.args[0]))
+                if err.args
+                else "unknown"
+            )
             raise ValueError(
                 f"Unsupported sympy function '{func_name}' in SBML expression. "
                 "Provide a torch implementation via _EXTRA_SYMPY_FUNCS or extend sympytorch."
@@ -168,15 +192,17 @@ class PyTorchODE(MechanisticModel):
         self._compiled_ready = True
 
     @classmethod
-    def parse_one_reaction(cls, name: str, formula_string: str, libsbml_parameters: libsbml.ListOfParameters):
-        base_node_name = (
-            name.replace("_degradation", "").replace("_synthesis", "")
-        )
-        formula_string = re.sub(r'\bmax\b', cls.alternative_max_name, formula_string)
+    def parse_one_reaction(
+        cls,
+        name: str,
+        formula_string: str,
+        libsbml_parameters: libsbml.ListOfParameters,
+    ):
+        base_node_name = name.replace("_degradation", "").replace("_synthesis", "")
+        formula_string = re.sub(r"\bmax\b", cls.alternative_max_name, formula_string)
 
         param_dict = dict()
-        
-        
+
         # This way the order of the terms is preserved, eases readability
         with evaluate(0):
             # TODO THIJS: here the formula string for Node_1_synthesis needs the brackets added just after the division. Ideally check if this method would also generalise for three or more genes.
@@ -186,21 +212,25 @@ class PyTorchODE(MechanisticModel):
 
         for old_param_name in sympy_formula.free_symbols:
             old_param_name = str(old_param_name)
-            if old_param_name.startswith('Node'):
+            if old_param_name.startswith("Node"):
                 continue
-            elif old_param_name == 'cell':
+            elif old_param_name == "cell":
                 continue
-            new_param_name = f'{old_param_name}_{base_node_name}'
+            new_param_name = f"{old_param_name}_{base_node_name}"
             replacement_dict[old_param_name] = new_param_name
             # Also figure out the value of the parameter
-            assert new_param_name not in param_dict, f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
+            assert (
+                new_param_name not in param_dict
+            ), f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
             if old_param_name == cls.alternative_max_name:
-                old_param_name = 'max'
-            param_dict[new_param_name] = libsbml_parameters.get(old_param_name).getValue()
+                old_param_name = "max"
+            param_dict[new_param_name] = libsbml_parameters.get(
+                old_param_name
+            ).getValue()
         sympy_formula = sympy_formula.subs(replacement_dict)
-        
+
         return base_node_name, sympy_formula, param_dict
-    
+
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:
         """
@@ -208,44 +238,44 @@ class PyTorchODE(MechanisticModel):
         that should be in the denominator after a division operator.
         """
         import re
-        
+
         def find_matching_paren(s, start_pos):
             """Find the position of the matching closing parenthesis"""
-            if s[start_pos] != '(':
+            if s[start_pos] != "(":
                 return -1
-            
+
             count = 1
             pos = start_pos + 1
-            
+
             while pos < len(s) and count > 0:
-                if s[pos] == '(':
+                if s[pos] == "(":
                     count += 1
-                elif s[pos] == ')':
+                elif s[pos] == ")":
                     count -= 1
                 pos += 1
-                
+
             return pos - 1 if count == 0 else -1
-        
+
         def fix_division_at_position(formula_str, div_pos):
             """Fix division at a specific position by grouping subsequent multiplication terms"""
             if div_pos >= len(formula_str) - 1:
                 return formula_str
-                
+
             # Start collecting terms after the division
             pos = div_pos + 1
             terms = []
-            
+
             while pos < len(formula_str):
                 # Skip whitespace
                 while pos < len(formula_str) and formula_str[pos].isspace():
                     pos += 1
-                
+
                 if pos >= len(formula_str):
                     break
-                
+
                 # If this is not the first term, we need to check for multiplication operator
                 if len(terms) > 0:
-                    if formula_str[pos] == '*':
+                    if formula_str[pos] == "*":
                         pos += 1  # Skip the '*'
                         # Skip whitespace after '*'
                         while pos < len(formula_str) and formula_str[pos].isspace():
@@ -253,57 +283,61 @@ class PyTorchODE(MechanisticModel):
                     else:
                         # No multiplication operator, so we're done with this division
                         break
-                
+
                 if pos >= len(formula_str):
                     break
-                
+
                 # Collect the next term
                 term_start = pos
-                
-                if formula_str[pos] == '(':
+
+                if formula_str[pos] == "(":
                     # Parenthetical expression
                     end_paren = find_matching_paren(formula_str, pos)
                     if end_paren != -1:
-                        terms.append(formula_str[pos:end_paren + 1])
+                        terms.append(formula_str[pos : end_paren + 1])
                         pos = end_paren + 1
                     else:
                         break
                 else:
                     # Regular term (variable, number, or function call)
-                    while (pos < len(formula_str) and 
-                        formula_str[pos] not in ['*', '/', '+', '-', ')', ' '] and
-                        not (formula_str[pos:pos+1].isspace())):
+                    while (
+                        pos < len(formula_str)
+                        and formula_str[pos] not in ["*", "/", "+", "-", ")", " "]
+                        and not (formula_str[pos : pos + 1].isspace())
+                    ):
                         pos += 1
-                    
+
                     # Handle function calls like pow(...)
-                    if pos < len(formula_str) and formula_str[pos] == '(':
+                    if pos < len(formula_str) and formula_str[pos] == "(":
                         end_paren = find_matching_paren(formula_str, pos)
                         if end_paren != -1:
                             pos = end_paren + 1
-                    
+
                     terms.append(formula_str[term_start:pos])
-            
+
             # If we found multiple terms, wrap them in parentheses
             if len(terms) > 1:
-                grouped_terms = ' * '.join(terms)  # Preserve spacing
-                new_denominator = f'/({grouped_terms})'
-                
+                grouped_terms = " * ".join(terms)  # Preserve spacing
+                new_denominator = f"/({grouped_terms})"
+
                 # Calculate the original length to replace
                 original_end = pos
                 original_section = formula_str[div_pos:original_end]
-                
-                return (formula_str[:div_pos] + new_denominator + formula_str[original_end:])
-            
+
+                return (
+                    formula_str[:div_pos] + new_denominator + formula_str[original_end:]
+                )
+
             return formula_str
-        
+
         # Find all division operators and fix them
         result = formula
-        div_positions = [i for i, char in enumerate(result) if char == '/']
-        
+        div_positions = [i for i, char in enumerate(result) if char == "/"]
+
         # Process divisions from right to left to avoid position shifts
         for div_pos in reversed(div_positions):
             result = fix_division_at_position(result, div_pos)
-        
+
         return result
 
     def integrate(
@@ -317,7 +351,6 @@ class PyTorchODE(MechanisticModel):
         self._compile_expressions()
         return super().integrate(initial_state, t_eval)
 
-
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
         Get the derivative at a given time point.
@@ -330,7 +363,7 @@ class PyTorchODE(MechanisticModel):
         """
         if state.isinf().any() or state.isnan().any():
             raise ValueError("NaN or inf in state tensor.")
-        
+
         # Clamp state to prevent negative values
         state = torch.clamp(state, min=0.0)
         if not getattr(self, "_compiled_ready", False):
@@ -361,8 +394,7 @@ class PyTorchODE(MechanisticModel):
         ko_masks = ko_masks.to(device=device, dtype=state.dtype)
 
         inputs = {
-            gene: state[:, idx]
-            for idx, gene in enumerate(self.modelled_gene_labels)
+            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
         }
         inputs["cell"] = torch.full(
             (batch_size,),
@@ -384,55 +416,3 @@ class PyTorchODE(MechanisticModel):
             ) from exc
 
         return synthesis * ko_masks - decay
-
-class TorchLinearODE(MechanisticModel):
-    def __init__(self, regulatory_network: RegulatoryNetwork):
-        super().__init__(list(regulatory_network.nodes))
-        self.regulatory_network = regulatory_network
-
-        # Initialize the adjacency/weight matrix
-        self.weight_matrix = torch.zeros(
-            (self.n_genes, self.n_genes), dtype=torch.float32
-        )
-
-        for (
-            from_gene,
-            to_gene,
-            property_dict,
-        ) in regulatory_network.get_all_interactions():
-            if from_gene in self.gene_index and to_gene in self.gene_index:
-                from_idx = self.gene_index[from_gene]
-                to_idx = self.gene_index[to_gene]
-                self.weight_matrix[to_idx, from_idx] = property_dict["influence"]
-        self.weight_matrix = nn.Parameter(self.weight_matrix, requires_grad=True)
-
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        # Handle both single samples and batches
-        if state.dim() == 1:
-            # Single sample case - add batch dimension
-            state = state.unsqueeze(0)
-            squeeze_output = True
-        else:
-            squeeze_output = False
-        
-        # Perform batch matrix multiplication
-        result = torch.bmm(
-            self.weight_matrix.unsqueeze(0).expand(state.shape[0], -1, -1),
-            state.unsqueeze(2),
-        ).squeeze(2)
-        
-        # Return in the same format as input
-        if squeeze_output:
-            return result.squeeze(0)
-        return result
-
-    def _make_weight_matrix_zeroes(self):
-        """Initialize the weight matrix by setting everything to 0."""
-        self.weight_matrix = nn.Parameter(
-            torch.zeros_like(self.weight_matrix, dtype=torch.float32),
-            requires_grad=True,
-        )
-
-    def set_conditions(self, conditions):
-        logging.warning("Currently TorchLinearODE does not parse the conditions")
-        pass

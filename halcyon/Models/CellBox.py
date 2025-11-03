@@ -38,7 +38,6 @@ class CellBox(MachineLearningModel):
         self.epsilon = nn.Parameter(
             torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
         )
-        
 
     @property
     def w_masked(self) -> torch.Tensor:

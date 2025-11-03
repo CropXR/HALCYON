@@ -23,7 +23,13 @@ class HybridModel(Model):
         all_modelled_genes = list(
             set(mm.modelled_gene_labels) | set(ml.modelled_gene_labels)
         )
-        super().__init__(modelled_gene_labels=list(all_modelled_genes))
+        assert (
+            mm.condition_names == ml.condition_names
+        ), f"Conditions of {mm} and {ml} should match"
+        super().__init__(
+            modelled_gene_labels=list(all_modelled_genes),
+            condition_names=mm.condition_names,
+        )
         self.mm = mm
         self.ml = ml
         self.mm.to(self.device)

@@ -70,7 +70,7 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
     # Environment vector for for knocked out G1
     assert torch.allclose(
         environment,
-        torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
         atol=1e-4,
     )
     assert torch.allclose(

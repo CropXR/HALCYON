@@ -8,7 +8,6 @@ import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers, PhoenixAddAndProdLayers
-from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 from halcyon.Trainer import Trainer, TrainingJob
 from tests.create_dummy_data import (
@@ -40,21 +39,6 @@ def test_calculate_loss():
     assert my_trainer.calculate_loss_expression_vs_pred(
         expressions_gt, expressions_gt
     ) == approx(0.0)
-
-
-def test_integrate_model():
-    gt_regulatory_network, interactions, data = get_synthetic_data()
-    correct_model = TorchLinearODE(gt_regulatory_network)
-    my_trainer = Trainer(correct_model, data)
-    gt_expressions = data[0][1]
-    init_conditions = gt_expressions[:, 0].unsqueeze(0)
-    output = my_trainer.integrate_model(init_conditions)
-    assert torch.allclose(
-        my_trainer.calculate_loss_expression_vs_pred(
-            output, gt_expressions.unsqueeze(0).to(correct_model.device)
-        ),
-        torch.tensor([0.0], device=correct_model.device),
-    )
 
 
 def test_train_neural_ode():
@@ -127,12 +111,7 @@ def test_plot_fit_vs_real_data(cellbox_from_expression):
 
 
 def test_with_regularisation():
-    gt_regulatory_network, _, expressions = get_synthetic_data()
-    correct_model = TorchLinearODE(gt_regulatory_network)
-    my_trainer = Trainer(
-        correct_model, expressions, optimizer_kwargs={"weight_decay": 1}
-    )
-    assert my_trainer.optimizer.state_dict()["param_groups"][0]["weight_decay"] == 1
+    assert False
 
 
 @pytest.mark.parametrize(
@@ -188,7 +167,7 @@ def test_load_double_ko_tensors(train_job_with_loaded_cellbox: TrainingJob):
     # Only a 1 at position 0 and 3 because those are the KO genes
     assert torch.allclose(
         exp_condition,
-        torch.tensor([1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        torch.tensor([1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     )
     expected_expression = torch.tensor(
         [

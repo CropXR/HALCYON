@@ -7,12 +7,7 @@ from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 class MachineLearningModel(Model, ABC):
     def __init__(self, modelled_gene_labels, condition_names, **kwargs):
-        self._n_conditions = len(condition_names)
-        super().__init__(modelled_gene_labels, **kwargs)
-
-    @property
-    def n_conditions(self):
-        return self._n_conditions
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
 
     @abstractmethod
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:

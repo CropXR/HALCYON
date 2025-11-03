@@ -63,8 +63,8 @@ def test_final_loss_heatmap(result_list_from_jobs):
     gt_df = pd.DataFrame(
         {
             10: {
-                "CellBox_hidden_nan": 0.06147445738315582,
-                "PhoenixAddAndProdLayers_hidden_2.0": 0.060300204902887344,
+                "CellBox_hidden_nan": 0.06098203361034393,
+                "PhoenixAddAndProdLayers_hidden_2.0": 0.0542202889919281,
             }
         },
     )
