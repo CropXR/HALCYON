@@ -409,15 +409,11 @@ class PyTorchODE(MechanisticModel):
 
         synthesis = synthesis_module(**inputs)
         decay = decay_module(**inputs)
-
-        target_shape = (batch_size, n_genes)
-        try:
-            synthesis = torch.broadcast_to(synthesis, target_shape)
-            decay = torch.broadcast_to(decay, target_shape)
-        except RuntimeError as exc:  # pragma: no cover - defensive branch
-            raise RuntimeError(
-                f"SymPyModule outputs have incompatible shapes {synthesis.shape} and {decay.shape}."
-            ) from exc
+        # If output is 1D (single sample), unsqueeze to add batch dimension
+        if synthesis.dim() == 1:
+            synthesis = synthesis.unsqueeze(0)
+        if decay.dim() == 1:
+            decay = decay.unsqueeze(0)
 
         return synthesis * ko_masks - decay
 
