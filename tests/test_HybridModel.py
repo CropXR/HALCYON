@@ -3,6 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Losses import MSELossPlusMachineLearningL2
 from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.NeuralODE import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import PyTorchODE
@@ -118,3 +119,24 @@ def test_hybrid_does_perfect_fit_if_ml_weights_zero(
     )
 
     assert torch.allclose(expression_data, output, atol=1e-3, rtol=1e-3)
+
+    loss = my_trainer.calculate_loss_expression_vs_pred(expression_data, output)
+    assert torch.allclose(loss, torch.tensor([0.0], device=my_trainer.model.device))
+
+
+def test_l2_loss(
+    expr_data_from_sim, mech_model_from_sim_result, ml_model_from_sim_result
+):
+    # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
+    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
+    hybrid_model = HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
+    my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
+    my_trainer = Trainer(
+        hybrid_model, expr_data_from_sim, batch_size=2, loss=my_l2_loss
+    )
+    test_batch = next(iter(my_trainer.dataloader))
+    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    assert torch.allclose(
+        torch.tensor(0.0043, device=my_trainer.model.device), loss, atol=1e-3, rtol=1e-3
+    )

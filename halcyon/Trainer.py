@@ -10,8 +10,10 @@ from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithCond
 
 from typing import Callable
 from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.Losses import MSELossFlexible
+from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import Model
-from torch.nn.functional import mse_loss
+import torch.nn as nn
 import seaborn as sns
 
 from halcyon.Simulators.GNWSimRunner import SimulationResult
@@ -24,7 +26,7 @@ class Trainer:
         dataset: ExpressionDataWithConditions,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
-        loss_fn: Callable = mse_loss,
+        loss: nn.Module = MSELossFlexible(),
         batch_size: int = 1,
     ):
         """Class to handle training of models
@@ -38,7 +40,7 @@ class Trainer:
             batch_size (int, optional): Batch size to use during training. Defaults to 1.
         """
         self.model = model
-        self.loss_fn = loss_fn
+        self.loss_fn = loss
         # Ensure that expressions match the order of the modelled genes
         self.dataset = dataset
         self.dataset.match_genes_to_list(model.modelled_gene_labels)
@@ -117,7 +119,7 @@ class Trainer:
         self, expression_true: torch.Tensor, expression_pred: torch.Tensor
     ) -> torch.Tensor:
         """Calculate the loss between a given model output and the actual expressions."""
-        return self.loss_fn(expression_pred, expression_true)
+        return self.loss_fn(expression_pred, expression_true, self.model)
 
     def _from_expressions_to_plot(
         self, expressions: np.ndarray, title: str | None, axs: Axes, show_legend: bool

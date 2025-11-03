@@ -110,10 +110,6 @@ def test_plot_fit_vs_real_data(cellbox_from_expression):
     assert out_fig is not None
 
 
-def test_with_regularisation():
-    assert False
-
-
 @pytest.mark.parametrize(
     "model_class, model_args",
     [
