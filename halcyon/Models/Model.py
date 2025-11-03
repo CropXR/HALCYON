@@ -13,7 +13,6 @@ class Model(ABC, nn.Module):
     ):
         super().__init__()
         self.modelled_gene_labels = natsorted(modelled_gene_labels)
-        self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
         if device is not None:
             self.device = torch.device(device)
         else:
@@ -34,10 +33,10 @@ class Model(ABC, nn.Module):
         """Get the derivative at a given time point."""
         pass
 
-    # @abstractmethod
-    # def set_conditions(self, conditions: torch.Tensor) -> None:
-    #     """Set the environmental conditions."""
-    #     pass
+    @abstractmethod
+    def set_conditions(self, conditions: torch.Tensor) -> None:
+        """Set the environmental conditions."""
+        pass
 
     def integrate(
         self,
@@ -51,11 +50,10 @@ class Model(ABC, nn.Module):
         assert (
             t_eval.dim() == 1
         ), f"t_eval should be a 1D tensor, but got shape {t_eval.shape}"
-        # assert(initial_state.shape[0] == self.ko_masks.shape[0] * max(1,self.env_flags.shape[0])), f"Initial state batch size {initial_state.shape[0]} does not match ko_masks batch size {self.ko_masks.shape[0]} times max of (1,{self.env_flags.shape[0]})"
-        # assert(initial_state.shape[0] == self.env_flags.shape[0]), f"Initial state batch size {initial_state.shape[0]} does not match env_flags batch size {self.env_flags.shape[0]}"
 
         output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
-        return output.permute(1, 2, 0)  # Permute dimensions to [Batch, Genes, Time]
+        # Permute dimensions to [Batch, Genes, Time]
+        return output.permute(1, 2, 0)
 
     def parse_env_data(
         self, environment_data: torch.Tensor
