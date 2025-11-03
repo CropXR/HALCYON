@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - bioconda
   - defaults
+  - nodefaults
 dependencies:
   - _libgcc_mutex=0.1=conda_forge
   - _openmp_mutex=4.5=2_gnu
@@ -290,9 +291,10 @@ dependencies:
       - python-libcombine==0.2.20
       - python-libnuml==1.1.7
       - python-libsedml==2.0.33
+      - sympytorch==0.1.4
       - tellurium==2.2.11.1
-      - torch==2.8.0+cu129 
+      - torch==2.8.0+cu129
       - torchdiffeq==0.2.5
       - torchvision==0.23.0+cu129
       - triton==3.4.0
-prefix: /home/noord087/lustre_link/miniforge3/envs/halcyon
+prefix: /home/thijs/miniforge3/envs/halcyon2

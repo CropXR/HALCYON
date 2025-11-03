@@ -10,7 +10,6 @@ from halcyon.RegulatoryNetwork import RegulatoryNetwork
 import torch
 from torch import nn
 
-
 import logging
 
 
@@ -57,9 +56,6 @@ class PhoenixABC(MachineLearningModel, ABC):
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
 
-    def reset_conditions(self):
-        self.ko_masks = torch.ones(self.n_genes)  # type: ignore
-
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         pass
@@ -93,7 +89,7 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
         decay = self._get_decay(state)
-        output = (self.neural_net(nn_input) * self.ko_masks.squeeze(2) - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        output = (self.neural_net(nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
@@ -139,6 +135,6 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         combined_nn_input = torch.cat((sum_out, prod_out), dim=1)
 
         decay = self._get_decay(state)
-        output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks.squeeze(2) - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
