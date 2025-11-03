@@ -58,7 +58,9 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
-    def _calculate_model_prediction(self, experiment_data, expression_data):
+    def _calculate_model_prediction(
+        self, experiment_data: torch.Tensor, expression_data: torch.Tensor
+    ):
         self.optimizer.zero_grad()
         self.model.set_conditions(experiment_data)
         output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
@@ -266,12 +268,12 @@ class TrainingJob:
         )
         self.expressions.scale_time_series()
         self.model_kwargs = model_kwargs or {}
-        self.optimizer_kwargs = optimizer_kwargs or {}
         model = model_cls(
             self.expressions.genes,
             self.expressions.all_environments,
             **self.model_kwargs,
         )
+        self.optimizer_kwargs = optimizer_kwargs or {}
         self.trainer = Trainer(
             model,
             self.expressions,
