@@ -44,7 +44,7 @@ class ExpressionData:
             ignore_index=False, value_name=self.expression_name, var_name=self.time_name
         ).reset_index(names=self.gene_name)
 
-    def plot_expressions(self, axis=None) -> Axes:
+    def plot_expressions(self, axis=None, legend: bool = True) -> Axes:
         """Plot gene expression levels.
 
         This method does not call plt.show() to allow integration into larger
@@ -57,4 +57,5 @@ class ExpressionData:
             y=self.expression_name,
             hue=self.gene_name,
             ax=axis,
+            legend=legend,
         )
