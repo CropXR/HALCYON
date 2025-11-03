@@ -103,7 +103,7 @@ def ml_model_from_sim_result(expr_data_from_sim):
     return model
 
 
-def test_mm_and_ml_merging(
+def test_hybrid_does_perfect_fit_if_ml_weights_zero(
     expr_data_from_sim, mech_model_from_sim_result, ml_model_from_sim_result
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
