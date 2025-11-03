@@ -1,7 +1,4 @@
 from pathlib import Path
-
-import numpy as np
-import numpy.testing as npt
 import pandas as pd
 import pytest
 import sympy as sp
@@ -38,9 +35,14 @@ def test_steady_state_derivateives_zero(test_mechanistic_model, in_folder):
         t=torch.tensor([0]), state=ss_tensor
     )
 
-    assert np.allclose(
-        forward_results.detach().numpy(), np.array([0, 0, 0, 0]), atol=1e-5
+    torch.testing.assert_close(
+        forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0
     )
+
+
+@pytest.fixture
+def in_folder() -> Path:
+    return Path("tests/4_genes_multplicative_interactions")
 
 
 @pytest.fixture
@@ -51,7 +53,7 @@ def in_folder() -> Path:
 @pytest.fixture
 def test_mechanistic_model(in_folder) -> PyTorchODE:
     sbml_path = in_folder / "integration_test_network.xml"
-    model = PyTorchODE.from_sbml(sbml_path, condition_names=(), from_GNW=True)
+    model = PyTorchODE.from_sbml(sbml_path, condition_names=(), from_gnw=True)
     return model
 
 
@@ -97,7 +99,7 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
     baseline = test_mechanistic_model.forward(
         torch.tensor([0.0]), ss_initial_values
     ).squeeze(0)
-    npt.assert_allclose(baseline.numpy(), 0.0, atol=1e-5)
+    torch.testing.assert_close(baseline, torch.zeros_like(baseline), atol=1e-5, rtol=0)
 
     ko_tensor = torch.zeros(1, test_mechanistic_model.n_genes)
     ko_index = 0
@@ -115,11 +117,14 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
     state_dict["cell"] = 1.0
     subs_dict = test_mechanistic_model.param_dict | state_dict
     expected = -float(test_mechanistic_model.decay_dict[target_gene].subs(subs_dict))
-    assert np.isclose(ko_result[ko_index].item(), expected, atol=1e-5)
-    npt.assert_allclose(
-        ko_result[ko_index + 1 :].detach().numpy(),
-        baseline[ko_index + 1 :].detach().numpy(),
+    torch.testing.assert_close(
+        ko_result[ko_index], torch.tensor(expected), atol=1e-5, rtol=0
+    )
+    torch.testing.assert_close(
+        ko_result[ko_index + 1 :],
+        baseline[ko_index + 1 :],
         atol=1e-5,
+        rtol=0,
     )
     test_mechanistic_model.reset_conditions()
 
@@ -138,6 +143,13 @@ def test_fix_gnw_division_brackets_groups_denominator():
     formula = "a/b*c"
     fixed = PyTorchODE._fix_gnw_division_brackets(formula)
     assert fixed == "a/(b * c)"
+
+
+def test_fix_gnw_multiple_division_brackets_groups_denominator():
+    """Test that the _fix_gnw_division_brackets method correctly groups the denominator in division expressions."""
+    formula = "a/b*c + d/e*f*g"
+    fixed = PyTorchODE._fix_gnw_division_brackets(formula)
+    assert fixed == "a/(b * c)+ d/(e * f * g)"
 
 
 def test_zero_parameters_leads_to_zero_derivatives(
@@ -159,7 +171,9 @@ def test_zero_parameters_leads_to_zero_derivatives(
     derivatives = test_mechanistic_model.forward(torch.tensor([0.0]), ss_initial_values)
 
     # Assert that all derivatives are close to zero
-    assert np.allclose(derivatives.detach().numpy(), 0.0, atol=1e-5)
+    torch.testing.assert_close(
+        derivatives, torch.zeros_like(derivatives), atol=1e-5, rtol=0
+    )
 
 
 def test_forward_compiles_and_uses_torch_ops():

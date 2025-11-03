@@ -92,7 +92,7 @@ class Model(ABC, nn.Module):
         self.env_flags = torch.zeros(self.n_conditions)  # type: ignore
 
     @staticmethod
-    def get_compatible_device():
+    def get_compatible_device() -> torch.device:
         """
         Get a compatible device for PyTorch.
         Automatically detects if GPU is compatible and falls back to CPU if not.
@@ -102,7 +102,7 @@ class Model(ABC, nn.Module):
             torch.device: Compatible device (CPU or GPU)
         """
         if not torch.cuda.is_available():
-            logging.warning("CUDA not available. Using CPU.")
+            logging.info("CUDA not available. Using CPU.")
             return torch.device("cpu")
 
         try:
@@ -122,16 +122,24 @@ class Model(ABC, nn.Module):
                 logging.warning(
                     f"GPU {device_name} (compute capability {major}.{minor}) is not compatible."
                 )
-                logging.warning(f"Supported architectures: {supported_archs}")
-                logging.warning("Using CPU instead.")
+                logging.info(f"Supported architectures: {supported_archs}")
+                logging.info("Using CPU instead.")
                 return torch.device("cpu")
+            else:
+                logging.info(
+                    f"Using GPU: {device_name} (compute capability {major}.{minor})"
+                )
+                return torch.device("cuda")
 
-            logging.info(
-                f"Using GPU: {device_name} (compute capability {major}.{minor})"
-            )
-            return torch.device("cuda")
-
+        except RuntimeError as e:
+            logging.error(f"Runtime error checking GPU compatibility: {e}")
+            logging.info("Falling back to CPU.")
+            return torch.device("cpu")
+        except AttributeError as e:
+            logging.error(f"Attribute error accessing CUDA properties: {e}")
+            logging.info("Falling back to CPU.")
+            return torch.device("cpu")
         except Exception as e:
-            logging.error(f"Error checking GPU compatibility: {e}")
-            logging.error("Falling back to CPU.")
+            logging.error(f"Unexpected error checking GPU compatibility: {e}")
+            logging.info("Falling back to CPU.")
             return torch.device("cpu")
