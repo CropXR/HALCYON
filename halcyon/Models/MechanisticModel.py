@@ -6,7 +6,6 @@ import sympy as sp
 from sympy.parsing.sympy_parser import parse_expr
 from sympy import symbols
 import torch
-import numpy as np
 from typing import Callable, Dict, List, Optional
 from abc import abstractmethod
 from typing_extensions import Self
@@ -41,7 +40,6 @@ class PyTorchODE(MechanisticModel):
         self._compiled_ready = False
         self._synthesis_module: Optional[nn.Module] = None
         self._decay_module: Optional[nn.Module] = None
-
 
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
@@ -117,6 +115,8 @@ class PyTorchODE(MechanisticModel):
 
         def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
             """Prepare SymPy expressions for compilation.
+            Takes a dictionary of expressions and applies parameter substitutions from the parameter dictionary as well as float hiding. This ensures this is only done once per expression before compilation and not at each forward pass.
+            Float hiding prevents SymPy from automatically evaluating or simplifying expressions that contain floats, which can be important for preserving the exact structure of symbolic expressions
 
             Args:
                 expr_dict (Dict[str, sp.Expr]): A dictionary expression name keys and SymPy expressions values.
@@ -142,7 +142,7 @@ class PyTorchODE(MechanisticModel):
                 expressions=decay_exprs
             )
         except KeyError as err:
-            func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown" # catch error from sympytorch when functions are missing
+            func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown" # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
             raise ValueError(
                 f"Unsupported sympy function '{func_name}' in SBML expression. "
                 "Provide a torch implementation via sympytorch."
