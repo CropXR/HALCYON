@@ -37,9 +37,9 @@ class PyTorchODE(MechanisticModel):
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
         self.param_dict = param_dict
-        self._compiled_ready = False
-        self._synthesis_module: Optional[nn.Module] = None
-        self._decay_module: Optional[nn.Module] = None
+        self._compiled_ready = False # should be false until expressions are compiled, which is done at first integration
+        self._synthesis_module: Optional[nn.Module] = None # compiled synthesis modules will be stored here after compilation
+        self._decay_module: Optional[nn.Module] = None # compiled decay modules will be stored here after compilation
 
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
@@ -152,6 +152,16 @@ class PyTorchODE(MechanisticModel):
 
     @classmethod
     def parse_one_reaction(cls, name: str, formula_string: str, libsbml_parameters: libsbml.ListOfParameters):
+        """
+        
+        Parse a single reaction from the SBML model.
+        Args:
+            name (str): The name of the reaction.
+            formula_string (str): The formula string of the reaction.
+            libsbml_parameters (libsbml.ListOfParameters): The list of parameters associated with the reaction.
+        Returns:
+            tuple[str, sp.Expr, Dict[str, float]]: A tuple containing the base node name, the sympy expression, and a dictionary of parameters used in the equation.
+        """
         base_node_name = (
             name.replace("_degradation", "").replace("_synthesis", "")
         )
@@ -162,7 +172,6 @@ class PyTorchODE(MechanisticModel):
         
         # This way the order of the terms is preserved, eases readability
         with evaluate(0):
-            # TODO THIJS: here the formula string for Node_1_synthesis needs the brackets added just after the division. Ideally check if this method would also generalise for three or more genes.
             sympy_formula = parse_expr(formula_string, evaluate=False)
 
         replacement_dict = dict()
@@ -187,30 +196,85 @@ class PyTorchODE(MechanisticModel):
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:
         """
-        Fix GNW division parsing by properly grouping into brackets all multiplicative terms
-        that should be in the denominator after a division operator.
-        """
-        import re
+        Fix incorrect division operator precedence by adding parentheses in GeneNetWeaver's SBML output.
+
+        Somewhere in GeneNetWeaver exporting it's model to SBML and libSBML importing them there is a bug: 
+        division expressions are written with incorrect operator precedence. For example, "a/b*c" is
+        intended to mean "a/(b*c)" but SymPy would parse it as "(a/b)*c" due to left-to-right evaluation.
         
-        def find_matching_paren(s, start_pos):
-            """Find the position of the matching closing parenthesis"""
-            if s[start_pos] != '(':
+        This method scans the formula string for division operators and wraps all subsequent
+        multiplication terms in parentheses to ensure they are treated as part of the denominator.
+        
+        Examples:
+            "a/b*c" → "a/(b * c)"
+            "a/b*c + d/e*f*g" → "a/(b * c)+ d/(e * f * g)"
+            "x/pow(y,2)*z" → "x/(pow(y,2) * z)"
+        
+        Args:
+            formula (str): The formula string from the SBML file, potentially with incorrect precedence.
+        
+        Returns:
+            str: The corrected formula with proper parenthesization.
+        
+        Note:
+            This function must be called when loading SBML files from GeneNetWeaver.
+            Use `PyTorchODE.from_sbml(path, from_gnw=True)` to automatically apply this fix.
+        """
+
+        def find_matching_closing_parenthesis(formula_str: str, start_pos: int) -> int:
+            """
+            Find the position of the matching closing parenthesis for an opening parenthesis.
+            
+            Args:
+                formula_str (str): The string to search in.
+                start_pos (int): The index of the opening parenthesis.
+            
+            Returns:
+                int: The index of the matching closing parenthesis, or -1 if not found or
+                     if the character at start_pos is not an opening parenthesis.
+            """
+            if formula_str[start_pos] != '(':
                 return -1
             
             count = 1
             pos = start_pos + 1
             
-            while pos < len(s) and count > 0:
-                if s[pos] == '(':
+            while pos < len(formula_str) and count > 0:
+                if formula_str[pos] == '(':
                     count += 1
-                elif s[pos] == ')':
+                elif formula_str[pos] == ')':
                     count -= 1
                 pos += 1
                 
             return pos - 1 if count == 0 else -1
 
         def fix_division_at_position(formula_str: str, div_pos: int) -> str:
-            """Fix division at a specific position by grouping subsequent multiplication terms"""
+            """
+            Fix a division operator at a specific position by grouping subsequent multiplication terms.
+            
+            Starting from the division operator at div_pos, this function scans forward to identify
+            all terms that should be part of the denominator. Terms are separated by multiplication
+            operators ('*'). The scanning stops when a different operator (+, -, /) is encountered
+            or the end of the string is reached.
+            
+            The function handles:
+            - Simple variables and numbers: "a", "123", "k_1"
+            - Parenthetical expressions: "(x + y)"
+            - Function calls: "pow(x, 2)", "max(a, b)"
+            - Nested parentheses: "pow((x + y), 2)"
+            
+            Args:
+                formula_str (str): The complete formula string.
+                div_pos (int): The index of the division operator to fix.
+            
+            Returns:
+                str: The formula with the division at div_pos corrected.
+                     If only one term follows the division, no changes are made.
+                     If multiple terms follow (connected by '*'), they are wrapped in parentheses.
+            
+            Example:
+                For "a/b*c*d + e", with div_pos pointing to '/', this returns "a/(b * c * d) + e"
+            """
             if div_pos >= len(formula_str) - 1:
                 return formula_str
                 
@@ -245,7 +309,7 @@ class PyTorchODE(MechanisticModel):
                 
                 if formula_str[pos] == '(':
                     # Parenthetical expression
-                    end_paren = find_matching_paren(formula_str, pos)
+                    end_paren = find_matching_closing_parenthesis(formula_str, pos)
                     if end_paren != -1:
                         terms.append(formula_str[pos:end_paren + 1])
                         pos = end_paren + 1
@@ -260,7 +324,7 @@ class PyTorchODE(MechanisticModel):
                     
                     # Handle function calls like pow(...)
                     if pos < len(formula_str) and formula_str[pos] == '(':
-                        end_paren = find_matching_paren(formula_str, pos)
+                        end_paren = find_matching_closing_parenthesis(formula_str, pos)
                         if end_paren != -1:
                             pos = end_paren + 1
                     
@@ -307,47 +371,36 @@ class PyTorchODE(MechanisticModel):
         Parameters:
             t (torch.Tensor): The time point at which to evaluate the ODE.
             state (torch.Tensor): The current state of the system.
-            impute_cell_to_1 (bool): Whether to impute the 'cell' variable to 1. Default is True.
         Returns:
             torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
         """
         if state.isinf().any() or state.isnan().any():
             raise ValueError("NaN or inf in state tensor.")
         
-        # Clamp state to prevent negative values
+        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
+        # most likely, the steps are slightly too large and lead to negative concentrations
         state = torch.clamp(state, min=0.0)
         if not getattr(self, "_compiled_ready", False):
             self._compile_expressions()
         batch_size, n_genes = state.shape
-        device = state.device
+        device = self.device
 
         synthesis_module = self._synthesis_module
         decay_module = self._decay_module
         if synthesis_module is None or decay_module is None:
             raise RuntimeError("SymPy modules were not initialised correctly.")
 
-        synthesis_module.to(device=device, dtype=state.dtype)
-        decay_module.to(device=device, dtype=state.dtype)
+        synthesis_module.to(device=device)
+        decay_module.to(device=device)
 
-        ko_masks = getattr(self, "ko_masks", torch.ones_like(state))
-        if ko_masks.dim() == 1:
-            if ko_masks.shape[0] == n_genes:
-                ko_masks = ko_masks.unsqueeze(0).expand(batch_size, n_genes)
-            elif ko_masks.shape[0] == batch_size:
-                ko_masks = ko_masks.unsqueeze(1).expand(batch_size, n_genes)
-            else:
-                raise ValueError(
-                    f"ko_masks shape {ko_masks.shape} does not match state shape {state.shape}"
-                )
-        elif ko_masks.shape != state.shape:
-            ko_masks = ko_masks.expand_as(state)
-        ko_masks = ko_masks.to(device=device, dtype=state.dtype)
+        ko_masks = self.ko_masks
+        ko_masks.to(device=device)
 
         inputs = {
             gene: state[:, idx]
             for idx, gene in enumerate(self.modelled_gene_labels)
         }
-        inputs["cell"] = torch.full(
+        inputs["cell"] = torch.full( # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
             (batch_size,),
             1.0,
             dtype=state.dtype,

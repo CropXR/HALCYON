@@ -31,11 +31,6 @@ class Model(ABC, nn.Module):
         """Get the derivative at a given time point."""
         pass
 
-    # @abstractmethod
-    # def set_conditions(self, conditions: torch.Tensor) -> None:
-    #     """Set the environmental conditions."""
-    #     pass
-
     def integrate(
         self,
         initial_state: torch.Tensor,
@@ -44,8 +39,6 @@ class Model(ABC, nn.Module):
         """Solve the system over time. Provide initial state in form of [Batch, Genes]. Returns tensor with [Batch, Genes, Time]."""
         assert(initial_state.shape[1] == self.n_genes), f"Initial state should have shape (B, G) where G={self.n_genes}, but got {initial_state.shape}"
         assert(t_eval.dim() == 1), f"t_eval should be a 1D tensor, but got shape {t_eval.shape}"
-        # assert(initial_state.shape[0] == self.ko_masks.shape[0] * max(1,self.env_flags.shape[0])), f"Initial state batch size {initial_state.shape[0]} does not match ko_masks batch size {self.ko_masks.shape[0]} times max of (1,{self.env_flags.shape[0]})"
-        # assert(initial_state.shape[0] == self.env_flags.shape[0]), f"Initial state batch size {initial_state.shape[0]} does not match env_flags batch size {self.env_flags.shape[0]}"
         
         output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
         return output.permute(1, 2, 0)  # Permute dimensions to [Batch, Genes, Time]
@@ -87,7 +80,7 @@ class Model(ABC, nn.Module):
         self.env_flags = torch.zeros(self.n_conditions)  # type: ignore
     
     @staticmethod
-    def get_compatible_device():
+    def get_compatible_device() -> torch.device:
         """
         Get a compatible device for PyTorch.
         Automatically detects if GPU is compatible and falls back to CPU if not.
@@ -97,7 +90,7 @@ class Model(ABC, nn.Module):
             torch.device: Compatible device (CPU or GPU)
         """
         if not torch.cuda.is_available():
-            logging.warning("CUDA not available. Using CPU.")
+            logging.info("CUDA not available. Using CPU.")
             return torch.device('cpu')
         
         try:
@@ -115,8 +108,8 @@ class Model(ABC, nn.Module):
             
             if current_arch not in supported_archs:
                 logging.warning(f"GPU {device_name} (compute capability {major}.{minor}) is not compatible.")
-                logging.warning(f"Supported architectures: {supported_archs}")
-                logging.warning("Using CPU instead.")
+                logging.info(f"Supported architectures: {supported_archs}")
+                logging.info("Using CPU instead.")
                 return torch.device('cpu')
             else:
                 logging.info(f"Using GPU: {device_name} (compute capability {major}.{minor})")
@@ -124,14 +117,14 @@ class Model(ABC, nn.Module):
             
         except RuntimeError as e:
             logging.error(f"Runtime error checking GPU compatibility: {e}")
-            logging.warning("Falling back to CPU.")
+            logging.info("Falling back to CPU.")
             return torch.device('cpu')
         except AttributeError as e:
             logging.error(f"Attribute error accessing CUDA properties: {e}")
-            logging.warning("Falling back to CPU.")
+            logging.info("Falling back to CPU.")
             return torch.device('cpu')
         except Exception as e:
             logging.error(f"Unexpected error checking GPU compatibility: {e}")
-            logging.warning("Falling back to CPU.")
+            logging.info("Falling back to CPU.")
             return torch.device('cpu')
 
