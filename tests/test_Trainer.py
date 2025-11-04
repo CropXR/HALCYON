@@ -17,6 +17,7 @@ from tests.test_fixtures import (
 )
 from tests.test_fixtures import expression_data_from_gnw
 from tests.test_fixtures import sim_result
+from torch.testing import assert_close
 
 
 @pytest.fixture
@@ -49,7 +50,7 @@ def test_integrate_model():
     gt_expressions = data[0][1]
     init_conditions = gt_expressions[:, 0].unsqueeze(0)
     output = my_trainer.integrate_model(init_conditions)
-    assert torch.allclose(
+    assert_close(
         my_trainer.calculate_loss_expression_vs_pred(
             output, gt_expressions.unsqueeze(0).to(correct_model.device)
         ),
@@ -165,7 +166,7 @@ def test_train_job_and_load_model(model_class, model_args, sim_result):
     train_job.load_if_exists()
     loaded_state_dict = train_job.trainer.model.state_dict()
     for weight_key in og_model_state_dicts:
-        assert torch.allclose(
+        assert_close(
             og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
         ), f"Mismatch in {weight_key}"
 
@@ -186,7 +187,7 @@ def test_load_double_ko_tensors(train_job_with_loaded_cellbox: TrainingJob):
     double_ko_expressions = train_job_with_loaded_cellbox.get_double_ko_files()
     exp_condition, expression_data = double_ko_expressions[0]
     # Only a 1 at position 0 and 3 because those are the KO genes
-    assert torch.allclose(
+    assert_close(
         exp_condition,
         torch.tensor([1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     )
@@ -425,7 +426,7 @@ def test_load_double_ko_tensors(train_job_with_loaded_cellbox: TrainingJob):
         ]
     )
 
-    assert torch.allclose(expression_data, expected_expression, rtol=1e-03, atol=1e-03)
+    assert_close(expression_data, expected_expression, rtol=1e-03, atol=1e-03)
 
 
 def test_losses_on_double_ko(train_job_with_loaded_cellbox: TrainingJob):

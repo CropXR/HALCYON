@@ -6,6 +6,7 @@ from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
 from tests.test_fixtures import get_synthetic_data
+from torch.testing import assert_close
 
 
 def test_merge_modelled_genes():
@@ -35,10 +36,10 @@ def test_hybrid_model_gene_split():
     env_conditions = env_conditions.to(hybrid_model.device)
     expressions = expressions.to(hybrid_model.device)
     # Ensure that they handle the different order of genes well
-    assert torch.allclose(
+    assert_close(
         hybrid_model.mm_indices, torch.tensor([0, 3, 4], device=hybrid_model.device)
     )
-    assert torch.allclose(
+    assert_close(
         hybrid_model.ml_indices,
         torch.tensor([0, 1, 2, 3, 4], device=hybrid_model.device),
     )
@@ -46,7 +47,7 @@ def test_hybrid_model_gene_split():
         hybrid_model.modelled_gene_labels[i] for i in hybrid_model.mm_indices.tolist()
     ] == ["G1", "G4", "G5"]
     hybrid_model.set_conditions(env_conditions)
-    assert torch.allclose(
+    assert_close(
         hybrid_model._get_mm_forward(0, expressions[:, :, 0]),
         torch.tensor([0.1000, 0.0000, -0.0800], device=hybrid_model.device),
     )
@@ -61,7 +62,7 @@ def test_hybrid_model_gene_split():
     integration_output = trainer.integrate_model(expressions[:, :, 0])
     # Check if at least shape and initial gene expressions match
     assert tuple(integration_output.shape) == (1, 5, 4)
-    assert torch.allclose(
+    assert_close(
         integration_output[0, :, 0],
         torch.tensor(
             [0.1000, 0.2000, 0.3000, 0.4000, 0.5000], device=hybrid_model.device

@@ -4,6 +4,7 @@ import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from tests.test_fixtures import create_synthetic_expressions, get_synthetic_data
 from pathlib import Path
+from torch.testing import assert_close
 
 
 def test_extract_info():
@@ -21,6 +22,4 @@ def test_match_genes_to_list():
     _, _, expressions = get_synthetic_data()
     expressions.match_genes_to_list(["G5", "G4", "G2", "G1", "G3"])
     assert expressions.genes == ["G5", "G4", "G2", "G1", "G3"]
-    assert torch.allclose(
-        expressions[0][1][:, 0], torch.tensor([0.5, 0.4, 0.2, 0.1, 0.3])
-    )
+    assert_close(expressions[0][1][:, 0], torch.tensor([0.5, 0.4, 0.2, 0.1, 0.3]))

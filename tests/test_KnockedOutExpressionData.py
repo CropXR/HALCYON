@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from tests.test_fixtures import expression_data_from_gnw
+from torch.testing import assert_close
 
 
 def test_scale_time_series(expression_data_from_gnw):
@@ -68,12 +69,12 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
     # For KO of gene 1
     environment, my_expression_data = expression_data_from_gnw[0]
     # Environment vector for for knocked out G1
-    assert torch.allclose(
+    assert_close(
         environment,
         torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
         atol=1e-4,
     )
-    assert torch.allclose(
+    assert_close(
         my_expression_data,
         torch.tensor(
             [
@@ -328,6 +329,4 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
     # For each knocked-out index check that it also has an expression of 0 at the end.
     for env_vector, expressions in expression_data_from_gnw:
         ko_gene_index = (env_vector == 1).nonzero().squeeze()
-        assert torch.allclose(
-            expressions[ko_gene_index][-1], torch.tensor([0.0]), atol=1e-4
-        )
+        assert_close(expressions[ko_gene_index][-1], torch.tensor([0.0]), atol=1e-4)
