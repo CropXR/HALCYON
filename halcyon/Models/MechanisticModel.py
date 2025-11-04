@@ -92,7 +92,7 @@ class PyTorchODE(MechanisticModel):
 
         for i in range(model.getNumReactions()):
             reaction = model.getReaction(i)
-            reaction_id = reaction.getId()  # .rstrip("_")
+            reaction_id = reaction.getId()
             formula = reaction.getKineticLaw().getFormula()
 
             if from_gnw:
