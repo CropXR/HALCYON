@@ -29,14 +29,11 @@ class PhoenixABC(MachineLearningModel, ABC):
         self.per_gene_multipliers = nn.Parameter(
             torch.full(size=(self.n_genes,), fill_value=1.0)
         )
-        self.ko_masks = torch.ones(self.n_genes, device=self.device)  # type: ignore
-        self.env_flags = torch.zeros(self.n_conditions, device=self.device)  # type: ignore
 
     def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
         for layer in model:
             if isinstance(layer, nn.Linear):
                 nn.init.sparse_(layer.weight, sparsity=sparsity, std=0.05)
-
 
     def _get_decay(self, state):
         return nn.functional.relu(self.decay_params * state)

@@ -90,7 +90,7 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
                 if i == 0:
                     # Plot ground truth in first column
                     ko_title = f"Ground truth (KO: {', '.join(exp_condition.ko_gene)})"
-                    trainer._from_expressions_to_plot(
+                    trainer._plot_from_expressions(
                         expressions=expressions_tensor.detach().cpu().numpy(),
                         title=ko_title,
                         axs=axs[j, 0],

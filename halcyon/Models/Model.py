@@ -80,8 +80,8 @@ class Model(ABC, nn.Module):
         self.ko_masks = ko_masks
 
     def reset_conditions(self):
-        self.ko_masks = torch.ones([self.n_genes])  # type: ignore
-        self.env_flags = torch.zeros(self.n_conditions)  # type: ignore
+        self.ko_masks = torch.ones(self.n_genes, device=self.device)  # type: ignore
+        self.env_flags = torch.zeros(self.n_conditions, device=self.device)  # type: ignore
 
     @staticmethod
     def get_compatible_device() -> torch.device:

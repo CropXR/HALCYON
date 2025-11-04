@@ -1,8 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
-import pytest
-from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
+from halcyon.Simulators.GNWSimRunner import SimulationResult
 
 import hashlib
 
@@ -14,23 +13,6 @@ def create_file_hash(path: Path):
         buf = f.read()
         hasher.update(buf)
     return hasher.hexdigest()
-
-
-@pytest.fixture
-def sim_result() -> SimulationResult:
-    gnw_sim = GNWSimRunner(
-        settings_path=Path("setting_files/gnw_testing_runs_settings.txt")
-    )
-    generated_data_path = Path("tests/generated_test_data")
-
-    sim_result = gnw_sim.run_simulation(
-        n_genes=10,
-        sparsity=0.1,
-        num_modules=2,
-        network_name="integration_test_network",
-        output_path=generated_data_path,
-    )
-    return sim_result
 
 
 def test_gnw_reproducible(sim_result):

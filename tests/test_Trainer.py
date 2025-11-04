@@ -16,7 +16,7 @@ from tests.create_dummy_data import (
     get_synthetic_data,
 )
 from tests.create_dummy_data import expression_data_from_gnw
-from tests.test_GNWSimRunner import sim_result
+from tests.create_dummy_data import sim_result
 
 
 @pytest.fixture

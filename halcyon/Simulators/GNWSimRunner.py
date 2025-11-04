@@ -31,24 +31,20 @@ class SimulationResult:
         for field in fields(self):
             yield field.name, getattr(self, field.name)
 
-    def double_ko_timeseries_nonoise_file(self) -> Path:
+    def double_ko_timeseries_nonoise_file_path(self) -> Path:
         """Get path to double knockout timeseries file."""
         out_path = (
             self.data_path / f"{self.network_name}_nonoise_dualknockout_timeseries.tsv"
         )
-        self._verify_if_exists(out_path)
+        assert out_path.exists()
         return out_path
 
-    def _verify_if_exists(self, path_to_test: Path):
-        """Verify that a file exists at the given path."""
-        assert path_to_test.exists(), f"File {path_to_test} does not exist"
-
-    def double_ko_index_file(self) -> Path:
+    def double_ko_index_file_path(self) -> Path:
         """Get path to double knockout index file."""
         out_path = (
             self.data_path / f"{self.network_name}_dualknockout_timeseries_indexes.tsv"
         )
-        self._verify_if_exists(out_path)
+        assert out_path.exists()
         return out_path
 
 

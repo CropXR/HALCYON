@@ -6,8 +6,14 @@ import pytest
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.FittedTrainingJobList import FittedTrainingJobList
+from halcyon.Models.CellBox import CellBox
+from halcyon.Models.NeuralODE import PhoenixAddAndProdLayers
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from scipy.integrate import solve_ivp
+
+from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
+from halcyon.Trainer import TrainingJob
 
 
 def get_interactions() -> dict:
@@ -84,3 +90,64 @@ def expression_data_from_gnw():
         )
     )
     return expressions
+
+
+@pytest.fixture
+def sim_result() -> SimulationResult:
+    gnw_sim = GNWSimRunner(
+        settings_path=Path("setting_files/gnw_testing_runs_settings.txt")
+    )
+    generated_data_path = Path("tests/generated_test_data")
+
+    sim_result = gnw_sim.run_simulation(
+        n_genes=10,
+        sparsity=0.1,
+        num_modules=2,
+        network_name="integration_test_network",
+        output_path=generated_data_path,
+    )
+    return sim_result
+
+
+@pytest.fixture
+def train_jobs(sim_result):
+    train_jobs: list[TrainingJob] = []
+    train_steps = 2
+
+    train_jobs.extend(
+        [
+            TrainingJob(
+                PhoenixAddAndProdLayers,
+                sim_result,
+                nr_training_steps=train_steps,
+                model_kwargs={"hidden_size": 2},
+                optimizer_kwargs={"lr": 0.1},
+            )
+        ]
+    )
+
+    train_jobs.extend(
+        [
+            TrainingJob(
+                CellBox,
+                sim_result,
+                nr_training_steps=train_steps,
+                model_kwargs={"self_activations": True},
+                optimizer_kwargs={"lr": 0.1},
+            )
+        ]
+    )
+
+    for train_job in train_jobs:
+        train_job.save_path = (
+            train_job.save_path.parent.parent
+            / "expected_output"
+            / train_job.save_path.name
+        )
+    return train_jobs
+
+
+@pytest.fixture
+def result_list_from_jobs(train_jobs):
+    result_list = FittedTrainingJobList.from_train_jobs(train_jobs)
+    return result_list

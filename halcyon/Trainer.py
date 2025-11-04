@@ -111,7 +111,7 @@ class Trainer:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(expression_pred, expression_true)
 
-    def _from_expressions_to_plot(
+    def _plot_from_expressions(
         self, expressions: np.ndarray, title: str | None, axs: Axes, show_legend: bool
     ):
         df_real = pd.DataFrame(
@@ -136,7 +136,7 @@ class Trainer:
         with torch.no_grad():
             predictions = self.integrate_model(initial_states_tensor=initial_condition)
             predictions = predictions.squeeze(0).detach().cpu().numpy()
-            self._from_expressions_to_plot(predictions, title, axs, show_legend)
+            self._plot_from_expressions(predictions, title, axs, show_legend)
 
     def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
@@ -157,7 +157,7 @@ class Trainer:
             env = env.to(self.model.device)
             expressions = expressions.to(self.model.device)
             # Plot ground truth
-            self._from_expressions_to_plot(
+            self._plot_from_expressions(
                 expressions.detach().cpu().numpy(),
                 f"Measured (Sample {i})",
                 axs[i, 0],
@@ -215,7 +215,9 @@ class Trainer:
         self.loss_history = checkpoint["loss_history"]
         self.model.load_state_dict(checkpoint["model_state_dict"])
 
-    def predict(self, expressions_to_predict: ExpressionDataWithConditions):
+    def calculate_loss_from_expression_data(
+        self, expressions_to_predict: ExpressionDataWithConditions
+    ):
         """Provide Expressiondata (e.g. with double knockouts) and calculate loss on them.
 
         Args:
@@ -333,14 +335,14 @@ class TrainingJob:
 
     def get_double_ko_files(self) -> ExpressionDataWithConditions:
         double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
-            expression_file_path=self.sim_result.double_ko_timeseries_nonoise_file(),
-            ko_file_path=self.sim_result.double_ko_index_file(),
+            expression_file_path=self.sim_result.double_ko_timeseries_nonoise_file_path(),
+            ko_file_path=self.sim_result.double_ko_index_file_path(),
         )
         return double_ko_expressions
 
     def losses_on_double_ko(self):
         double_ko_expressions = self.get_double_ko_files()
-        loss = self.trainer.predict(double_ko_expressions)
+        loss = self.trainer.calculate_loss_from_expression_data(double_ko_expressions)
         return loss
 
 
