@@ -139,8 +139,6 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
             cmap="viridis",
             cbar_kws={"label": "Final Loss"},
         )
-        # plt.xlabel("Number of Genes")
-        # plt.ylabel("Model")
         plt.title("Final Loss Heatmap")
         plt.tight_layout()
         plt.show()
