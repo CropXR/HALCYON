@@ -1,5 +1,5 @@
 import pytest
-from tests.create_dummy_data import create_synthetic_gene_network
+from tests.test_fixtures import create_synthetic_gene_network
 
 
 def test_get_ingoing_interactions():

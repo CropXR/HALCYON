@@ -11,12 +11,12 @@ from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers, PhoenixAddAndProdLaye
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 from halcyon.Trainer import Trainer, TrainingJob
-from tests.create_dummy_data import (
+from tests.test_fixtures import (
     create_synthetic_expressions,
     get_synthetic_data,
 )
-from tests.create_dummy_data import expression_data_from_gnw
-from tests.create_dummy_data import sim_result
+from tests.test_fixtures import expression_data_from_gnw
+from tests.test_fixtures import sim_result
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
-from tests.create_dummy_data import get_synthetic_data
+from tests.test_fixtures import get_synthetic_data
 
 
 def test_merge_modelled_genes():

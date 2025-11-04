@@ -4,7 +4,7 @@ import numpy as np
 from halcyon.Evaluator import Evaluator
 from halcyon.Models.CellBox import CellBox
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
-from tests.create_dummy_data import get_synthetic_data
+from tests.test_fixtures import get_synthetic_data
 import networkx as nx
 
 

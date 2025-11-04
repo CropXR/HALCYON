@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from tests.create_dummy_data import expression_data_from_gnw
+from tests.test_fixtures import expression_data_from_gnw
 
 
 def test_scale_time_series(expression_data_from_gnw):
