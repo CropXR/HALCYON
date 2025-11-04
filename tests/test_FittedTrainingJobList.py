@@ -37,7 +37,6 @@ def train_jobs(sim_result):
         ]
     )
 
-    len(train_jobs)
     for train_job in train_jobs:
         train_job.save_path = (
             train_job.save_path.parent.parent
