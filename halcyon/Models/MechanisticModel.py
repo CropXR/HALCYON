@@ -225,7 +225,7 @@ class PyTorchODE(MechanisticModel):
         """
         Fix incorrect division operator precedence by adding parentheses in GeneNetWeaver's SBML output.
 
-        Somewhere in GeneNetWeaver exporting it's model to SBML and libSBML importing them there is a bug:
+        Somewhere in GeneNetWeaver exporting its model equations to SBML and libSBML importing them there is a bug:
         division expressions are written with incorrect operator precedence. For example, "a/b*c" is
         intended to mean "a/(b*c)" but SymPy would parse it as "(a/b)*c" due to left-to-right evaluation.
 
