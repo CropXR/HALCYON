@@ -121,7 +121,6 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
             index="model_overall_name",
             columns=column_name,
             values="final_loss",
-            # aggfunc="mean"
         )
         return heatmap_data
 
