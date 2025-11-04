@@ -82,6 +82,7 @@ def test_cellbox_integrate(my_cellbox):
             device=my_cellbox.device,
         ).unsqueeze(0),
         atol=1e-4,
+        rtol=1e-4,
     )
 
 

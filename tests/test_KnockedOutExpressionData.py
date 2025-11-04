@@ -329,4 +329,6 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
     # For each knocked-out index check that it also has an expression of 0 at the end.
     for env_vector, expressions in expression_data_from_gnw:
         ko_gene_index = (env_vector == 1).nonzero().squeeze()
-        assert_close(expressions[ko_gene_index][-1], torch.tensor([0.0]), atol=1e-4)
+        assert_close(
+            expressions[ko_gene_index][-1], torch.tensor([0.0]), rtol=1e-4, atol=1e-4
+        )
