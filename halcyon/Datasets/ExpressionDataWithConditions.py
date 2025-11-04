@@ -131,8 +131,7 @@ class ExpressionDataWithConditions(Dataset):
                 all_environments=("test", "test2"),
                 environment=None,
             )
-            df = pd.read_csv(StringIO(block), sep="\t", names=headers)
-            df = df.T
+            df = pd.read_csv(StringIO(block), sep="\t", names=headers).T
             ko_dict[experiment_condition] = ExpressionData(df)
 
         return cls(ko_dict)
