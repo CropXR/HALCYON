@@ -37,18 +37,6 @@ class PhoenixABC(MachineLearningModel, ABC):
             if isinstance(layer, nn.Linear):
                 nn.init.sparse_(layer.weight, sparsity=sparsity, std=0.05)
 
-    def set_conditions(self, env_data: torch.Tensor):
-        """Use the env_data tensor to set the condition (i.e. knockouts and environment flags) for the model.
-
-        On each forward pass the environment flags are used as input to the neural network, and the knockout masks are used to mask the output of the neural network.
-        Args:
-            env_data (torch.Tensor): Tensor of shape (B, G + C) where B is the batch size, G is the number of genes and C is the number of conditions.
-        """
-        # Knockouts should be used as mask after the forwards pass
-        ko_masks, env_flags = self.parse_env_data(env_data)
-        self.env_flags = env_flags
-        # Environments should be appended to the forward pass but not returned (Because they do not change over time)
-        self.ko_masks = ko_masks
 
     def _get_decay(self, state):
         return nn.functional.relu(self.decay_params * state)
