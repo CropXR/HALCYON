@@ -10,22 +10,18 @@ from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers, PhoenixAddAndProdLayers
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 from halcyon.Trainer import Trainer, TrainingJob
-from tests.create_dummy_data import (
-    create_synthetic_expressions,
-    get_synthetic_data,
-)
-from tests.create_dummy_data import expression_data_from_gnw
-from tests.test_GNWSimRunner import sim_result
+
+
+from torch.testing import assert_close
 
 
 @pytest.fixture
-def cellbox_from_expression():
-    expressions = create_synthetic_expressions()
-    return CellBox(expressions.genes, ("test", "test2"))
+def cellbox_from_expression(create_synthetic_expressions):
+    return CellBox(create_synthetic_expressions.genes, ("test", "test2"))
 
 
-def test_calculate_loss():
-    _, _, expressions = get_synthetic_data()
+def test_calculate_loss(get_synthetic_data):
+    _, _, expressions = get_synthetic_data
     mock_model = MagicMock()
     mock_model.modelled_gene_labels.return_value = ["G1", "G3"]
     mock_model.parameters.return_value = [torch.randn(2, 2), torch.randn(3, 3)]
@@ -41,8 +37,8 @@ def test_calculate_loss():
     ) == approx(0.0)
 
 
-def test_train_neural_ode():
-    expressions = create_synthetic_expressions()
+def test_train_neural_ode(create_synthetic_expressions):
+    expressions = create_synthetic_expressions
     neural_ode_model = PhoenixOnlyAddLayers(
         expressions.genes, expressions.all_environments, hidden_size=2
     )
@@ -65,13 +61,13 @@ def test_train_neural_ode():
     assert not torch.allclose(init_decay, neural_ode_model.decay_params.detach())
 
 
-def test_train_cellbox(cellbox_from_expression):
+def test_train_cellbox(cellbox_from_expression, create_synthetic_expressions):
 
     cellbox_from_expression._set_weight_matrix_to_ones()
     cellbox_from_expression._set_epsilon_to_zero()
     init_epsilon = deepcopy(cellbox_from_expression.epsilon)
     init_decay = deepcopy(cellbox_from_expression.decay_params)
-    my_trainer = Trainer(cellbox_from_expression, create_synthetic_expressions())
+    my_trainer = Trainer(cellbox_from_expression, create_synthetic_expressions)
     my_trainer.train(5)
     # Assert loss is decreasing
     assert all(
@@ -103,8 +99,8 @@ def test_train_cellbox_ko_data(expression_data_from_gnw):
     assert not torch.allclose(cellbox.W, init_w)
 
 
-def test_plot_fit_vs_real_data(cellbox_from_expression):
-    gt_regulatory_network, _, expressions = get_synthetic_data()
+def test_plot_fit_vs_real_data(cellbox_from_expression, get_synthetic_data):
+    gt_regulatory_network, _, expressions = get_synthetic_data
     my_trainer = Trainer(cellbox_from_expression, expressions)
     out_fig, out_axs = my_trainer.plot_fit_vs_real()
     assert out_fig is not None
@@ -140,7 +136,7 @@ def test_train_job_and_load_model(model_class, model_args, sim_result):
     train_job.load_if_exists()
     loaded_state_dict = train_job.trainer.model.state_dict()
     for weight_key in og_model_state_dicts:
-        assert torch.allclose(
+        assert_close(
             og_model_state_dicts[weight_key], loaded_state_dict[weight_key]
         ), f"Mismatch in {weight_key}"
 
@@ -161,7 +157,7 @@ def test_load_double_ko_tensors(train_job_with_loaded_cellbox: TrainingJob):
     double_ko_expressions = train_job_with_loaded_cellbox.get_double_ko_files()
     exp_condition, expression_data = double_ko_expressions[0]
     # Only a 1 at position 0 and 3 because those are the KO genes
-    assert torch.allclose(
+    assert_close(
         exp_condition,
         torch.tensor([1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
     )
@@ -400,7 +396,7 @@ def test_load_double_ko_tensors(train_job_with_loaded_cellbox: TrainingJob):
         ]
     )
 
-    assert torch.allclose(expression_data, expected_expression, rtol=1e-03, atol=1e-03)
+    assert_close(expression_data, expected_expression, rtol=1e-03, atol=1e-03)
 
 
 def test_losses_on_double_ko(train_job_with_loaded_cellbox: TrainingJob):

@@ -8,7 +8,7 @@ class ExperimentCondition:
     """Dataclass to store experimental conditions (both knockout and environment)
 
     Args:
-        ko_gene (tuple[str] | None): Gene that is knocked out. If None, no gene is knocked out. Can also be a tuple of strings for multiple knockouts.
+        ko_gene (tuple[str] | None): Tuple of strings for genes that are knocked out. If None, no gene is knocked out.
         all_genes (tuple[str, ...]): All genes in the dataset.
         environment (str | None): Environment in which the experiment was conducted. If None, no environment is specified.
         all_environments (tuple[str, ...]): All environments in the dataset.

@@ -90,7 +90,7 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
                 if i == 0:
                     # Plot ground truth in first column
                     ko_title = f"Ground truth (KO: {', '.join(exp_condition.ko_gene)})"
-                    trainer._from_expressions_to_plot(
+                    trainer._plot_from_expressions(
                         expressions=expressions_tensor.detach().cpu().numpy(),
                         title=ko_title,
                         axs=axs[j, 0],
@@ -121,7 +121,6 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
             index="model_overall_name",
             columns=column_name,
             values="final_loss",
-            # aggfunc="mean"
         )
         return heatmap_data
 
@@ -139,8 +138,6 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
             cmap="viridis",
             cbar_kws={"label": "Final Loss"},
         )
-        # plt.xlabel("Number of Genes")
-        # plt.ylabel("Model")
         plt.title("Final Loss Heatmap")
         plt.tight_layout()
         plt.show()
