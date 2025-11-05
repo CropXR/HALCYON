@@ -9,9 +9,9 @@ from halcyon.Models.MechanisticModel import PyTorchODE
 
 
 def test_select_subset_genes(test_mechanistic_model):
-
-    test_mechanistic_model.select_genes(["Node1", "Node3", "Node4"])
-    test_mechanistic_model.modelled_gene_labels == ["Node1", "Node3", "Node4"]
+    nodes_to_select = ["Node_0", "Node_2"]
+    test_mechanistic_model.select_genes(nodes_to_select)
+    test_mechanistic_model.modelled_gene_labels == nodes_to_select
 
 
 def test_steady_state_derivateives_zero(test_mechanistic_model, in_folder):

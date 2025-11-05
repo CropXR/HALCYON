@@ -57,8 +57,25 @@ class PyTorchODE(MechanisticModel):
     def regulatory_network(self) -> RegulatoryNetwork:
         raise NotImplementedError("This method needs to be implemented in subclass.")
 
-    def select_genes(self, genes: list[str]):
-        assert all(gene in self.modelled_gene_labels for gene in genes)
+    def select_genes(self, genes_to_keep: list[str]):
+        assert all(
+            gene_to_keep in self.modelled_gene_labels for gene_to_keep in genes_to_keep
+        ), "Not all genes that need to be kept are in the model"
+        genes_to_remove = list(set(self.modelled_gene_labels) ^ set(genes_to_keep))
+
+        new_synthesis_dict = dict()
+        new_decay_dict = dict()
+
+        # Heuristic, set all gene expressions to 0 for genes that are not modelled
+        replacement_dict = {unmodeled_gene: 0 for unmodeled_gene in genes_to_remove}
+        for gene in genes_to_keep:
+            synthesis_formula = self.synthesis_dict[gene]
+            new_synthesis_dict[gene] = synthesis_formula.subs(replacement_dict)
+            new_decay_dict[gene] = self.decay_dict[gene]
+        self._compiled_ready = False
+        self.synthesis_dict = new_synthesis_dict
+        self.decay_dict = new_decay_dict
+        self.modelled_gene_labels = genes_to_keep
 
     @classmethod
     def from_sbml(

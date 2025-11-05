@@ -84,5 +84,15 @@ class HybridModel(Model):
         return self.ml.get_inferred_network(threshold=threshold)
 
     def set_conditions(self, env_conditions: torch.Tensor):
-        self.mm.set_conditions(env_conditions)
-        self.ml.set_conditions(env_conditions)
+        for model, gene_indices in zip(
+            [self.mm, self.ml], [self.mm_indices, self.ml_indices]
+        ):
+            # The knockouts
+            genes_and_conditions = env_conditions[:, gene_indices]
+            if self.n_conditions > 0:
+                # Also include the conditions (e.g. heat or drought that are passed as flag)
+                condition_flags = env_conditions[:, : self.n_conditions]
+                genes_and_conditions = torch.cat(
+                    (genes_and_conditions, condition_flags)
+                )
+            model.set_conditions(genes_and_conditions)

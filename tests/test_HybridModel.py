@@ -25,7 +25,7 @@ def test_merge_modelled_genes():
     assert set(hybrid_model.modelled_gene_labels) == {"a", "b", "c", "d"}
 
 
-def test_hybrid_model_gene_split():
+def test_hybrid_model_gene_split_THISISOLD():
     gt_regulatory_network, interactions, expression_dataset = get_synthetic_data()
     subset_regulatory_network = gt_regulatory_network.select_subset(["G1", "G4", "G5"])
     env_conditions, expressions = expression_dataset[0]
@@ -91,7 +91,7 @@ def mech_model_from_sim_result(sim_result, expr_data_from_sim):
     model = PyTorchODE.from_sbml(
         sim_result.data_path / "integration_test_network.xml",
         condition_names=expr_data_from_sim.all_environments,
-        from_GNW=True,
+        from_gnw=True,
     )
     return model
 
@@ -104,39 +104,102 @@ def ml_model_from_sim_result(expr_data_from_sim):
     return model
 
 
+@pytest.fixture
+def hybrid_model_with_ml_zero_weights(
+    mech_model_from_sim_result, ml_model_from_sim_result
+):
+    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
+    return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
+
+@pytest.fixture
+def hybrid_model_with_ml_zero_weights_and_mm_missing_node_9(
+    mech_model_from_sim_result, ml_model_from_sim_result
+):
+    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
+    mech_model_from_sim_result.select_genes([f"Node_{i}" for i in range(9)])
+    return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
+
 def test_hybrid_does_perfect_fit_if_ml_weights_zero(
-    expr_data_from_sim, mech_model_from_sim_result, ml_model_from_sim_result
+    expr_data_from_sim, hybrid_model_with_ml_zero_weights
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
-    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
-    hybrid_model = HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
-
-    my_trainer = Trainer(hybrid_model, expr_data_from_sim, batch_size=2)
+    my_trainer = Trainer(
+        hybrid_model_with_ml_zero_weights, expr_data_from_sim, batch_size=2
+    )
     test_batch = next(iter(my_trainer.dataloader))
     experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
     output = my_trainer._calculate_model_prediction_at_conditions(
         experiment_data, expression_data
     )
-
     assert torch.allclose(expression_data, output, atol=1e-3, rtol=1e-3)
-
     loss = my_trainer.calculate_loss_expression_vs_pred(expression_data, output)
     assert torch.allclose(loss, torch.tensor([0.0], device=my_trainer.model.device))
 
 
-def test_l2_loss(
-    expr_data_from_sim, mech_model_from_sim_result, ml_model_from_sim_result
+def test_most_genes_perfect_fit_if_only_remove_gene_9(
+    expr_data_from_sim, hybrid_model_with_ml_zero_weights_and_mm_missing_node_9
 ):
-    # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
-    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
-    hybrid_model = HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+    my_trainer = Trainer(
+        hybrid_model_with_ml_zero_weights_and_mm_missing_node_9,
+        expr_data_from_sim,
+        batch_size=2,
+    )
+    test_batch = next(iter(my_trainer.dataloader))
+    experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
+    output = my_trainer._calculate_model_prediction_at_conditions(
+        experiment_data, expression_data
+    )
+    # First 9 genes will match perfectly
+    assert torch.allclose(
+        expression_data[:, :9, :], output[:, :9, :], atol=1e-3, rtol=1e-3
+    )
+    loss = my_trainer.calculate_loss_expression_vs_pred(expression_data, output)
+    # Loss changes massively for some reasons -> Not replicable?! TODO
+    assert torch.allclose(loss, torch.tensor([0.0382], device=my_trainer.model.device))
 
+
+def test_l2_loss(expr_data_from_sim, hybrid_model_with_ml_zero_weights):
     my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
     my_trainer = Trainer(
-        hybrid_model, expr_data_from_sim, batch_size=2, loss=my_l2_loss
+        hybrid_model_with_ml_zero_weights,
+        expr_data_from_sim,
+        batch_size=2,
+        loss=my_l2_loss,
     )
     test_batch = next(iter(my_trainer.dataloader))
     loss = my_trainer._calculate_loss_from_batch(test_batch)
     assert torch.allclose(
         torch.tensor(0.0043, device=my_trainer.model.device), loss, atol=1e-3, rtol=1e-3
     )
+
+
+def test_hybrid_model_gene_split(
+    expr_data_from_sim, hybrid_model_with_ml_zero_weights_and_mm_missing_node_9
+):
+    hybrid_model = hybrid_model_with_ml_zero_weights_and_mm_missing_node_9
+
+    torch.testing.assert_close(
+        hybrid_model.mm_indices,
+        torch.tensor([0, 1, 2, 3, 4, 5, 6, 7, 8]),
+        check_device=False,
+    )
+    torch.testing.assert_close(
+        hybrid_model.ml_indices,
+        torch.tensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        check_device=False,
+    )
+    assert [
+        hybrid_model.modelled_gene_labels[i] for i in hybrid_model.mm_indices.tolist()
+    ] == [f"Node_{i}" for i in range(9)]
+
+    # my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
+    # my_trainer = Trainer(
+    #     hybrid_model, expr_data_from_sim, batch_size=2, loss=my_l2_loss
+    # )
+    # test_batch = next(iter(my_trainer.dataloader))
+    # loss = my_trainer._calculate_loss_from_batch(test_batch)
+    # assert torch.allclose(
+    #     torch.tensor(0.0043, device=my_trainer.model.device), loss, atol=1e-3, rtol=1e-3
+    # )
