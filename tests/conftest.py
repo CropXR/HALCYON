@@ -1,8 +1,11 @@
 from pathlib import Path
+import random
 from typing import Tuple
 import networkx as nx
+import numpy as np
 import pandas as pd
 import pytest
+import torch
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.ExpressionData import ExpressionData
@@ -14,6 +17,16 @@ from scipy.integrate import solve_ivp
 
 from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
 from halcyon.Trainer import TrainingJob
+
+
+@pytest.fixture(scope="session", autouse=True)
+def set_random_seed():
+    seed = 174
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 @pytest.fixture
