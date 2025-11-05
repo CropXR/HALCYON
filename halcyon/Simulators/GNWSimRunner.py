@@ -14,10 +14,11 @@ class SimulationResult:
         network_name (str): File name to use for outputting the files.
         nr_genes (int): Number of genes in the network.
         nr_modules (int): Number of modules in the network.
-        sparsity (float): How sparse the network is 
+        sparsity (float): How sparse the network is
             (higher values mean fewer connections).
         keep_self_interactions (bool): Whether self-interactions are kept.
     """
+
     data_path: Path
     network_name: str
     nr_genes: int
@@ -29,6 +30,22 @@ class SimulationResult:
         """Iterate over field names and their values (as if this were a dict)"""
         for field in fields(self):
             yield field.name, getattr(self, field.name)
+
+    def double_ko_timeseries_nonoise_file_path(self) -> Path:
+        """Get path to double knockout timeseries file."""
+        out_path = (
+            self.data_path / f"{self.network_name}_nonoise_dualknockout_timeseries.tsv"
+        )
+        assert out_path.exists()
+        return out_path
+
+    def double_ko_index_file_path(self) -> Path:
+        """Get path to double knockout index file."""
+        out_path = (
+            self.data_path / f"{self.network_name}_dualknockout_timeseries_indexes.tsv"
+        )
+        assert out_path.exists()
+        return out_path
 
 
 class GNWSimRunner:

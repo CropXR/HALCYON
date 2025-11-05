@@ -81,10 +81,19 @@ class ExpressionDataWithConditions(Dataset):
     def __len__(self) -> int:
         return len(self._ko_dict)
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return tuple of first item KO and environmental condition, and second item the corresponding expression data."""
+    def _get_experiment_and_expression_at_index(
+        self, idx: int
+    ) -> tuple[ExperimentCondition, ExpressionData]:
+        """Get objects of experimental condition and expression data at an index."""
         experiment_condition = list(self._ko_dict.keys())[idx]
         expression_data = self._ko_dict[experiment_condition]
+        return experiment_condition, expression_data
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data."""
+        experiment_condition, expression_data = (
+            self._get_experiment_and_expression_at_index(idx)
+        )
         return experiment_condition.as_tensor(), expression_data.as_tensor()
 
     def match_genes_to_list(self, genes: list[str]):
@@ -118,10 +127,50 @@ class ExpressionDataWithConditions(Dataset):
         for gene_name, block in zip(headers, text_blocks):
             experiment_condition = ExperimentCondition(
                 all_genes=tuple(headers),
-                ko_gene=gene_name,
+                ko_gene=(gene_name,),
                 all_environments=("test", "test2"),
                 environment=None,
             )
+            df = pd.read_csv(StringIO(block), sep="\t", names=headers).T
+            ko_dict[experiment_condition] = ExpressionData(df)
+
+        return cls(ko_dict)
+
+    @classmethod
+    def from_gnw_double_ko_files(
+        cls, expression_file_path: Path, ko_file_path: Path
+    ) -> Self:
+        """Create this object from GeneNetWeaver double knockout files.
+        Args:
+            expression_file_path (Path): path to tsv file with expression data.
+            ko_file_path (Path): path to tsv file with double KO gene pairs.
+        """
+        # Load expression data
+        ko_dict = {}
+        text_blocks = expression_file_path.read_text().strip().split("\n\n")
+        headers = text_blocks.pop(0)
+        headers = headers.split("\t")[1:]
+        # Read corresponding KO genes from ko_file_path
+        all_ko_combo_list = ko_file_path.read_text().strip().split("\n")
+        # Remove header
+        all_ko_combo_list.pop(0)
+        assert len(all_ko_combo_list) == len(
+            text_blocks
+        ), "Number of KO gene pairs must match number of expression data blocks."
+
+        for block, raw_ko_gene_str in zip(text_blocks, all_ko_combo_list):
+            ko_for_this_expression_block = []
+            for gene_index in raw_ko_gene_str.split("\t"):
+                # Index is one higher than the Node_ name
+                ko_for_this_expression_block.append(f"Node_{int(gene_index) - 1}")
+
+            experiment_condition = ExperimentCondition(
+                all_genes=tuple(headers),
+                ko_gene=tuple(ko_for_this_expression_block),
+                all_environments=("test", "test2"),
+                environment=None,
+            )
+
             df = pd.read_csv(StringIO(block), sep="\t", names=headers)
             df = df.T
             ko_dict[experiment_condition] = ExpressionData(df)

@@ -2,12 +2,13 @@ import torch
 from halcyon.Models.CellBox import CellBox
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 import pytest
+from torch.testing import assert_close
 
 
 @pytest.fixture
 def neural_ode():
     gene_labels = ["a", "b", "c"]
-    my_neural_ode = PhoenixOnlyAddLayers(gene_labels, ("test_cond",))
+    my_neural_ode = PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
     return my_neural_ode
 
 
@@ -53,7 +54,7 @@ def test_cellbox_forward(my_cellbox):
     # Time not important
     my_cellbox.set_conditions(env_conditions)
     forward_pass = my_cellbox.forward(t=torch.tensor([0]), state=init_expr)
-    assert torch.allclose(
+    assert_close(
         forward_pass,
         torch.tanh(torch.tensor([5.0, 4.0, 3.0], device=my_cellbox.device).unsqueeze(0))
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
@@ -70,7 +71,7 @@ def test_cellbox_integrate(my_cellbox):
     output = my_cellbox.integrate(
         init_values, t_eval=torch.tensor([0.0, 1.0, 2.0], device=my_cellbox.device)
     )
-    assert torch.allclose(
+    assert_close(
         output,
         torch.tensor(
             [
@@ -81,6 +82,7 @@ def test_cellbox_integrate(my_cellbox):
             device=my_cellbox.device,
         ).unsqueeze(0),
         atol=1e-4,
+        rtol=1e-4,
     )
 
 
@@ -118,14 +120,14 @@ def test_cellbox_gene_knockout(my_cellbox):
     my_cellbox.set_conditions(env_values)
     # Time not important
     forward_pass = my_cellbox.forward(t=torch.tensor([0]), state=init_values)
-    assert torch.allclose(
+    assert_close(
         forward_pass[0, :],
         torch.tanh(torch.tensor([5.0, 4.0, 3.0], device=my_cellbox.device))
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
         * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device),
     )
 
-    assert torch.allclose(
+    assert_close(
         forward_pass[1, :],
         torch.tanh(torch.tensor([5.0, 0.0, 3.0], device=my_cellbox.device))
         - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)

@@ -4,12 +4,12 @@ import numpy as np
 from halcyon.Evaluator import Evaluator
 from halcyon.Models.CellBox import CellBox
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
-from tests.create_dummy_data import get_synthetic_data
+
 import networkx as nx
 
 
-def test_compare_inferred_network():
-    gt_regulatory_network, interactions, expressions = get_synthetic_data()
+def test_compare_inferred_network(get_synthetic_data):
+    gt_regulatory_network, interactions, expressions = get_synthetic_data
 
     my_evaluator = Evaluator(gt_regulatory_network, expressions)
     mock_model = MagicMock()
@@ -28,8 +28,8 @@ def test_compare_inferred_network():
     assert comparison_output == 0
 
 
-def test_roc_auc_inferred_network():
-    gt_regulatory_network, interactions, expressions = get_synthetic_data()
+def test_roc_auc_inferred_network(get_synthetic_data):
+    gt_regulatory_network, interactions, expressions = get_synthetic_data
     my_evaluator = Evaluator(gt_regulatory_network, expressions)
     cellbox = CellBox(gt_regulatory_network.node_names, [], self_activations=False)
     cellbox._set_weight_matrix_to_ones()

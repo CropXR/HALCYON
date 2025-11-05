@@ -79,7 +79,7 @@ tsMultifactorial = 0
 # Generate time series as in DREAM4
 tsDREAM4TimeSeries = 0
 # Generate time series for dual knockouts
-tsDualKnockouts = 0
+tsDualKnockouts = 1
 
 # Number of time series experiments (different perturbations are used for each time series)
 numTimeSeries = 10

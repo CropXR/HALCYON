@@ -4,9 +4,12 @@ from torch import nn
 
 class PhoenixSumActivation(nn.Module):
     def forward(self, y: torch.Tensor) -> torch.Tensor:
-        return (y - 0.5) / (1 + torch.abs(y - 0.5))
+        shifted = y - 0.5
+        return shifted / (1 + torch.abs(shifted))
 
 
 class PhoenixProdActivation(nn.Module):
     def forward(self, y: torch.Tensor) -> torch.Tensor:
-        return torch.log(((y - 0.5) / (1 + torch.abs(y - 0.5))) + 1)
+        shifted = y - 0.5
+        # Log1p implicitly computes log(1 + x)
+        return torch.log1p((shifted / (1 + torch.abs(shifted))))

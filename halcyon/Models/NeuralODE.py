@@ -29,15 +29,17 @@ class PhoenixABC(MachineLearningModel, ABC):
         self.per_gene_multipliers = nn.Parameter(
             torch.full(size=(self.n_genes,), fill_value=1.0)
         )
-        
+
+    def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
+        for layer in model:
+            if isinstance(layer, nn.Linear):
+                nn.init.sparse_(layer.weight, sparsity=sparsity, std=0.05)
 
     def _get_decay(self, state):
         return nn.functional.relu(self.decay_params * state)
 
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
-
-
 
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -49,6 +51,7 @@ class PhoenixOnlyAddLayers(PhoenixABC):
         self,
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
+        hidden_size: int,
         **kwargs,
     ):
         """Create Phoenix model; a neural network that takes the gene expression and the environment as input and returns the change in gene expression. This version only has additive layers, so no interactive effects are modelled.
@@ -60,8 +63,10 @@ class PhoenixOnlyAddLayers(PhoenixABC):
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.neural_net = nn.Sequential(
             PhoenixSumActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, self.n_genes),
+            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
+            nn.Linear(hidden_size, self.n_genes),
         )
+        self.init_sparse_weights(self.neural_net)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         logging.debug(f"State\t {state}")
@@ -101,6 +106,8 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         )
 
         self.combine_layer_nn = nn.Sequential(nn.Linear(2 * hidden_size, self.n_genes))
+        for model in [self.sum_nn, self.prod_nn, self.combine_layer_nn]:
+            self.init_sparse_weights(model)
 
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         logging.debug(f"State\t {state}")
@@ -115,4 +122,4 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         decay = self._get_decay(state)
         output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
-        return output 
+        return output

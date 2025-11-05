@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 import numpy as np
 import pandas as pd
 import torch
@@ -57,7 +58,21 @@ class Trainer:
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
 
-    def train(self, n_epochs: int, do_profiling=False):
+    def _calculate_model_prediction(self, experiment_data, expression_data):
+        self.optimizer.zero_grad()
+        self.model.set_conditions(experiment_data)
+        output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
+        return output
+
+    def _calculate_loss_from_batch(self, batch):
+        experiment_data, expression_data = batch
+        experiment_data = experiment_data.to(self.model.device)
+        expression_data = expression_data.to(self.model.device)
+        output = self._calculate_model_prediction(experiment_data, expression_data)
+        loss = self.calculate_loss_expression_vs_pred(expression_data, output)
+        return loss
+
+    def train(self, n_epochs: int):
         """Perform model training on batches.
 
         Args:
@@ -68,17 +83,7 @@ class Trainer:
         for epoch in range(n_epochs):
             epoch_loss = 0.0
             for batch in self.dataloader:
-                experiment_data, expression_data = batch
-                experiment_data = experiment_data.to(self.model.device)
-                expression_data = expression_data.to(self.model.device)
-
-                self.optimizer.zero_grad()
-                self.model.set_conditions(experiment_data)
-                output = self.integrate_model(
-                    initial_states_tensor=expression_data[:, :, 0]
-                )
-
-                loss = self.calculate_loss(expression_data, output)
+                loss = self._calculate_loss_from_batch(batch)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
@@ -100,11 +105,38 @@ class Trainer:
         plt.ylim((0, 1.5 * max(self.loss_history)))
         plt.show()
 
-    def calculate_loss(
+    def calculate_loss_expression_vs_pred(
         self, expression_true: torch.Tensor, expression_pred: torch.Tensor
     ) -> torch.Tensor:
         """Calculate the loss between a given model output and the actual expressions."""
         return self.loss_fn(expression_pred, expression_true)
+
+    def _plot_from_expressions(
+        self, expressions: np.ndarray, title: str | None, axs: Axes, show_legend: bool
+    ):
+        df_real = pd.DataFrame(
+            expressions,
+            columns=self.dataset._get_time_points(),
+            index=self.dataset.genes,
+        )
+        ExpressionData(df_real).plot_expressions(axis=axs, legend=show_legend)
+        if title is not None:
+            axs.set_title(title)
+
+    def _plot_one_prediction(
+        self,
+        initial_condition: torch.Tensor,
+        title: str,
+        env: torch.Tensor,
+        axs: Axes,
+        show_legend: bool,
+    ):
+        """Simulate and plot prediction"""
+        self.model.set_conditions(env.unsqueeze(0))
+        with torch.no_grad():
+            predictions = self.integrate_model(initial_states_tensor=initial_condition)
+            predictions = predictions.squeeze(0).detach().cpu().numpy()
+            self._plot_from_expressions(predictions, title, axs, show_legend)
 
     def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
@@ -114,39 +146,31 @@ class Trainer:
             n = top_n
         else:
             n = len(self.dataset)
-        fig, axs = plt.subplots(n, 2, sharey=True, figsize=(10, 4 * n))
+        fig, axs = plt.subplots(n, 2, sharey=True, sharex="col", figsize=(7, 3 * n))
         if n == 1:
             axs = np.expand_dims(
                 axs, axis=0
             )  # ensure consistent indexing for single row
 
-        timepoints = self.dataset._get_time_points()
-        gene_labels = self.dataset.genes
         for i in range(n):
             env, expressions = self.dataset[i]
             env = env.to(self.model.device)
             expressions = expressions.to(self.model.device)
             # Plot ground truth
-            df_real = pd.DataFrame(
+            self._plot_from_expressions(
                 expressions.detach().cpu().numpy(),
-                columns=timepoints,
-                index=gene_labels,
+                f"Measured (Sample {i})",
+                axs[i, 0],
+                show_legend,
             )
-            ExpressionData(df_real).plot_expressions(axis=axs[i, 0], legend=show_legend)
-            axs[i, 0].set_title(f"Measured (Sample {i})")
+            self._plot_one_prediction(
+                initial_condition=expressions[:, 0].unsqueeze(0),
+                title=f"Model fit (Sample {i})",
+                env=env,
+                axs=axs[i, 1],
+                show_legend=show_legend,
+            )
 
-            # Simulate and plot prediction
-            self.model.set_conditions(env.unsqueeze(0))
-            output = self.integrate_model(
-                initial_states_tensor=expressions[:, 0].unsqueeze(0)
-            )
-            df_pred = pd.DataFrame(
-                output.squeeze(0).detach().cpu().numpy(),
-                columns=timepoints,
-                index=gene_labels,
-            )
-            ExpressionData(df_pred).plot_expressions(axis=axs[i, 1], legend=show_legend)
-            axs[i, 1].set_title(f"Model (Sample {i})")
         plt.tight_layout()
         return fig, axs
 
@@ -181,7 +205,7 @@ class Trainer:
         checkpoint = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
-            "loss_history": self.loss_history,  # e.g. a list of floats
+            "loss_history": self.loss_history,
         }
         torch.save(checkpoint, checkpoint_path)
 
@@ -190,6 +214,30 @@ class Trainer:
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.loss_history = checkpoint["loss_history"]
         self.model.load_state_dict(checkpoint["model_state_dict"])
+
+    def calculate_loss_from_expression_data(
+        self, expressions_to_predict: ExpressionDataWithConditions
+    ):
+        """Provide Expressiondata (e.g. with double knockouts) and calculate loss on them.
+
+        Args:
+            expressions_to_predict (ExpressionDataWithConditions): Dataset on which losses should be calculated
+        """
+        assert (
+            expressions_to_predict.genes == self.model.modelled_gene_labels
+        ), "Gene labels do not match"
+        self.model.eval()
+        expressions_to_predict.scale_time_series()
+        my_dataloader = DataLoader(
+            expressions_to_predict, batch_size=1, shuffle=False, pin_memory=True
+        )
+        all_losses = []
+        with torch.no_grad():
+            for batch in my_dataloader:
+                loss = self._calculate_loss_from_batch(batch)
+                all_losses.append(loss.detach().cpu().item())
+        self.model.train()
+        return all_losses
 
 
 class TrainingJob:
@@ -220,13 +268,17 @@ class TrainingJob:
         )
         self.expressions.scale_time_series()
         self.model_kwargs = model_kwargs or {}
+        self.optimizer_kwargs = optimizer_kwargs or {}
         model = model_cls(
             self.expressions.genes,
             self.expressions.all_environments,
             **self.model_kwargs,
         )
         self.trainer = Trainer(
-            model, self.expressions, batch_size=32, optimizer_kwargs=optimizer_kwargs
+            model,
+            self.expressions,
+            batch_size=32,
+            optimizer_kwargs=self.optimizer_kwargs,
         )
 
         file_name = f"trained_trainer_{model.__class__.__name__}"
@@ -235,12 +287,15 @@ class TrainingJob:
                 if kwarg_name == "device":
                     continue
                 file_name += f"_{kwarg_name}_{value}"
+        if self.optimizer_kwargs:
+            for kwarg_name, value in self.optimizer_kwargs.items():
+                file_name += f"_{kwarg_name}_{value}"
         file_name += ".pt"
 
         self.save_path = self.sim_result.data_path / file_name
 
     def __repr__(self):
-        return f"Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs}"
+        return f"TrainingJob: Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs} and {self.optimizer_kwargs}"
 
     def load_if_exists(self):
         if self.save_path.exists():
@@ -273,7 +328,22 @@ class TrainingJob:
         if self.model_kwargs:
             for key, value in self.model_kwargs.items():
                 output_dict[key] = value
+        if self.optimizer_kwargs:
+            for key, value in self.optimizer_kwargs.items():
+                output_dict[key] = value
         return output_dict
+
+    def get_double_ko_files(self) -> ExpressionDataWithConditions:
+        double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
+            expression_file_path=self.sim_result.double_ko_timeseries_nonoise_file_path(),
+            ko_file_path=self.sim_result.double_ko_index_file_path(),
+        )
+        return double_ko_expressions
+
+    def losses_on_double_ko(self):
+        double_ko_expressions = self.get_double_ko_files()
+        loss = self.trainer.calculate_loss_from_expression_data(double_ko_expressions)
+        return loss
 
 
 def run_training_job(job: TrainingJob):

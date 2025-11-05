@@ -18,6 +18,7 @@ import logging
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.Model import Model
 
+
 class MechanisticModel(Model):
     def __init__(self, modelled_gene_labels: List[str]):
         super().__init__(modelled_gene_labels)
@@ -32,14 +33,24 @@ class MechanisticModel(Model):
 class PyTorchODE(MechanisticModel):
     alternative_max_name = "max_rate"
 
-    def __init__(self, modelled_gene_labels: List[str], synthesis_dict: Dict[str, sp.Expr], decay_dict: Dict[str, sp.Expr], param_dict: Dict[str, float]):
+    def __init__(
+        self,
+        modelled_gene_labels: List[str],
+        synthesis_dict: Dict[str, sp.Expr],
+        decay_dict: Dict[str, sp.Expr],
+        param_dict: Dict[str, float],
+    ):
         super().__init__(modelled_gene_labels)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
         self.param_dict = param_dict
-        self._compiled_ready = False # should be false until expressions are compiled, which is done at first integration
-        self._synthesis_module: Optional[nn.Module] = None # compiled synthesis modules will be stored here after compilation
-        self._decay_module: Optional[nn.Module] = None # compiled decay modules will be stored here after compilation
+        self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
+        self._synthesis_module: Optional[nn.Module] = (
+            None  # compiled synthesis modules will be stored here after compilation
+        )
+        self._decay_module: Optional[nn.Module] = (
+            None  # compiled decay modules will be stored here after compilation
+        )
 
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
@@ -61,7 +72,6 @@ class PyTorchODE(MechanisticModel):
             Self: An instance of the MechanisticModel.
         """
 
-        
         if isinstance(sbml_path, Path):
             sbml_path = str(sbml_path)
         assert isinstance(sbml_path, str)  # Ensure sbml_path is a string
@@ -70,7 +80,9 @@ class PyTorchODE(MechanisticModel):
         reader = libsbml.SBMLReader()
         document = reader.readSBML(sbml_path)
 
-        assert document is not None and document.getModel() is not None, "Failed to load SBML model."
+        assert (
+            document is not None and document.getModel() is not None
+        ), "Failed to load SBML model."
         model = document.getModel()
 
         param_dict = dict()
@@ -80,13 +92,15 @@ class PyTorchODE(MechanisticModel):
 
         for i in range(model.getNumReactions()):
             reaction = model.getReaction(i)
-            reaction_id = reaction.getId()#.rstrip("_")
+            reaction_id = reaction.getId()
             formula = reaction.getKineticLaw().getFormula()
 
             if from_gnw:
                 formula = cls._fix_gnw_division_brackets(formula)
-            
-            libsbml_parameters = model.getReaction(reaction_id).getKineticLaw().getListOfParameters()
+
+            libsbml_parameters = (
+                model.getReaction(reaction_id).getKineticLaw().getListOfParameters()
+            )
 
             base_node_name, sympy_formula, one_reactions_parameters = (
                 cls.parse_one_reaction(reaction_id, formula, libsbml_parameters)
@@ -106,8 +120,13 @@ class PyTorchODE(MechanisticModel):
                 raise NameError(
                     f"Reaction {reaction_id} does not end with _synthesis or _degradation."
                 )
-        
-        return cls(base_node_names, synthesis_expression_dict, decay_expression_dict, param_dict)
+
+        return cls(
+            base_node_names,
+            synthesis_expression_dict,
+            decay_expression_dict,
+            param_dict,
+        )
 
     def _compile_expressions(self) -> None:
         """Pre-compile SymPy expressions into torch modules via sympytorch."""
@@ -126,7 +145,9 @@ class PyTorchODE(MechanisticModel):
             """
             prepared: List[sp.Expr] = []
             for gene in self.modelled_gene_labels:
-                expr = expr_dict[gene].subs(param_subs) # Apply parameter substitutions, take parameter values from param_dict
+                expr = expr_dict[gene].subs(
+                    param_subs
+                )  # Apply parameter substitutions, take parameter values from param_dict
                 expr = sympytorch.hide_floats(expr)
                 prepared.append(expr)
             return prepared
@@ -135,25 +156,39 @@ class PyTorchODE(MechanisticModel):
         decay_exprs = _prepare_expressions(self.decay_dict)
 
         try:
-            self._synthesis_module = sympytorch.SymPyModule(
-                expressions=synthesis_exprs
-            )
-            self._decay_module = sympytorch.SymPyModule(
-                expressions=decay_exprs
-            )
+            self._synthesis_module = sympytorch.SymPyModule(expressions=synthesis_exprs)
+            self._decay_module = sympytorch.SymPyModule(expressions=decay_exprs)
         except KeyError as err:
-            func_name = getattr(err.args[0], "__name__", str(err.args[0])) if err.args else "unknown" # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
+            func_name = (
+                getattr(err.args[0], "__name__", str(err.args[0]))
+                if err.args
+                else "unknown"
+            )  # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
             raise ValueError(
                 f"Unsupported sympy function '{func_name}' in SBML expression. "
                 "Provide a torch implementation via sympytorch."
             ) from err
 
+        self._synthesis_module.to(device=self.device)
+        self._decay_module.to(device=self.device)
         self._compiled_ready = True
 
+    def _set_all_parameters_to_zero(self):
+        new_param_dict = {}
+        for key in self.param_dict.keys():
+            new_param_dict[key] = 0.0
+        self.param_dict = new_param_dict
+        self._compiled_ready = False
+
     @classmethod
-    def parse_one_reaction(cls, name: str, formula_string: str, libsbml_parameters: libsbml.ListOfParameters):
+    def parse_one_reaction(
+        cls,
+        name: str,
+        formula_string: str,
+        libsbml_parameters: libsbml.ListOfParameters,
+    ):
         """
-        
+
         Parse a single reaction from the SBML model.
         Args:
             name (str): The name of the reaction.
@@ -162,14 +197,11 @@ class PyTorchODE(MechanisticModel):
         Returns:
             tuple[str, sp.Expr, Dict[str, float]]: A tuple containing the base node name, the sympy expression, and a dictionary of parameters used in the equation.
         """
-        base_node_name = (
-            name.replace("_degradation", "").replace("_synthesis", "")
-        )
-        formula_string = re.sub(r'\bmax\b', cls.alternative_max_name, formula_string)
+        base_node_name = name.replace("_degradation", "").replace("_synthesis", "")
+        formula_string = re.sub(r"\bmax\b", cls.alternative_max_name, formula_string)
 
         param_dict = dict()
-        
-        
+
         # This way the order of the terms is preserved, eases readability
         with evaluate(0):
             sympy_formula = parse_expr(formula_string, evaluate=False)
@@ -178,44 +210,48 @@ class PyTorchODE(MechanisticModel):
 
         for old_param_name in sympy_formula.free_symbols:
             old_param_name = str(old_param_name)
-            if old_param_name.startswith('Node'):
+            if old_param_name.startswith("Node"):
                 continue
-            elif old_param_name == 'cell':
+            elif old_param_name == "cell":
                 continue
-            new_param_name = f'{old_param_name}_{base_node_name}'
+            new_param_name = f"{old_param_name}_{base_node_name}"
             replacement_dict[old_param_name] = new_param_name
             # Also figure out the value of the parameter
-            assert new_param_name not in param_dict, f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
+            assert (
+                new_param_name not in param_dict
+            ), f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
             if old_param_name == cls.alternative_max_name:
-                old_param_name = 'max'
-            param_dict[new_param_name] = libsbml_parameters.get(old_param_name).getValue()
+                old_param_name = "max"
+            param_dict[new_param_name] = libsbml_parameters.get(
+                old_param_name
+            ).getValue()
         sympy_formula = sympy_formula.subs(replacement_dict)
-        
+
         return base_node_name, sympy_formula, param_dict
-    
+
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:
         """
         Fix incorrect division operator precedence by adding parentheses in GeneNetWeaver's SBML output.
 
-        Somewhere in GeneNetWeaver exporting it's model to SBML and libSBML importing them there is a bug: 
+        Somewhere in GeneNetWeaver exporting its model equations to SBML and libSBML importing them there is a bug:
         division expressions are written with incorrect operator precedence. For example, "a/b*c" is
         intended to mean "a/(b*c)" but SymPy would parse it as "(a/b)*c" due to left-to-right evaluation.
-        
+
         This method scans the formula string for division operators and wraps all subsequent
         multiplication terms in parentheses to ensure they are treated as part of the denominator.
-        
+
         Examples:
             "a/b*c" → "a/(b * c)"
             "a/b*c + d/e*f*g" → "a/(b * c)+ d/(e * f * g)"
             "x/pow(y,2)*z" → "x/(pow(y,2) * z)"
-        
+
         Args:
             formula (str): The formula string from the SBML file, potentially with incorrect precedence.
-        
+
         Returns:
             str: The corrected formula with proper parenthesization.
-        
+
         Note:
             This function must be called when loading SBML files from GeneNetWeaver.
             Use `PyTorchODE.from_sbml(path, from_gnw=True)` to automatically apply this fix.
@@ -224,75 +260,75 @@ class PyTorchODE(MechanisticModel):
         def find_matching_closing_parenthesis(formula_str: str, start_pos: int) -> int:
             """
             Find the position of the matching closing parenthesis for an opening parenthesis.
-            
+
             Args:
                 formula_str (str): The string to search in.
                 start_pos (int): The index of the opening parenthesis.
-            
+
             Returns:
                 int: The index of the matching closing parenthesis, or -1 if not found or
                      if the character at start_pos is not an opening parenthesis.
             """
-            if formula_str[start_pos] != '(':
+            if formula_str[start_pos] != "(":
                 return -1
-            
+
             count = 1
             pos = start_pos + 1
-            
+
             while pos < len(formula_str) and count > 0:
-                if formula_str[pos] == '(':
+                if formula_str[pos] == "(":
                     count += 1
-                elif formula_str[pos] == ')':
+                elif formula_str[pos] == ")":
                     count -= 1
                 pos += 1
-                
+
             return pos - 1 if count == 0 else -1
 
         def fix_division_at_position(formula_str: str, div_pos: int) -> str:
             """
             Fix a division operator at a specific position by grouping subsequent multiplication terms.
-            
+
             Starting from the division operator at div_pos, this function scans forward to identify
             all terms that should be part of the denominator. Terms are separated by multiplication
             operators ('*'). The scanning stops when a different operator (+, -, /) is encountered
             or the end of the string is reached.
-            
+
             The function handles:
             - Simple variables and numbers: "a", "123", "k_1"
             - Parenthetical expressions: "(x + y)"
             - Function calls: "pow(x, 2)", "max(a, b)"
             - Nested parentheses: "pow((x + y), 2)"
-            
+
             Args:
                 formula_str (str): The complete formula string.
                 div_pos (int): The index of the division operator to fix.
-            
+
             Returns:
                 str: The formula with the division at div_pos corrected.
                      If only one term follows the division, no changes are made.
                      If multiple terms follow (connected by '*'), they are wrapped in parentheses.
-            
+
             Example:
                 For "a/b*c*d + e", with div_pos pointing to '/', this returns "a/(b * c * d) + e"
             """
             if div_pos >= len(formula_str) - 1:
                 return formula_str
-                
+
             # Start collecting terms after the division
             pos = div_pos + 1
             terms = []
-            
+
             while pos < len(formula_str):
                 # Skip whitespace
                 while pos < len(formula_str) and formula_str[pos].isspace():
                     pos += 1
-                
+
                 if pos >= len(formula_str):
                     break
-                
+
                 # If this is not the first term, we need to check for multiplication operator
                 if len(terms) > 0:
-                    if formula_str[pos] == '*':
+                    if formula_str[pos] == "*":
                         pos += 1  # Skip the '*'
                         # Skip whitespace after '*'
                         while pos < len(formula_str) and formula_str[pos].isspace():
@@ -300,57 +336,61 @@ class PyTorchODE(MechanisticModel):
                     else:
                         # No multiplication operator, so we're done with this division
                         break
-                
+
                 if pos >= len(formula_str):
                     break
-                
+
                 # Collect the next term
                 term_start = pos
-                
-                if formula_str[pos] == '(':
+
+                if formula_str[pos] == "(":
                     # Parenthetical expression
                     end_paren = find_matching_closing_parenthesis(formula_str, pos)
                     if end_paren != -1:
-                        terms.append(formula_str[pos:end_paren + 1])
+                        terms.append(formula_str[pos : end_paren + 1])
                         pos = end_paren + 1
                     else:
                         break
                 else:
                     # Regular term (variable, number, or function call)
-                    while (pos < len(formula_str) and 
-                        formula_str[pos] not in ['*', '/', '+', '-', ')', ' '] and
-                        not (formula_str[pos:pos+1].isspace())):
+                    while (
+                        pos < len(formula_str)
+                        and formula_str[pos] not in ["*", "/", "+", "-", ")", " "]
+                        and not (formula_str[pos : pos + 1].isspace())
+                    ):
                         pos += 1
-                    
+
                     # Handle function calls like pow(...)
-                    if pos < len(formula_str) and formula_str[pos] == '(':
+                    if pos < len(formula_str) and formula_str[pos] == "(":
                         end_paren = find_matching_closing_parenthesis(formula_str, pos)
                         if end_paren != -1:
                             pos = end_paren + 1
-                    
+
                     terms.append(formula_str[term_start:pos])
-            
+
             # If we found multiple terms, wrap them in parentheses
             if len(terms) > 1:
-                grouped_terms = ' * '.join(terms)  # Preserve spacing
-                new_denominator = f'/({grouped_terms})'
-                
+                grouped_terms = " * ".join(terms)  # Preserve spacing
+                new_denominator = f"/({grouped_terms})"
+
                 # Calculate the original length to replace
                 original_end = pos
                 original_section = formula_str[div_pos:original_end]
-                
-                return (formula_str[:div_pos] + new_denominator + formula_str[original_end:])
-            
+
+                return (
+                    formula_str[:div_pos] + new_denominator + formula_str[original_end:]
+                )
+
             return formula_str
-        
+
         # Find all division operators and fix them
         result = formula
-        div_positions = [i for i, char in enumerate(result) if char == '/']
-        
+        div_positions = [i for i, char in enumerate(result) if char == "/"]
+
         # Process divisions from right to left to avoid position shifts
         for div_pos in reversed(div_positions):
             result = fix_division_at_position(result, div_pos)
-        
+
         return result
 
     def integrate(
@@ -364,7 +404,6 @@ class PyTorchODE(MechanisticModel):
         self._compile_expressions()
         return super().integrate(initial_state, t_eval)
 
-
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
         Get the derivative at a given time point.
@@ -376,46 +415,40 @@ class PyTorchODE(MechanisticModel):
         """
         if state.isinf().any() or state.isnan().any():
             raise ValueError("NaN or inf in state tensor.")
-        
+
         # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
         # most likely, the steps are slightly too large and lead to negative concentrations
         state = torch.clamp(state, min=0.0)
-        if not getattr(self, "_compiled_ready", False):
+        if not self._compiled_ready:
             self._compile_expressions()
         batch_size, n_genes = state.shape
-        device = self.device
 
-        synthesis_module = self._synthesis_module
-        decay_module = self._decay_module
-        if synthesis_module is None or decay_module is None:
+        if self._synthesis_module is None or self._decay_module is None:
             raise RuntimeError("SymPy modules were not initialised correctly.")
 
-        synthesis_module.to(device=device)
-        decay_module.to(device=device)
-
-        ko_masks = self.ko_masks
-        ko_masks.to(device=device)
+        self.ko_masks = self.ko_masks.to(device=self.device)
 
         inputs = {
-            gene: state[:, idx]
-            for idx, gene in enumerate(self.modelled_gene_labels)
+            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
         }
-        inputs["cell"] = torch.full( # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
+        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
+        inputs["cell"] = torch.full(
             (batch_size,),
             1.0,
             dtype=state.dtype,
-            device=device,
+            device=self.device,
         )
 
-        synthesis = synthesis_module(**inputs)
-        decay = decay_module(**inputs)
+        synthesis = self._synthesis_module(**inputs)
+        decay = self._decay_module(**inputs)
         # If output is 1D (single sample), unsqueeze to add batch dimension
         if synthesis.dim() == 1:
             synthesis = synthesis.unsqueeze(0)
         if decay.dim() == 1:
             decay = decay.unsqueeze(0)
 
-        return synthesis * ko_masks - decay
+        return synthesis * self.ko_masks - decay
+
 
 class TorchLinearODE(MechanisticModel):
     def __init__(self, regulatory_network: RegulatoryNetwork):
@@ -446,13 +479,13 @@ class TorchLinearODE(MechanisticModel):
             squeeze_output = True
         else:
             squeeze_output = False
-        
+
         # Perform batch matrix multiplication
         result = torch.bmm(
             self.weight_matrix.unsqueeze(0).expand(state.shape[0], -1, -1),
             state.unsqueeze(2),
         ).squeeze(2)
-        
+
         # Return in the same format as input
         if squeeze_output:
             return result.squeeze(0)
@@ -468,7 +501,7 @@ class TorchLinearODE(MechanisticModel):
     def set_conditions(self, conditions):
         logging.warning("Currently TorchLinearODE does not parse the conditions")
         pass
-    
+
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
         return self._regulatory_network

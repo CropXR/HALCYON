@@ -6,7 +6,9 @@ from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 class MachineLearningModel(Model, ABC):
-    def __init__(self, modelled_gene_labels: list[str], condition_names: list[str], **kwargs):
+    def __init__(
+        self, modelled_gene_labels: list[str], condition_names: list[str], **kwargs
+    ):
         self._n_conditions = len(condition_names)
         super().__init__(modelled_gene_labels, **kwargs)
 
