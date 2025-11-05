@@ -1,6 +1,6 @@
 from dataclasses import asdict
 from pathlib import Path
-from tests.test_fixtures import sim_result
+
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 
 import hashlib

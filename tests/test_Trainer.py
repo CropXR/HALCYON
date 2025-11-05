@@ -11,23 +11,18 @@ from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers, PhoenixAddAndProdLaye
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 from halcyon.Trainer import Trainer, TrainingJob
-from tests.test_fixtures import (
-    create_synthetic_expressions,
-    get_synthetic_data,
-)
-from tests.test_fixtures import expression_data_from_gnw
-from tests.test_fixtures import sim_result
+
+
 from torch.testing import assert_close
 
 
 @pytest.fixture
-def cellbox_from_expression():
-    expressions = create_synthetic_expressions()
-    return CellBox(expressions.genes, ("test", "test2"))
+def cellbox_from_expression(create_synthetic_expressions):
+    return CellBox(create_synthetic_expressions.genes, ("test", "test2"))
 
 
-def test_calculate_loss():
-    _, _, expressions = get_synthetic_data()
+def test_calculate_loss(get_synthetic_data):
+    _, _, expressions = get_synthetic_data
     mock_model = MagicMock()
     mock_model.modelled_gene_labels.return_value = ["G1", "G3"]
     mock_model.parameters.return_value = [torch.randn(2, 2), torch.randn(3, 3)]
@@ -43,8 +38,8 @@ def test_calculate_loss():
     ) == approx(0.0)
 
 
-def test_integrate_model():
-    gt_regulatory_network, interactions, data = get_synthetic_data()
+def test_integrate_model(get_synthetic_data):
+    gt_regulatory_network, interactions, data = get_synthetic_data
     correct_model = TorchLinearODE(gt_regulatory_network)
     my_trainer = Trainer(correct_model, data)
     gt_expressions = data[0][1]
@@ -54,12 +49,12 @@ def test_integrate_model():
         my_trainer.calculate_loss_expression_vs_pred(
             output, gt_expressions.unsqueeze(0).to(correct_model.device)
         ),
-        torch.tensor([0.0], device=correct_model.device),
+        torch.tensor(0.0, device=correct_model.device),
     )
 
 
-def test_train_neural_ode():
-    expressions = create_synthetic_expressions()
+def test_train_neural_ode(create_synthetic_expressions):
+    expressions = create_synthetic_expressions
     neural_ode_model = PhoenixOnlyAddLayers(
         expressions.genes, expressions.all_environments, hidden_size=2
     )
@@ -82,13 +77,13 @@ def test_train_neural_ode():
     assert not torch.allclose(init_decay, neural_ode_model.decay_params.detach())
 
 
-def test_train_cellbox(cellbox_from_expression):
+def test_train_cellbox(cellbox_from_expression, create_synthetic_expressions):
 
     cellbox_from_expression._set_weight_matrix_to_ones()
     cellbox_from_expression._set_epsilon_to_zero()
     init_epsilon = deepcopy(cellbox_from_expression.epsilon)
     init_decay = deepcopy(cellbox_from_expression.decay_params)
-    my_trainer = Trainer(cellbox_from_expression, create_synthetic_expressions())
+    my_trainer = Trainer(cellbox_from_expression, create_synthetic_expressions)
     my_trainer.train(5)
     # Assert loss is decreasing
     assert all(
@@ -120,15 +115,15 @@ def test_train_cellbox_ko_data(expression_data_from_gnw):
     assert not torch.allclose(cellbox.W, init_w)
 
 
-def test_plot_fit_vs_real_data(cellbox_from_expression):
-    gt_regulatory_network, _, expressions = get_synthetic_data()
+def test_plot_fit_vs_real_data(cellbox_from_expression, get_synthetic_data):
+    gt_regulatory_network, _, expressions = get_synthetic_data
     my_trainer = Trainer(cellbox_from_expression, expressions)
     out_fig, out_axs = my_trainer.plot_fit_vs_real()
     assert out_fig is not None
 
 
-def test_with_regularisation():
-    gt_regulatory_network, _, expressions = get_synthetic_data()
+def test_with_regularisation(get_synthetic_data):
+    gt_regulatory_network, _, expressions = get_synthetic_data
     correct_model = TorchLinearODE(gt_regulatory_network)
     my_trainer = Trainer(
         correct_model, expressions, optimizer_kwargs={"weight_decay": 1}

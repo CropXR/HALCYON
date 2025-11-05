@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from tests.test_fixtures import expression_data_from_gnw
+
 from torch.testing import assert_close
 
 
@@ -73,6 +73,7 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
         environment,
         torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
         atol=1e-4,
+        rtol=1e-4,
     )
     assert_close(
         my_expression_data,
@@ -311,6 +312,7 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
             ]
         ),
         atol=1e-4,
+        rtol=1e-4,
     )
 
     assert expression_data_from_gnw.genes == [
@@ -330,5 +332,5 @@ def test_parse_from_genenetweaver_output(expression_data_from_gnw):
     for env_vector, expressions in expression_data_from_gnw:
         ko_gene_index = (env_vector == 1).nonzero().squeeze()
         assert_close(
-            expressions[ko_gene_index][-1], torch.tensor([0.0]), rtol=1e-4, atol=1e-4
+            expressions[ko_gene_index][-1], torch.tensor(0.0), rtol=1e-4, atol=1e-4
         )

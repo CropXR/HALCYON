@@ -16,6 +16,7 @@ from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
 from halcyon.Trainer import TrainingJob
 
 
+@pytest.fixture
 def get_interactions() -> dict:
     return {
         ("G5", "G1"): 0.2,
@@ -26,9 +27,9 @@ def get_interactions() -> dict:
     }
 
 
-# Create and return the gene network as a GeneNetwork object
-def create_synthetic_gene_network() -> Tuple[RegulatoryNetwork, dict]:
-    interactions = get_interactions()
+@pytest.fixture
+def create_synthetic_gene_network(get_interactions) -> Tuple[RegulatoryNetwork, dict]:
+    interactions = get_interactions
     graph = nx.DiGraph()
     graph.add_nodes_from(
         set(g for pair in interactions.keys() for g in pair)
@@ -40,9 +41,9 @@ def create_synthetic_gene_network() -> Tuple[RegulatoryNetwork, dict]:
     return RegulatoryNetwork(graph), interactions
 
 
-# Create synthetic gene expression time series using ODEs
-def create_synthetic_expressions() -> ExpressionDataWithConditions:
-    interactions = get_interactions()
+@pytest.fixture
+def create_synthetic_expressions(get_interactions) -> ExpressionDataWithConditions:
+    interactions = get_interactions
     initial_state = [0.1, 0.2, 0.3, 0.4, 0.5]
     timespan = [0, 5]
     genes = ("G1", "G2", "G3", "G4", "G5")
@@ -67,12 +68,13 @@ def create_synthetic_expressions() -> ExpressionDataWithConditions:
     return ExpressionDataWithConditions({condition: ExpressionData(df)})
 
 
-def get_synthetic_data():
-    regulatory_network, interactions = create_synthetic_gene_network()
-    expressions = create_synthetic_expressions()
-    return regulatory_network, interactions, expressions
+@pytest.fixture
+def get_synthetic_data(create_synthetic_gene_network, create_synthetic_expressions):
+    regulatory_network, interactions = create_synthetic_gene_network
+    return regulatory_network, interactions, create_synthetic_expressions
 
 
+@pytest.fixture
 def create_ko_from_sample_data() -> ExpressionDataWithConditions:
     input_path = Path(
         "tests/grnsimdummydata/InSilicoSize10-Yeast1_knockout_timeseries.tsv"

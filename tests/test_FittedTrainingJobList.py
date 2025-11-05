@@ -1,5 +1,4 @@
 import pandas as pd
-from tests.test_fixtures import sim_result, result_list_from_jobs
 from pandas.testing import assert_frame_equal
 
 

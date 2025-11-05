@@ -5,7 +5,6 @@ from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import TorchLinearODE
 from halcyon.Trainer import Trainer
-from tests.test_fixtures import get_synthetic_data
 from torch.testing import assert_close
 
 
@@ -18,8 +17,8 @@ def test_merge_modelled_genes():
     assert set(hybrid_model.modelled_gene_labels) == {"a", "b", "c", "d"}
 
 
-def test_hybrid_model_gene_split():
-    gt_regulatory_network, interactions, expression_dataset = get_synthetic_data()
+def test_hybrid_model_gene_split(get_synthetic_data):
+    gt_regulatory_network, interactions, expression_dataset = get_synthetic_data
     subset_regulatory_network = gt_regulatory_network.select_subset(["G1", "G4", "G5"])
     env_conditions, expressions = expression_dataset[0]
 
