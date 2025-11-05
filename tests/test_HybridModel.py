@@ -48,7 +48,7 @@ def test_hybrid_model_gene_split(get_synthetic_data):
     hybrid_model.set_conditions(env_conditions)
     assert_close(
         hybrid_model._get_mm_forward(0, expressions[:, :, 0]),
-        torch.tensor([0.1000, 0.0000, -0.0800], device=hybrid_model.device),
+        torch.tensor([[0.1000, 0.0000, -0.0800]], device=hybrid_model.device),
     )
 
     one_forward = hybrid_model.forward(

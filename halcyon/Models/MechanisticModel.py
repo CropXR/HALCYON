@@ -169,7 +169,16 @@ class PyTorchODE(MechanisticModel):
                 "Provide a torch implementation via sympytorch."
             ) from err
 
+        self._synthesis_module.to(device=self.device)
+        self._decay_module.to(device=self.device)
         self._compiled_ready = True
+
+    def _set_all_parameters_to_zero(self):
+        new_param_dict = {}
+        for key in self.param_dict.keys():
+            new_param_dict[key] = 0.0
+        self.param_dict = new_param_dict
+        self._compiled_ready = False
 
     @classmethod
     def parse_one_reaction(
@@ -410,43 +419,35 @@ class PyTorchODE(MechanisticModel):
         # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
         # most likely, the steps are slightly too large and lead to negative concentrations
         state = torch.clamp(state, min=0.0)
-        if not getattr(self, "_compiled_ready", False):
+        if not self._compiled_ready:
             self._compile_expressions()
         batch_size, n_genes = state.shape
-        device = self.device
 
-        synthesis_module = self._synthesis_module
-        decay_module = self._decay_module
-        if synthesis_module is None or decay_module is None:
+        if self._synthesis_module is None or self._decay_module is None:
             raise RuntimeError("SymPy modules were not initialised correctly.")
 
-        synthesis_module.to(device=device)
-        decay_module.to(device=device)
-
-        ko_masks = self.ko_masks
-        ko_masks.to(device=device)
+        self.ko_masks = self.ko_masks.to(device=self.device)
 
         inputs = {
             gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
         }
-        inputs["cell"] = (
-            torch.full(  # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
-                (batch_size,),
-                1.0,
-                dtype=state.dtype,
-                device=device,
-            )
+        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
+        inputs["cell"] = torch.full(
+            (batch_size,),
+            1.0,
+            dtype=state.dtype,
+            device=self.device,
         )
 
-        synthesis = synthesis_module(**inputs)
-        decay = decay_module(**inputs)
+        synthesis = self._synthesis_module(**inputs)
+        decay = self._decay_module(**inputs)
         # If output is 1D (single sample), unsqueeze to add batch dimension
         if synthesis.dim() == 1:
             synthesis = synthesis.unsqueeze(0)
         if decay.dim() == 1:
             decay = decay.unsqueeze(0)
 
-        return synthesis * ko_masks - decay
+        return synthesis * self.ko_masks - decay
 
 
 class TorchLinearODE(MechanisticModel):
