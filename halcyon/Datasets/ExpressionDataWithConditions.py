@@ -104,9 +104,12 @@ class ExpressionDataWithConditions(Dataset):
         """
         new_dict = dict()
         for experiment_condition, expression_data in self._ko_dict.items():
-            new_experiment_condition = (
-                experiment_condition.return_with_changed_gene_list(genes)
-            )
+            try:
+                new_experiment_condition = (
+                    experiment_condition.return_with_changed_gene_list(genes)
+                )
+            except KeyError:
+                continue
             new_dict[new_experiment_condition] = expression_data.match_genes_to_list(
                 genes
             )
