@@ -8,7 +8,7 @@ from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 class HybridModel(Model):
-    def __init__(self, mm: MechanisticModel, ml: MachineLearningModel):
+    def __init__(self, mm: MechanisticModel, ml: MachineLearningModel, **kwargs):
         """
         Initialize the HybridModel with a mechanistic model and a machine learning model.
         Args:
@@ -29,6 +29,7 @@ class HybridModel(Model):
         super().__init__(
             modelled_gene_labels=list(all_modelled_genes),
             condition_names=mm.condition_names,
+            **kwargs,
         )
         self._mm = mm
         self._ml = ml
