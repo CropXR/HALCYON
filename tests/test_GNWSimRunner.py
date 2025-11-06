@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
+
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 
 import hashlib
@@ -37,3 +38,8 @@ def test_gnw_reproducible(sim_result):
         keep_self_interactions=True,
     )
     assert asdict(sim_result) == asdict(expected_sim_result)
+
+
+def test_plot_gnw_run(sim_result: SimulationResult):
+    sim_result.plot_network()
+    assert True

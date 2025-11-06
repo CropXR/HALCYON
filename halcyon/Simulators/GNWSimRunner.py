@@ -1,8 +1,11 @@
 import logging
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, fields
+import networkx as nx
+import matplotlib.pyplot as plt
 
 
 @dataclass
@@ -25,6 +28,7 @@ class SimulationResult:
     nr_modules: int
     sparsity: float
     keep_self_interactions: bool
+    network: nx.DiGraph
 
     def items(self):
         """Iterate over field names and their values (as if this were a dict)"""
@@ -46,6 +50,20 @@ class SimulationResult:
         )
         assert out_path.exists()
         return out_path
+
+    def plot_network(self):
+        pos = nx.kamada_kawai_layout(self.network)
+        # Extract edge colors from the attribute
+        edge_colors = [self.network[u][v]["color"] for u, v in self.network.edges()]
+        nx.draw(
+            self.network,
+            pos,
+            connectionstyle="arc3,rad=0.2",
+            with_labels=True,
+            arrows=True,
+            edge_color=edge_colors,
+        )
+        plt.show()
 
 
 class GNWSimRunner:
@@ -116,7 +134,13 @@ class GNWSimRunner:
             step_1_args.append("--keep-self-interactions")
         if sparsity == 0:
             raise ValueError("Sparsity cannot be zero.")
-        step1_process = subprocess.run(step_1_args, check=True)
+        step1_process = subprocess.run(
+            step_1_args, check=True, capture_output=True, text=True
+        )
+
+        network = self._from_stderr_to_network(
+            step1_process.stderr, n_genes, network_name
+        )
 
         # Step 2 run simulation
         logging.info("Simulating network expression over time")
@@ -143,4 +167,37 @@ class GNWSimRunner:
             nr_modules=num_modules,
             sparsity=sparsity,
             keep_self_interactions=keep_self_interactions,
+            network=network,
         )
+
+    def _from_stderr_to_network(
+        self,
+        stderr: str,
+        n_genes: int,
+        network_name: str,
+        keep_multiplicative=False,
+    ) -> nx.DiGraph:
+        lines = stderr.splitlines()
+        network_lines = [i for i in lines if i.startswith(network_name)]
+        assert len(network_lines) == n_genes
+
+        G = nx.DiGraph()
+        for line in network_lines:
+            _, target_str, regulator_str = line.split(": ")
+            for regulator in regulator_str.split(" + "):
+                if regulator.startswith("~"):
+                    # Inhibitory interaction
+                    regulator = regulator[1:]
+                    colour = "red"
+                else:
+                    colour = "green"
+                regulator = regulator.replace(")", "").replace("(", "")
+                if keep_multiplicative:
+                    G.add_edge(regulator, target_str, color=colour)
+                elements_of_complex = re.split(r"[~*]", regulator)
+                for element in elements_of_complex:
+                    if keep_multiplicative:
+                        G.add_edge(element, regulator, color="black")
+                    else:
+                        G.add_edge(element, target_str, color=colour)
+        return G

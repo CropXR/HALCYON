@@ -11,7 +11,7 @@ from halcyon.Models.MechanisticModel import PyTorchODE
 def test_select_subset_genes(test_pytorchode_model):
     nodes_to_select = ["Node_0", "Node_2"]
     test_pytorchode_model.select_genes(nodes_to_select)
-    test_pytorchode_model.modelled_gene_labels == nodes_to_select
+    assert test_pytorchode_model.modelled_gene_labels == nodes_to_select
 
 
 def test_steady_state_derivateives_zero(test_pytorchode_model, ss_initial_values):
