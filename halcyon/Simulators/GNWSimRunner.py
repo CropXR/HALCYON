@@ -7,6 +7,8 @@ from dataclasses import dataclass, fields
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
+
 
 @dataclass
 class SimulationResult:
@@ -20,6 +22,7 @@ class SimulationResult:
         sparsity (float): How sparse the network is
             (higher values mean fewer connections).
         keep_self_interactions (bool): Whether self-interactions are kept.
+        network (RegulatoryNetwork): The generated gene regulatory network.
     """
 
     data_path: Path
@@ -28,7 +31,7 @@ class SimulationResult:
     nr_modules: int
     sparsity: float
     keep_self_interactions: bool
-    network: nx.DiGraph
+    network: RegulatoryNetwork
 
     def items(self):
         """Iterate over field names and their values (as if this were a dict)"""
@@ -50,20 +53,6 @@ class SimulationResult:
         )
         assert out_path.exists()
         return out_path
-
-    def plot_network(self):
-        pos = nx.kamada_kawai_layout(self.network)
-        # Extract edge colors from the attribute
-        edge_colors = [self.network[u][v]["color"] for u, v in self.network.edges()]
-        nx.draw(
-            self.network,
-            pos,
-            connectionstyle="arc3,rad=0.2",
-            with_labels=True,
-            arrows=True,
-            edge_color=edge_colors,
-        )
-        plt.show()
 
 
 class GNWSimRunner:
@@ -138,7 +127,7 @@ class GNWSimRunner:
             step_1_args, check=True, capture_output=True, text=True
         )
 
-        network = self._from_stderr_to_network(
+        network = RegulatoryNetwork.from_stderr_gnw(
             step1_process.stderr, n_genes, network_name
         )
 
@@ -169,35 +158,3 @@ class GNWSimRunner:
             keep_self_interactions=keep_self_interactions,
             network=network,
         )
-
-    def _from_stderr_to_network(
-        self,
-        stderr: str,
-        n_genes: int,
-        network_name: str,
-        keep_multiplicative=False,
-    ) -> nx.DiGraph:
-        lines = stderr.splitlines()
-        network_lines = [i for i in lines if i.startswith(network_name)]
-        assert len(network_lines) == n_genes
-
-        G = nx.DiGraph()
-        for line in network_lines:
-            _, target_str, regulator_str = line.split(": ")
-            for regulator in regulator_str.split(" + "):
-                if regulator.startswith("~"):
-                    # Inhibitory interaction
-                    regulator = regulator[1:]
-                    colour = "red"
-                else:
-                    colour = "green"
-                regulator = regulator.replace(")", "").replace("(", "")
-                if keep_multiplicative:
-                    G.add_edge(regulator, target_str, color=colour)
-                elements_of_complex = re.split(r"[~*]", regulator)
-                for element in elements_of_complex:
-                    if keep_multiplicative:
-                        G.add_edge(element, regulator, color="black")
-                    else:
-                        G.add_edge(element, target_str, color=colour)
-        return G

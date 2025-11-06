@@ -41,5 +41,5 @@ def test_gnw_reproducible(sim_result):
 
 
 def test_plot_gnw_run(sim_result: SimulationResult):
-    sim_result.plot_network()
-    assert True
+    # Just rough code to see if no errors
+    sim_result.network.plot()
