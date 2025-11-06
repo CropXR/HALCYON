@@ -1,6 +1,6 @@
 import torch
 from halcyon.Models.CellBox import CellBox
-from halcyon.Models.NeuralODE import PhoenixOnlyAddLayers
+from halcyon.Models.PhoenixModels import PhoenixOnlyAddLayers
 import pytest
 from torch.testing import assert_close
 

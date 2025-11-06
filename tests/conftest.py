@@ -11,7 +11,7 @@ from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithCond
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.FittedTrainingJobList import FittedTrainingJobList
 from halcyon.Models.CellBox import CellBox
-from halcyon.Models.NeuralODE import PhoenixAddAndProdLayers
+from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from scipy.integrate import solve_ivp
 

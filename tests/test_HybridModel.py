@@ -6,7 +6,7 @@ import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Losses import MSELossPlusMachineLearningL2
 from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.NeuralODE import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
+from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import PyTorchODE
 from halcyon.Trainer import Trainer
 from torch.testing import assert_close
