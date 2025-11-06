@@ -50,11 +50,14 @@ def ml_model_from_sim_result(expr_data_from_sim):
 
 
 @pytest.fixture
-def hybrid_model_with_ml_zero_weights(
-    mech_model_from_sim_result, ml_model_from_sim_result
-):
-    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
+def hybrid_model(mech_model_from_sim_result, ml_model_from_sim_result):
     return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
+
+@pytest.fixture
+def hybrid_model_with_ml_zero_weights(hybrid_model):
+    hybrid_model.ml._set_per_gene_multipliers_to_zero()
+    return hybrid_model
 
 
 @pytest.fixture
@@ -583,20 +586,38 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
     )
 
 
-def test_l2_loss(expr_data_from_sim, hybrid_model_with_ml_zero_weights, test_batch):
-    my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
+def test_l2_loss(expr_data_from_sim, hybrid_model, test_batch):
+    my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=1)
     my_trainer = Trainer(
-        hybrid_model_with_ml_zero_weights,
+        hybrid_model,
         expr_data_from_sim,
         batch_size=2,
         loss=my_l2_loss,
     )
     loss = my_trainer._calculate_loss_from_batch(test_batch)
     assert_close(
-        torch.tensor(0.00531, device=my_trainer.model.device),
+        torch.tensor(9083.3809 + 0.0145, device=my_trainer.model.device),
         loss,
-        atol=1e-3,
-        rtol=1e-3,
+        atol=1e-4,
+        rtol=1e-4,
+    )
+    # Changing lambda
+    my_trainer.loss_fn = MSELossPlusMachineLearningL2(lambda_param=0.5)
+    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    assert_close(
+        torch.tensor(9083.3809 + 0.0145 * 0.5, device=my_trainer.model.device),
+        loss,
+        atol=1e-4,
+        rtol=1e-4,
+    )
+    # Checking that changing ML weights changes loss, too.
+    my_trainer.model.ml._set_per_gene_multipliers_to_zero()
+    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    assert_close(
+        torch.tensor(0.0072617, device=my_trainer.model.device),
+        loss,
+        atol=1e-4,
+        rtol=1e-4,
     )
 
 
