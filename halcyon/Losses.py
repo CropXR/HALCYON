@@ -10,7 +10,7 @@ class MSELossFlexible(nn.Module):
         self.mse = nn.MSELoss()
 
     def forward(self, expression_pred, expression_true, *args, **kwargs):
-        """Ignores extra arguments"""
+        """Ignores extra arguments, because might be passing along the model parameters as well as potential third argument"""
         return self.mse(expression_pred, expression_true)
 
 
