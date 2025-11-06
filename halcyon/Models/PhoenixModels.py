@@ -23,12 +23,8 @@ class PhoenixABC(MachineLearningModel, ABC):
         """Class that is inherited, so shouldn't be called on its own."""
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
 
-        self.decay_params = nn.Parameter(
-            torch.full(size=(self.n_genes,), fill_value=0.1)
-        )
-        self.per_gene_multipliers = nn.Parameter(
-            torch.full(size=(self.n_genes,), fill_value=1.0)
-        )
+        self.decay_params = nn.Parameter(torch.rand(self.n_genes))
+        self.per_gene_multipliers = nn.Parameter(torch.rand(self.n_genes))
 
     def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
         for layer in model:
