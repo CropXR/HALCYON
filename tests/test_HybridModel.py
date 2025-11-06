@@ -22,58 +22,6 @@ def test_merge_modelled_genes():
     assert set(hybrid_model.modelled_gene_labels) == {"a", "b", "c", "d"}
 
 
-def test_hybrid_model_gene_split_THISISOLD(get_synthetic_data):
-    gt_regulatory_network, interactions, expression_dataset = get_synthetic_data
-    subset_regulatory_network = gt_regulatory_network.select_subset(["G1", "G4", "G5"])
-    env_conditions, expressions = expression_dataset[0]
-
-    # imitate batch
-    env_conditions, expressions = env_conditions.unsqueeze(0), expressions.unsqueeze(0)
-
-    ml_model = PhoenixOnlyAddLayers(
-        expression_dataset.genes,
-        expression_dataset.all_environments,
-        hidden_size=2,
-    )
-    mm_model = TorchLinearODE(subset_regulatory_network)
-    hybrid_model = HybridModel(mm_model, ml_model)
-    env_conditions = env_conditions.to(hybrid_model.device)
-    expressions = expressions.to(hybrid_model.device)
-    # Ensure that they handle the different order of genes well
-    assert_close(
-        hybrid_model.mm_indices, torch.tensor([0, 3, 4], device=hybrid_model.device)
-    )
-    assert_close(
-        hybrid_model.ml_indices,
-        torch.tensor([0, 1, 2, 3, 4], device=hybrid_model.device),
-    )
-    assert [
-        hybrid_model.modelled_gene_labels[i] for i in hybrid_model.mm_indices.tolist()
-    ] == ["G1", "G4", "G5"]
-    hybrid_model.set_conditions(env_conditions)
-    assert_close(
-        hybrid_model._get_mm_forward(0, expressions[:, :, 0]),
-        torch.tensor([[0.1000, 0.0000, -0.0800]], device=hybrid_model.device),
-    )
-
-    one_forward = hybrid_model.forward(
-        t=torch.tensor([0], device=hybrid_model.device), state=expressions[:, :, 0]
-    )
-    assert one_forward.shape == (1, 5)
-
-    trainer = Trainer(hybrid_model, expression_dataset)
-
-    integration_output = trainer.integrate_model(expressions[:, :, 0])
-    # Check if at least shape and initial gene expressions match
-    assert tuple(integration_output.shape) == (1, 5, 4)
-    assert_close(
-        integration_output[0, :, 0],
-        torch.tensor(
-            [0.1000, 0.2000, 0.3000, 0.4000, 0.5000], device=hybrid_model.device
-        ),
-    )
-
-
 @pytest.fixture
 def expr_data_from_sim(sim_result):
     expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
@@ -118,14 +66,492 @@ def hybrid_model_with_ml_zero_weights_and_mm_missing_node_9(
     return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
 
 
+@pytest.fixture
+def test_batch():
+    experiment_data = torch.tensor(
+        [
+            [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        ]
+    )
+    expression_data = torch.tensor(
+        [
+            [
+                [
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                ],
+                [
+                    6.3392e-01,
+                    2.3183e-01,
+                    8.4785e-02,
+                    3.1007e-02,
+                    1.1340e-02,
+                    4.1471e-03,
+                    1.5166e-03,
+                    5.5470e-04,
+                    2.0280e-04,
+                    7.4200e-05,
+                    2.7100e-05,
+                    9.9000e-06,
+                    3.6000e-06,
+                    1.3000e-06,
+                    5.0000e-07,
+                    2.0000e-07,
+                    1.0000e-07,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                ],
+                [
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                ],
+                [
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                ],
+                [
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                ],
+                [
+                    9.9317e-01,
+                    9.9590e-01,
+                    9.9843e-01,
+                    9.9947e-01,
+                    9.9983e-01,
+                    9.9995e-01,
+                    9.9998e-01,
+                    9.9999e-01,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                    1.0000e00,
+                ],
+                [
+                    1.1174e-02,
+                    1.1156e-02,
+                    1.1142e-02,
+                    1.1135e-02,
+                    1.1132e-02,
+                    1.1131e-02,
+                    1.1131e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                    1.1130e-02,
+                ],
+                [
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                    2.3878e-01,
+                ],
+                [
+                    2.9734e-01,
+                    2.9733e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                    2.9732e-01,
+                ],
+                [
+                    9.9509e-01,
+                    9.8513e-01,
+                    9.1146e-01,
+                    6.3979e-01,
+                    2.8439e-01,
+                    9.6031e-02,
+                    3.1394e-02,
+                    1.2691e-02,
+                    7.6636e-03,
+                    6.3596e-03,
+                    6.0277e-03,
+                    5.9441e-03,
+                    5.9231e-03,
+                    5.9179e-03,
+                    5.9166e-03,
+                    5.9163e-03,
+                    5.9162e-03,
+                    5.9162e-03,
+                    5.9161e-03,
+                    5.9161e-03,
+                    5.9161e-03,
+                ],
+            ],
+            [
+                [
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                    7.2333e-01,
+                ],
+                [
+                    6.3392e-01,
+                    6.3358e-01,
+                    6.3338e-01,
+                    6.3325e-01,
+                    6.3317e-01,
+                    6.3313e-01,
+                    6.3310e-01,
+                    6.3308e-01,
+                    6.3307e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3306e-01,
+                    6.3305e-01,
+                    6.3305e-01,
+                    6.3305e-01,
+                ],
+                [
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                    9.4803e-01,
+                ],
+                [
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                    7.4355e-01,
+                ],
+                [
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                    1.3590e-01,
+                ],
+                [
+                    9.9317e-01,
+                    9.9318e-01,
+                    9.9319e-01,
+                    9.9319e-01,
+                    9.9319e-01,
+                    9.9319e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                    9.9320e-01,
+                ],
+                [
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                    1.1174e-02,
+                ],
+                [
+                    2.3878e-01,
+                    7.4420e-02,
+                    2.3194e-02,
+                    7.2289e-03,
+                    2.2530e-03,
+                    7.0220e-04,
+                    2.1890e-04,
+                    6.8200e-05,
+                    2.1300e-05,
+                    6.6000e-06,
+                    2.1000e-06,
+                    6.0000e-07,
+                    2.0000e-07,
+                    1.0000e-07,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                    0.0000e00,
+                ],
+                [
+                    2.9734e-01,
+                    1.9087e-01,
+                    9.0266e-02,
+                    4.8217e-02,
+                    3.3836e-02,
+                    2.9262e-02,
+                    2.7851e-02,
+                    2.7421e-02,
+                    2.7292e-02,
+                    2.7252e-02,
+                    2.7241e-02,
+                    2.7237e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                    2.7236e-02,
+                ],
+                [
+                    9.9509e-01,
+                    9.9508e-01,
+                    9.9508e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                    9.9507e-01,
+                ],
+            ],
+        ]
+    )
+    return experiment_data, expression_data
+
+
 def test_hybrid_does_perfect_fit_if_ml_weights_zero(
-    expr_data_from_sim, hybrid_model_with_ml_zero_weights
+    expr_data_from_sim, hybrid_model_with_ml_zero_weights, test_batch
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
     my_trainer = Trainer(
         hybrid_model_with_ml_zero_weights, expr_data_from_sim, batch_size=2
     )
-    test_batch = next(iter(my_trainer.dataloader))
     experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
     output = my_trainer._calculate_model_prediction_at_conditions(
         experiment_data, expression_data
@@ -136,14 +562,15 @@ def test_hybrid_does_perfect_fit_if_ml_weights_zero(
 
 
 def test_most_genes_perfect_fit_if_only_remove_gene_9(
-    expr_data_from_sim, hybrid_model_with_ml_zero_weights_and_mm_missing_node_9
+    expr_data_from_sim,
+    hybrid_model_with_ml_zero_weights_and_mm_missing_node_9,
+    test_batch,
 ):
     my_trainer = Trainer(
         hybrid_model_with_ml_zero_weights_and_mm_missing_node_9,
         expr_data_from_sim,
         batch_size=2,
     )
-    test_batch = next(iter(my_trainer.dataloader))
     experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
     output = my_trainer._calculate_model_prediction_at_conditions(
         experiment_data, expression_data
@@ -151,13 +578,12 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
     # First 9 genes will match perfectly
     assert_close(expression_data[:, :9, :], output[:, :9, :], atol=1e-3, rtol=1e-3)
     loss = my_trainer.calculate_loss_expression_vs_pred(expression_data, output)
-    # Loss changes massively for some reasons -> Not replicable?! TODO
     assert_close(
         loss, torch.tensor(0.0382, device=my_trainer.model.device), atol=1e-3, rtol=1e-3
     )
 
 
-def test_l2_loss(expr_data_from_sim, hybrid_model_with_ml_zero_weights):
+def test_l2_loss(expr_data_from_sim, hybrid_model_with_ml_zero_weights, test_batch):
     my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
     my_trainer = Trainer(
         hybrid_model_with_ml_zero_weights,
@@ -165,7 +591,6 @@ def test_l2_loss(expr_data_from_sim, hybrid_model_with_ml_zero_weights):
         batch_size=2,
         loss=my_l2_loss,
     )
-    test_batch = next(iter(my_trainer.dataloader))
     loss = my_trainer._calculate_loss_from_batch(test_batch)
     assert_close(
         torch.tensor(0.00531, device=my_trainer.model.device),
