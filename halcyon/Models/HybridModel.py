@@ -30,16 +30,16 @@ class HybridModel(Model):
             modelled_gene_labels=list(all_modelled_genes),
             condition_names=mm.condition_names,
         )
-        self.mm = mm
-        self.ml = ml
-        self.mm.to(self.device)
-        self.ml.to(self.device)
+        self._mm = mm
+        self._ml = ml
+        self._mm.to(self.device)
+        self._ml.to(self.device)
         # Precompute indices
-        self.mm_indices = torch.tensor(
+        self._mm_indices = torch.tensor(
             [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels],
             device=self.device,
         )
-        self.ml_indices = torch.tensor(
+        self._ml_indices = torch.tensor(
             [self.modelled_gene_labels.index(g) for g in ml.modelled_gene_labels],
             device=self.device,
         )
@@ -58,18 +58,18 @@ class HybridModel(Model):
         ml_output = self._get_ml_forward(t, state)
 
         output = torch.zeros_like(state, device=self.device)
-        output.index_add_(dim=1, index=self.mm_indices, source=mm_output)
-        output.index_add_(dim=1, index=self.ml_indices, source=ml_output)
+        output.index_add_(dim=1, index=self._mm_indices, source=mm_output)
+        output.index_add_(dim=1, index=self._ml_indices, source=ml_output)
         return output
 
     def _get_ml_forward(self, t, state) -> torch.Tensor:
-        ml_input = state[:, self.ml_indices]
-        ml_output = self.ml.forward(t, ml_input)
+        ml_input = state[:, self._ml_indices]
+        ml_output = self._ml.forward(t, ml_input)
         return ml_output
 
     def _get_mm_forward(self, t, state) -> torch.Tensor:
-        mm_input = state[:, self.mm_indices]
-        mm_output = self.mm.forward(t, mm_input)
+        mm_input = state[:, self._mm_indices]
+        mm_output = self._mm.forward(t, mm_input)
         return mm_output
 
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
@@ -81,11 +81,11 @@ class HybridModel(Model):
         logging.warning(
             "Now just use the ML-model network inference, but later on combine this with MM?"
         )
-        return self.ml.get_inferred_network(threshold=threshold)
+        return self._ml.get_inferred_network(threshold=threshold)
 
     def set_conditions(self, env_conditions: torch.Tensor):
         for model, gene_indices in zip(
-            [self.mm, self.ml], [self.mm_indices, self.ml_indices]
+            [self._mm, self._ml], [self._mm_indices, self._ml_indices]
         ):
             # The knockouts
             genes_and_conditions = env_conditions[:, gene_indices]

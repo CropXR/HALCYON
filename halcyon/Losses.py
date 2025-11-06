@@ -27,7 +27,9 @@ class MSELossPlusMachineLearningL2(MSELossFlexible):
     ):
         # Only take losses from ML model parameters and ignore the per gene multipliers (because it is okay to have these be 1 I think?)
         ml_params = [
-            p for n, p in model.ml.named_parameters() if not n == "per_gene_multipliers"
+            p
+            for n, p in model._ml.named_parameters()
+            if not n == "per_gene_multipliers"
         ]
         total_params_squared = sum((p**2).sum() for p in ml_params)
         total_params = sum(p.numel() for p in ml_params)
