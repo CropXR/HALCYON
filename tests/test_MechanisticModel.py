@@ -104,7 +104,9 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
         for idx, gene in enumerate(test_pytorchode_model.modelled_gene_labels)
     }
     state_dict["cell"] = 1.0
-    subs_dict = test_pytorchode_model.param_dict | state_dict
+    # Convert param_dict to a dict of floats for sympy substitution
+    param_values = {k: float(v.detach().cpu().numpy()) for k, v in test_pytorchode_model.param_dict.items()}
+    subs_dict = {**param_values, **state_dict}
     expected = -float(test_pytorchode_model.decay_dict[target_gene].subs(subs_dict))
     torch.testing.assert_close(
         ko_result[ko_index],

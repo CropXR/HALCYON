@@ -44,7 +44,11 @@ class PyTorchODE(MechanisticModel):
         super().__init__(modelled_gene_labels, condition_names)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
-        self.param_dict = param_dict
+        # Convert param_dict to a trainable ParameterDict
+        self.param_dict = nn.ParameterDict({
+            k: nn.Parameter(torch.tensor(v, dtype=torch.float32), requires_grad=True)
+            for k, v in param_dict.items()
+        })
         self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
         self._synthesis_module: Optional[nn.Module] = (
             None  # compiled synthesis modules will be stored here after compilation
@@ -56,6 +60,72 @@ class PyTorchODE(MechanisticModel):
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
         raise NotImplementedError("This method needs to be implemented in subclass.")
+    
+    def integrate(
+        self,
+        initial_state: torch.Tensor,
+        t_eval: torch.Tensor,
+    ) -> torch.Tensor:
+        self._synthesis_module = None
+        self._decay_module = None
+        self._compiled_ready = False
+        self._compile_expressions()
+        return super().integrate(initial_state, t_eval)
+
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """
+        Get the derivative at a given time point.
+        Parameters:
+            t (torch.Tensor): The time point at which to evaluate the ODE.
+            state (torch.Tensor): The current state of the system.
+        Returns:
+            torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
+        """
+        if state.isinf().any() or state.isnan().any():
+            raise ValueError("NaN or inf in state tensor.")
+
+        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
+        # most likely, the steps are slightly too large and lead to negative concentrations
+        state = torch.clamp(state, min=0.0)
+        if not self._compiled_ready:
+            self._compile_expressions()
+        batch_size, n_genes = state.shape
+
+        if self._synthesis_module is None or self._decay_module is None:
+            raise RuntimeError("SymPy modules were not initialised correctly.")
+
+        self.ko_masks = self.ko_masks.to(device=self.device)
+
+        inputs = {
+            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
+        }
+        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
+        inputs["cell"] = torch.full(
+            (batch_size,),
+            1.0,
+            dtype=state.dtype,
+            device=self.device,
+        )
+
+        synthesis = self._synthesis_module(**inputs)
+        decay = self._decay_module(**inputs)
+        # If output is 1D (single sample), unsqueeze to add batch dimension
+        if synthesis.dim() == 1:
+            synthesis = synthesis.unsqueeze(0)
+        if decay.dim() == 1:
+            decay = decay.unsqueeze(0)
+
+        return synthesis * self.ko_masks - decay
+    
+    def set_parameters(self, param_values: dict):
+        """
+        Set parameter values in the model. Accepts a dict of {name: value} and updates the corresponding nn.Parameter in param_dict.
+        Useful for testing and manual parameter updates.
+        """
+        for k, v in param_values.items():
+            if k in self.param_dict:
+                self.param_dict[k].data = torch.tensor(v, dtype=self.param_dict[k].dtype, device=self.param_dict[k].device)
+        self._compiled_ready = False  # recompile expressions with new parameter values
 
     def select_genes(self, genes_to_keep: list[str]):
         assert all(
@@ -151,6 +221,60 @@ class PyTorchODE(MechanisticModel):
             param_dict,
         )
 
+    @classmethod
+    def parse_one_reaction(
+        cls,
+        name: str,
+        formula_string: str,
+        libsbml_parameters: libsbml.ListOfParameters,
+    ):
+        """
+
+        Parse a single reaction from the SBML model.
+        Args:
+            name (str): The name of the reaction.
+            formula_string (str): The formula string of the reaction.
+            libsbml_parameters (libsbml.ListOfParameters): The list of parameters associated with the reaction.
+        Returns:
+            tuple[str, sp.Expr, Dict[str, float]]: A tuple containing the base node name, the sympy expression, and a dictionary of parameters used in the equation.
+        """
+        base_node_name = name.replace("_degradation", "").replace("_synthesis", "")
+        formula_string = re.sub(r"\bmax\b", cls.alternative_max_name, formula_string)
+
+        param_dict = dict()
+
+        # This way the order of the terms is preserved, eases readability
+        with evaluate(0):
+            sympy_formula = parse_expr(formula_string, evaluate=False)
+
+        replacement_dict = dict()
+
+        for old_param_name in sympy_formula.free_symbols:
+            old_param_name = str(old_param_name)
+            if old_param_name.startswith("Node"):
+                continue
+            elif old_param_name == "cell":
+                continue
+            new_param_name = f"{old_param_name}_{base_node_name}"
+            replacement_dict[old_param_name] = new_param_name
+            # Also figure out the value of the parameter
+            assert (
+                new_param_name not in param_dict
+            ), f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
+            if old_param_name == cls.alternative_max_name:
+                old_param_name = "max"
+            param_dict[new_param_name] = libsbml_parameters.get(
+                old_param_name
+            ).getValue()
+        sympy_formula = sympy_formula.subs(replacement_dict)
+
+        return base_node_name, sympy_formula, param_dict
+        
+    def _set_all_parameters_to_zero(self):
+        for key in self.param_dict.keys():
+            self.param_dict[key].data.fill_(0.0)
+        self._compiled_ready = False  # recompile expressions with new parameter values
+
     def _compile_expressions(self) -> None:
         """Pre-compile SymPy expressions into torch modules via sympytorch."""
         if (
@@ -203,63 +327,7 @@ class PyTorchODE(MechanisticModel):
         self._synthesis_module.to(device=self.device)
         self._decay_module.to(device=self.device)
         self._compiled_ready = True
-
-    def _set_all_parameters_to_zero(self):
-        new_param_dict = {}
-        for key in self.param_dict.keys():
-            new_param_dict[key] = 0.0
-        self.param_dict = new_param_dict
-        self._compiled_ready = False
-
-    @classmethod
-    def parse_one_reaction(
-        cls,
-        name: str,
-        formula_string: str,
-        libsbml_parameters: libsbml.ListOfParameters,
-    ):
-        """
-
-        Parse a single reaction from the SBML model.
-        Args:
-            name (str): The name of the reaction.
-            formula_string (str): The formula string of the reaction.
-            libsbml_parameters (libsbml.ListOfParameters): The list of parameters associated with the reaction.
-        Returns:
-            tuple[str, sp.Expr, Dict[str, float]]: A tuple containing the base node name, the sympy expression, and a dictionary of parameters used in the equation.
-        """
-        base_node_name = name.replace("_degradation", "").replace("_synthesis", "")
-        formula_string = re.sub(r"\bmax\b", cls.alternative_max_name, formula_string)
-
-        param_dict = dict()
-
-        # This way the order of the terms is preserved, eases readability
-        with evaluate(0):
-            sympy_formula = parse_expr(formula_string, evaluate=False)
-
-        replacement_dict = dict()
-
-        for old_param_name in sympy_formula.free_symbols:
-            old_param_name = str(old_param_name)
-            if old_param_name.startswith("Node"):
-                continue
-            elif old_param_name == "cell":
-                continue
-            new_param_name = f"{old_param_name}_{base_node_name}"
-            replacement_dict[old_param_name] = new_param_name
-            # Also figure out the value of the parameter
-            assert (
-                new_param_name not in param_dict
-            ), f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
-            if old_param_name == cls.alternative_max_name:
-                old_param_name = "max"
-            param_dict[new_param_name] = libsbml_parameters.get(
-                old_param_name
-            ).getValue()
-        sympy_formula = sympy_formula.subs(replacement_dict)
-
-        return base_node_name, sympy_formula, param_dict
-
+        
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:
         """
@@ -288,7 +356,7 @@ class PyTorchODE(MechanisticModel):
             Use `PyTorchODE.from_sbml(path, from_gnw=True)` to automatically apply this fix.
         """
 
-        def find_matching_closing_parenthesis(formula_str: str, start_pos: int) -> int:
+        def _find_matching_closing_parenthesis(formula_str: str, start_pos: int) -> int:
             """
             Find the position of the matching closing parenthesis for an opening parenthesis.
 
@@ -315,7 +383,7 @@ class PyTorchODE(MechanisticModel):
 
             return pos - 1 if count == 0 else -1
 
-        def fix_division_at_position(formula_str: str, div_pos: int) -> str:
+        def _fix_division_at_position(formula_str: str, div_pos: int) -> str:
             """
             Fix a division operator at a specific position by grouping subsequent multiplication terms.
 
@@ -376,7 +444,7 @@ class PyTorchODE(MechanisticModel):
 
                 if formula_str[pos] == "(":
                     # Parenthetical expression
-                    end_paren = find_matching_closing_parenthesis(formula_str, pos)
+                    end_paren = _find_matching_closing_parenthesis(formula_str, pos)
                     if end_paren != -1:
                         terms.append(formula_str[pos : end_paren + 1])
                         pos = end_paren + 1
@@ -393,7 +461,7 @@ class PyTorchODE(MechanisticModel):
 
                     # Handle function calls like pow(...)
                     if pos < len(formula_str) and formula_str[pos] == "(":
-                        end_paren = find_matching_closing_parenthesis(formula_str, pos)
+                        end_paren = _find_matching_closing_parenthesis(formula_str, pos)
                         if end_paren != -1:
                             pos = end_paren + 1
 
@@ -420,62 +488,6 @@ class PyTorchODE(MechanisticModel):
 
         # Process divisions from right to left to avoid position shifts
         for div_pos in reversed(div_positions):
-            result = fix_division_at_position(result, div_pos)
+            result = _fix_division_at_position(result, div_pos)
 
         return result
-
-    def integrate(
-        self,
-        initial_state: torch.Tensor,
-        t_eval: torch.Tensor,
-    ) -> torch.Tensor:
-        self._synthesis_module = None
-        self._decay_module = None
-        self._compiled_ready = False
-        self._compile_expressions()
-        return super().integrate(initial_state, t_eval)
-
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        """
-        Get the derivative at a given time point.
-        Parameters:
-            t (torch.Tensor): The time point at which to evaluate the ODE.
-            state (torch.Tensor): The current state of the system.
-        Returns:
-            torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
-        """
-        if state.isinf().any() or state.isnan().any():
-            raise ValueError("NaN or inf in state tensor.")
-
-        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
-        # most likely, the steps are slightly too large and lead to negative concentrations
-        state = torch.clamp(state, min=0.0)
-        if not self._compiled_ready:
-            self._compile_expressions()
-        batch_size, n_genes = state.shape
-
-        if self._synthesis_module is None or self._decay_module is None:
-            raise RuntimeError("SymPy modules were not initialised correctly.")
-
-        self.ko_masks = self.ko_masks.to(device=self.device)
-
-        inputs = {
-            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
-        }
-        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
-        inputs["cell"] = torch.full(
-            (batch_size,),
-            1.0,
-            dtype=state.dtype,
-            device=self.device,
-        )
-
-        synthesis = self._synthesis_module(**inputs)
-        decay = self._decay_module(**inputs)
-        # If output is 1D (single sample), unsqueeze to add batch dimension
-        if synthesis.dim() == 1:
-            synthesis = synthesis.unsqueeze(0)
-        if decay.dim() == 1:
-            decay = decay.unsqueeze(0)
-
-        return synthesis * self.ko_masks - decay
