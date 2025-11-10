@@ -4,3 +4,4 @@ target-version = ['py310']  # Set the target Python version to 3.10
 
 [tool.pytest.ini_options]
 pythonpath = ["."]  # Adjust the path as needed
+testpaths = [ "tests"]
