@@ -1,3 +1,4 @@
+from typing import Generator
 import torch
 from halcyon.Models.Model import Model
 from abc import abstractmethod, ABC
@@ -14,4 +15,8 @@ class MachineLearningModel(Model, ABC):
     @abstractmethod
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         """Extract the inferred network"""
+        pass
+
+    @abstractmethod
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
         pass

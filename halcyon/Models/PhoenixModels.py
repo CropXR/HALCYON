@@ -18,11 +18,12 @@ class PhoenixABC(MachineLearningModel, ABC):
         self,
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
+        hidden_size: int,
         **kwargs,
     ):
         """Class that is inherited, so shouldn't be called on its own."""
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
-
+        self.hidden_size = hidden_size
         self.decay_params = nn.Parameter(torch.rand(self.n_genes))
         self.per_gene_multipliers = nn.Parameter(torch.rand(self.n_genes))
 
@@ -45,6 +46,15 @@ class PhoenixABC(MachineLearningModel, ABC):
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         pass
 
+    def get_hyperparams(self):
+        out_list = []
+        for name, value in zip(
+            ["device", "hidden_size"], [self.device, self.hidden_size]
+        ):
+            out_list.append((name, value))
+
+        return out_list
+
 
 class PhoenixOnlyAddLayers(PhoenixABC):
     def __init__(
@@ -60,11 +70,11 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             modelled_gene_labels (list[str]): List of genes that the model models.
             condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes.
         """
-        super().__init__(modelled_gene_labels, condition_names, **kwargs)
+        super().__init__(modelled_gene_labels, condition_names, hidden_size, **kwargs)
         self.neural_net = nn.Sequential(
             PhoenixSumActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
-            nn.Linear(hidden_size, self.n_genes),
+            nn.Linear(self.n_genes + self.n_conditions, self.hidden_size),
+            nn.Linear(self.hidden_size, self.n_genes),
         )
         self.init_sparse_weights(self.neural_net)
 
@@ -95,17 +105,19 @@ class PhoenixAddAndProdLayers(PhoenixABC):
             condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes.
             hidden_size (int): size of the hidden state.
         """
-        super().__init__(modelled_gene_labels, condition_names, **kwargs)
+        super().__init__(modelled_gene_labels, condition_names, hidden_size, **kwargs)
         self.sum_nn = nn.Sequential(
             PhoenixSumActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
+            nn.Linear(self.n_genes + self.n_conditions, self.hidden_size),
         )
         self.prod_nn = nn.Sequential(
             PhoenixProdActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
+            nn.Linear(self.n_genes + self.n_conditions, self.hidden_size),
         )
 
-        self.combine_layer_nn = nn.Sequential(nn.Linear(2 * hidden_size, self.n_genes))
+        self.combine_layer_nn = nn.Sequential(
+            nn.Linear(2 * self.hidden_size, self.n_genes)
+        )
         for model in [self.sum_nn, self.prod_nn, self.combine_layer_nn]:
             self.init_sparse_weights(model)
 

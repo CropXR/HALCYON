@@ -143,3 +143,6 @@ class Model(ABC, nn.Module):
             logging.error(f"Unexpected error checking GPU compatibility: {e}")
             logging.info("Falling back to CPU.")
             return torch.device("cpu")
+
+    def get_name(self):
+        return self.__class__.__name__

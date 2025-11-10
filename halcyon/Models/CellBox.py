@@ -39,6 +39,15 @@ class CellBox(MachineLearningModel):
             torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
         )
 
+    def get_hyperparams(self):
+        out_list = []
+        for name, value in zip(
+            ["device", "phi", "self_activations"],
+            [self.device, self.phi, self.self_activations],
+        ):
+            out_list.append((name, value))
+        return out_list
+
     @property
     def w_masked(self) -> torch.Tensor:
         """Return the weight matrix with the mask applied."""
