@@ -7,6 +7,7 @@ from dataclasses import dataclass, fields
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
@@ -46,6 +47,13 @@ class SimulationResult:
         assert out_path.exists()
         return out_path
 
+    def get_double_ko_expressiondata(self) -> ExpressionDataWithConditions:
+        double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
+            expression_file_path=self.double_ko_timeseries_nonoise_file_path(),
+            ko_file_path=self.double_ko_index_file_path(),
+        )
+        return double_ko_expressions
+
     def double_ko_index_file_path(self) -> Path:
         """Get path to double knockout index file."""
         out_path = (
@@ -53,6 +61,17 @@ class SimulationResult:
         )
         assert out_path.exists()
         return out_path
+
+    def get_no_noise_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
+        """Get knockout timeseries without noise data."""
+        out_path = (
+            self.data_path / f"{self.network_name}_nonoise_knockout_timeseries.tsv"
+        )
+        assert out_path.exists()
+
+        return ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+            out_path
+        )
 
 
 class GNWSimRunner:
