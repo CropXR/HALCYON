@@ -45,10 +45,14 @@ class PyTorchODE(MechanisticModel):
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
         # Convert param_dict to a trainable ParameterDict
-        self.param_dict = nn.ParameterDict({
-            k: nn.Parameter(torch.tensor(v, dtype=torch.float32), requires_grad=True)
-            for k, v in param_dict.items()
-        })
+        self.param_dict = nn.ParameterDict(
+            {
+                k: nn.Parameter(
+                    torch.tensor(v, dtype=torch.float32), requires_grad=True
+                )
+                for k, v in param_dict.items()
+            }
+        )
         self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
         self._synthesis_module: Optional[nn.Module] = (
             None  # compiled synthesis modules will be stored here after compilation
@@ -60,7 +64,7 @@ class PyTorchODE(MechanisticModel):
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
         raise NotImplementedError("This method needs to be implemented in subclass.")
-    
+
     def integrate(
         self,
         initial_state: torch.Tensor,
@@ -116,7 +120,7 @@ class PyTorchODE(MechanisticModel):
             decay = decay.unsqueeze(0)
 
         return synthesis * self.ko_masks - decay
-    
+
     def set_parameters(self, param_values: dict):
         """
         Set parameter values in the model. Accepts a dict of {name: value} and updates the corresponding nn.Parameter in param_dict.
@@ -124,7 +128,9 @@ class PyTorchODE(MechanisticModel):
         """
         for k, v in param_values.items():
             if k in self.param_dict:
-                self.param_dict[k].data = torch.tensor(v, dtype=self.param_dict[k].dtype, device=self.param_dict[k].device)
+                self.param_dict[k].data = torch.tensor(
+                    v, dtype=self.param_dict[k].dtype, device=self.param_dict[k].device
+                )
         self._compiled_ready = False  # recompile expressions with new parameter values
 
     def select_genes(self, genes_to_keep: list[str]):
@@ -269,7 +275,7 @@ class PyTorchODE(MechanisticModel):
         sympy_formula = sympy_formula.subs(replacement_dict)
 
         return base_node_name, sympy_formula, param_dict
-        
+
     def _set_all_parameters_to_zero(self):
         for key in self.param_dict.keys():
             self.param_dict[key].data.fill_(0.0)
@@ -327,7 +333,7 @@ class PyTorchODE(MechanisticModel):
         self._synthesis_module.to(device=self.device)
         self._decay_module.to(device=self.device)
         self._compiled_ready = True
-        
+
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:
         """
