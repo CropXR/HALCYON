@@ -67,20 +67,25 @@ class RegulatoryNetwork:
         """
         return RegulatoryNetwork(self._graph.subgraph(nodes).copy())
 
-    def plot(self):
+    def plot(self, ax=None):
         """Plot the network using networkx's draw function."""
         pos = nx.kamada_kawai_layout(self._graph)
         # Extract edge colors from the attribute
         edge_colors = [self._graph[u][v]["color"] for u, v in self._graph.edges()]
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
         nx.draw(
             self._graph,
             pos,
+            ax=ax,
             connectionstyle="arc3,rad=0.2",
             with_labels=True,
             arrows=True,
             edge_color=edge_colors,
         )
-        plt.show()
+        return fig, ax
 
     @classmethod
     def from_stderr_gnw(

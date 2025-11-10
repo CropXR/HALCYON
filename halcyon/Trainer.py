@@ -61,17 +61,17 @@ class Trainer:
         return time_points_tensor
 
     def _calculate_model_prediction_at_conditions(
-        self, experiment_data: torch.Tensor, expression_data: torch.Tensor
+        self, experiment_data: torch.Tensor, initial_state: torch.Tensor
     ):
         self.optimizer.zero_grad()
         self.model.set_conditions(experiment_data)
-        output = self.integrate_model(initial_states_tensor=expression_data[:, :, 0])
+        output = self.integrate_model(initial_states_tensor=initial_state)
         return output
 
     def _calculate_loss_from_batch(self, batch: torch.Tensor):
         experiment_data, expression_data = self.preprocess_batch(batch)
         output = self._calculate_model_prediction_at_conditions(
-            experiment_data, expression_data
+            experiment_data, expression_data[:, :, 0]
         )
         loss = self.calculate_loss_expression_vs_pred(expression_data, output)
         return loss
@@ -104,16 +104,20 @@ class Trainer:
 
         self.loss_history = loss_history
 
-    def plot_loss_history(self):
+    def plot_loss_history(self, ax=None):
         """After training the model, plot the loss history"""
         assert (
             len(self.loss_history) > 0
         ), "No loss history available. Train the model first."
-        sns.lineplot(self.loss_history)
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss")
-        plt.ylim((0, 1.5 * max(self.loss_history)))
-        plt.show()
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
+        sns.lineplot(self.loss_history, ax=ax)
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.set_ylim((0, 1.5 * max(self.loss_history)))
+        return fig, ax
 
     def calculate_loss_expression_vs_pred(
         self, expression_true: torch.Tensor, expression_pred: torch.Tensor
@@ -253,7 +257,7 @@ class Trainer:
 class TrainingJob:
     def __init__(
         self,
-        model_cls: Model,
+        model: Model,
         sim_result: SimulationResult,
         nr_training_steps: int,
         model_kwargs: dict | None = None,
@@ -276,13 +280,7 @@ class TrainingJob:
                 / f"{self.sim_result.network_name}_nonoise_knockout_timeseries.tsv"
             )
         )
-        self.expressions.scale_time_series()
         self.model_kwargs = model_kwargs or {}
-        model = model_cls(
-            self.expressions.genes,
-            self.expressions.all_environments,
-            **self.model_kwargs,
-        )
         self.optimizer_kwargs = optimizer_kwargs or {}
         self.trainer = Trainer(
             model,

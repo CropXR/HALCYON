@@ -110,7 +110,6 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
                 )
         for ax in np.ravel(axs):
             ax.set_ylim(ymin, ymax)
-        plt.show()
         return fig
 
     def _get_final_loss_heatmap_data(self, column_name: str = "nr_genes"):
@@ -131,13 +130,19 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
             column_name (str, optional): Column to group simulations by. Defaults to "nr_genes".
         """
         heatmap_data = self._get_final_loss_heatmap_data(column_name)
+
+        if ax is None:
+            fig, ax = plt.subplots()
+        else:
+            fig = ax.figure
         sns.heatmap(
             heatmap_data,
             annot=True,
+            ax=ax,
             fmt=".8f",
             cmap="viridis",
             cbar_kws={"label": "Final Loss"},
         )
-        plt.title("Final Loss Heatmap")
-        plt.tight_layout()
-        plt.show()
+        ax.set_title("Final Loss Heatmap")
+
+        return fig, ax
