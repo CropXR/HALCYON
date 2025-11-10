@@ -9,6 +9,9 @@ class RegulatoryNetwork:
     def __init__(self, network: nx.DiGraph):
         self._graph = network
 
+    def __eq__(self, other: Self):
+        return nx.is_isomorphic(self._graph, other._graph)
+
     def get_ingoing_interactions(self, gene_name: str) -> List:
         """Get interactions that influence a certain gene
 

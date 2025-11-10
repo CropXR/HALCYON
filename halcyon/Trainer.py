@@ -23,7 +23,9 @@ class Trainer:
     def __init__(
         self,
         model: Model,
-        dataset: ExpressionDataWithConditions,
+        sim_result: SimulationResult,
+        dataset: ExpressionDataWithConditions | None = None,
+        nr_training_steps: int = 10,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
         loss: nn.Module = MSELossFlexible(),
@@ -33,32 +35,91 @@ class Trainer:
 
         Args:
             model (Model): Model to be trained
-            dataset (ExpressionDataWithConditions): Dataset that contains expressions and their associated conditions.
+            sim_result (SimulationResult): Simulator output that the model should be trained on.
+            dataset (ExpressionDataWithConditions | None, optional): Dataset to use for training. If None, will use no-noise KO timeseries from sim_result. Defaults to None.
+            nr_training_steps (int): How many epochs to run the training
             optimizer_fn (Callable, optional): Optimizer function. Defaults to torch.optim.Adam.
-            optimizer_kwargs (_type_, optional): Optimizer kwargs. Defaults to None.
-            loss_fn (Callable, optional): Loss functions. Defaults to mse_loss.
+            optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
+            loss (Callable, optional): Loss functions. Defaults to mse loss.
             batch_size (int, optional): Batch size to use during training. Defaults to 1.
         """
         self.model = model
         self.loss_fn = loss
+        self.nr_training_steps = nr_training_steps
+
+        self.sim_result = sim_result
+        if dataset is None:
+            self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
+        else:
+            self.dataset = dataset
         # Ensure that expressions match the order of the modelled genes
-        self.dataset = dataset
         self.dataset.match_genes_to_list(model.modelled_gene_labels)
         self.dataloader = DataLoader(
             self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True
         )
+
         if optimizer_kwargs is None:
             optimizer_kwargs = dict()
         self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
+
         self.model.to(self.model.device)
+
+        file_name = self.get_save_file_name()
+        self.save_path = self.sim_result.data_path / file_name
+
         # Loss history after training. Is empty initially (because no training has been performed yet).
         self.loss_history = []
+
+    def get_save_file_name(self) -> str:
+        file_name = f"trained_trainer_{self.model.__class__.__name__}"
+        for hyperparam_name, hyperparam_value in self.model.get_hyperparams():
+            if hyperparam_name == "device":
+                continue
+            file_name += f"_{hyperparam_name}_{hyperparam_value}"
+        if self.optimizer_kwargs:
+            for kwarg_name, value in self.optimizer_kwargs.items():
+                file_name += f"_{kwarg_name}_{value}"
+        file_name += ".pt"
+        return file_name
+
+    def __repr__(self):
+        return f"Training {self.model.get_name()} on {self.sim_result}. Saving to {self.save_path}"
+
+    def load_if_exists(self):
+        if self.save_path.exists():
+            logging.info(f"Loading from {self.save_path}")
+            self.load(self.save_path)
+        else:
+            raise FileNotFoundError(f"No existing model found at {self.save_path}.")
+
+    @property
+    def final_loss(self):
+        return self.loss_history[-1]
 
     def get_time_points(self) -> torch.Tensor:
         """Get time points at which the expressions were measured."""
         time_points = self.dataset._get_time_points()
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
+
+    def summary(self) -> dict:
+        output_dict = {}
+        output_dict["final_loss"] = self.final_loss
+        output_dict["nr_training_steps"] = self.nr_training_steps
+        output_dict["model_path"] = str(self.save_path)
+        output_dict["model_cls"] = self.model.__class__.__name__
+        for key, value in self.sim_result.items():
+            output_dict[key] = value
+        for key, value in self.model.get_hyperparams():
+            output_dict[key] = value
+        for key, value in self.optimizer_kwargs.items():
+            output_dict[key] = value
+        return output_dict
+
+    def losses_on_double_ko(self):
+        double_ko_expressions = self.sim_result.get_double_ko_expressiondata()
+        loss = self.calculate_loss_from_expression_data(double_ko_expressions)
+        return loss
 
     def _calculate_model_prediction_at_conditions(
         self, experiment_data: torch.Tensor, initial_state: torch.Tensor
@@ -103,6 +164,15 @@ class Trainer:
             logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
 
         self.loss_history = loss_history
+
+    def train_for_parallelisation_and_save(self):
+        self.train(self.nr_training_steps)
+        self.save(self.save_path)
+
+        logging.info(
+            f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
+        )
+        return self.summary()
 
     def plot_loss_history(self, ax=None):
         """After training the model, plot the loss history"""
@@ -254,107 +324,7 @@ class Trainer:
         return all_losses
 
 
-class TrainingJob:
-    def __init__(
-        self,
-        model: Model,
-        sim_result: SimulationResult,
-        nr_training_steps: int,
-        model_kwargs: dict | None = None,
-        optimizer_kwargs: dict | None = None,
-    ):
-        """Training job that can be used to run training in parallel.
-
-        Args:
-            model_cls (Model): Class that can be used to construct the model. Should inherit from Model
-            sim_result (SimulationResult): Simulator output that the model should be trained on.
-            nr_training_steps (int): How many epochs to run the training
-            model_kwargs (dict, optional): Kwargs to pass to model (e.g. device). Defaults to None.
-            optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
-        """
-        self.sim_result = sim_result
-        self.nr_training_steps = nr_training_steps
-        self.expressions = (
-            ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
-                self.sim_result.data_path
-                / f"{self.sim_result.network_name}_nonoise_knockout_timeseries.tsv"
-            )
-        )
-        self.model_kwargs = model_kwargs or {}
-        self.optimizer_kwargs = optimizer_kwargs or {}
-        self.trainer = Trainer(
-            model,
-            self.expressions,
-            batch_size=32,
-            optimizer_kwargs=self.optimizer_kwargs,
-        )
-
-        file_name = f"trained_trainer_{model.__class__.__name__}"
-        if self.model_kwargs:
-            for kwarg_name, value in self.model_kwargs.items():
-                if kwarg_name == "device":
-                    continue
-                file_name += f"_{kwarg_name}_{value}"
-        if self.optimizer_kwargs:
-            for kwarg_name, value in self.optimizer_kwargs.items():
-                file_name += f"_{kwarg_name}_{value}"
-        file_name += ".pt"
-
-        self.save_path = self.sim_result.data_path / file_name
-
-    def __repr__(self):
-        return f"TrainingJob: Training {self.trainer.model.__class__.__name__} on {self.sim_result} with {self.model_kwargs} and {self.optimizer_kwargs}"
-
-    def load_if_exists(self):
-        if self.save_path.exists():
-            logging.info(f"Loading from {self.save_path}")
-            self.trainer.load(self.save_path)
-        else:
-            raise FileNotFoundError(f"No existing model found at {self.save_path}.")
-
-    def run(self):
-        self.trainer.train(self.nr_training_steps)
-        self.trainer.save(self.save_path)
-
-        logging.info(
-            f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
-        )
-        return self.summary()
-
-    @property
-    def final_loss(self):
-        return self.trainer.loss_history[-1]
-
-    def summary(self) -> dict:
-        output_dict = {}
-        output_dict["final_loss"] = self.final_loss
-        output_dict["nr_training_steps"] = self.nr_training_steps
-        output_dict["model_path"] = str(self.save_path)
-        output_dict["model_cls"] = self.trainer.model.__class__.__name__
-        for key, value in self.sim_result.items():
-            output_dict[key] = value
-        if self.model_kwargs:
-            for key, value in self.model_kwargs.items():
-                output_dict[key] = value
-        if self.optimizer_kwargs:
-            for key, value in self.optimizer_kwargs.items():
-                output_dict[key] = value
-        return output_dict
-
-    def get_double_ko_files(self) -> ExpressionDataWithConditions:
-        double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
-            expression_file_path=self.sim_result.double_ko_timeseries_nonoise_file_path(),
-            ko_file_path=self.sim_result.double_ko_index_file_path(),
-        )
-        return double_ko_expressions
-
-    def losses_on_double_ko(self):
-        double_ko_expressions = self.get_double_ko_files()
-        loss = self.trainer.calculate_loss_from_expression_data(double_ko_expressions)
-        return loss
-
-
-def run_training_job(job: TrainingJob):
+def run_training_job(job: Trainer):
     """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
     logging.basicConfig(
         level=logging.INFO,
@@ -362,7 +332,7 @@ def run_training_job(job: TrainingJob):
         force=True,
     )
     try:
-        output = job.run()
+        output = job.train_for_parallelisation_and_save()
     except AssertionError as e:
         logging.error(f"Error occurred while running job: {e}")
         output = {"error": str(e)}

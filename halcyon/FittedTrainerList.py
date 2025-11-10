@@ -1,6 +1,3 @@
-from halcyon.Trainer import TrainingJob
-
-
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -12,10 +9,12 @@ from collections import UserList
 from typing import Callable, Generic, TypeVar
 from typing_extensions import Self
 
-T = TypeVar("T", bound="TrainingJob")
+from halcyon.Trainer import Trainer
+
+T = TypeVar("T", bound="Trainer")
 
 
-class FittedTrainingJobList(UserList[T], Generic[T]):
+class FittedTrainerList(UserList[T], Generic[T]):
     def __init__(
         self,
         data: list[T] | None = None,
@@ -29,7 +28,7 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
         )
 
     @classmethod
-    def from_train_jobs(cls, train_jobs: list[TrainingJob]) -> Self:
+    def from_train_jobs(cls, train_jobs: list[Trainer]) -> Self:
         results = []
         for job in train_jobs:
             try:
@@ -45,7 +44,7 @@ class FittedTrainingJobList(UserList[T], Generic[T]):
     def __getitem__(self, index):
         """Copy numpy-like indexing, where you can select mulitple items via a list or array of indices."""
         if isinstance(index, list) or isinstance(index, np.ndarray):
-            return FittedTrainingJobList([self.data[i] for i in index])
+            return FittedTrainerList([self.data[i] for i in index])
         return super().__getitem__(index)
 
     def plot_all_model_fits_into_one_fig(
