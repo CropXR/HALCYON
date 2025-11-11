@@ -52,16 +52,18 @@ class Trainer:
             self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
         else:
             self.dataset = dataset
+        # If we want to scale time again click here
+        # self.dataset.scale_time_series()
+
         # Ensure that expressions match the order of the modelled genes
         self.dataset.match_genes_to_list(model.modelled_gene_labels)
         self.dataloader = DataLoader(
             self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True
         )
 
-        if optimizer_kwargs is None:
-            optimizer_kwargs = dict()
-        self.optimizer = optimizer_fn(model.parameters(), **optimizer_kwargs)
+        self.optimizer_kwargs = dict() if optimizer_kwargs is None else optimizer_kwargs
 
+        self.optimizer = optimizer_fn(model.parameters(), **self.optimizer_kwargs)
         self.model.to(self.model.device)
 
         file_name = self.get_save_file_name()
@@ -127,6 +129,7 @@ class Trainer:
         self.optimizer.zero_grad()
         self.model.set_conditions(experiment_data)
         output = self.integrate_model(initial_states_tensor=initial_state)
+
         return output
 
     def _calculate_loss_from_batch(self, batch: torch.Tensor):
@@ -165,7 +168,7 @@ class Trainer:
 
         self.loss_history = loss_history
 
-    def train_for_parallelisation_and_save(self):
+    def run_for_parallelisation_and_save(self):
         self.train(self.nr_training_steps)
         self.save(self.save_path)
 
@@ -332,7 +335,7 @@ def run_training_job(job: Trainer):
         force=True,
     )
     try:
-        output = job.train_for_parallelisation_and_save()
+        output = job.run_for_parallelisation_and_save()
     except AssertionError as e:
         logging.error(f"Error occurred while running job: {e}")
         output = {"error": str(e)}

@@ -9,7 +9,11 @@ import logging
 
 class Model(ABC, nn.Module):
     def __init__(
-        self, modelled_gene_labels: List[str], condition_names: List[str], device=None
+        self,
+        modelled_gene_labels: List[str],
+        condition_names: List[str],
+        device=None,
+        integration_method="dopri5",
     ):
         super().__init__()
         self.modelled_gene_labels = natsorted(modelled_gene_labels)
@@ -18,6 +22,7 @@ class Model(ABC, nn.Module):
         else:
             self.device = self.get_compatible_device()
         self.condition_names = condition_names
+        self.integration_method = integration_method
         self.reset_conditions()
 
     @property
@@ -51,9 +56,16 @@ class Model(ABC, nn.Module):
             t_eval.dim() == 1
         ), f"t_eval should be a 1D tensor, but got shape {t_eval.shape}"
 
-        output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
+        output: torch.Tensor = odeint(self, initial_state, t_eval, method=self.integration_method)  # type: ignore
+
         # Permute dimensions to [Batch, Genes, Time]
-        return output.permute(1, 2, 0)
+        output = output.permute(1, 2, 0)
+
+        assert not torch.isnan(
+            output
+        ).any(), "NaNs in output. Perhaps your parameters are too high"
+
+        return output
 
     def parse_env_data(
         self, environment_data: torch.Tensor

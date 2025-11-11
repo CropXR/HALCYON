@@ -10,7 +10,7 @@ class MSELossFlexible(nn.Module):
         self.mse = nn.MSELoss()
 
     def forward(self, expression_pred, expression_true, *args, **kwargs):
-        """Ignores extra arguments, because might be passing along the model parameters as well as potential third argument"""
+        """Ignores extra arguments, because might be passing along the model parameters as potential third argument"""
         return self.mse(expression_pred, expression_true)
 
 
@@ -33,5 +33,5 @@ class MSELossPlusMachineLearningL2(MSELossFlexible):
         ]
         total_params_squared = sum((p**2).sum() for p in ml_params)
         total_params = sum(p.numel() for p in ml_params)
-        param_l2 = total_params_squared / total_params
-        return self.mse(expression_pred, expression_true) + self.lambda_param * param_l2
+        loss_l2 = total_params_squared / total_params
+        return self.mse(expression_pred, expression_true) + self.lambda_param * loss_l2

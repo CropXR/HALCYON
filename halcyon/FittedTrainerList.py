@@ -64,19 +64,16 @@ class FittedTrainerList(UserList[T], Generic[T]):
         if top_n_genes:
             n_rows = top_n_genes
         elif only_double_ko:
-            n_rows = len(self[0].get_double_ko_files().conditions)
+            n_rows = len(self[0].sim_result.get_double_ko_expressiondata().conditions)
         else:
-            n_rows = len(model_list[0].trainer.dataset)
+            n_rows = len(model_list[0].dataset)
         fig, axs = plt.subplots(
             n_rows, n_cols, sharey=True, sharex="col", figsize=(4 * n_cols, 3 * n_rows)
         )
 
-        for i, train_job in enumerate(model_list):
-            # print(train_job.summary()["model_path"])
-            trainer = train_job.trainer
-
+        for i, trainer in enumerate(model_list):
             if only_double_ko:
-                dataset = train_job.get_double_ko_files()
+                dataset = trainer.sim_result.get_double_ko_expressiondata()
             else:
                 dataset = trainer.dataset
 
@@ -97,7 +94,7 @@ class FittedTrainerList(UserList[T], Generic[T]):
                     )
                 if j == 0:
                     # First row should have titles
-                    model_title = self.model_to_name_func(train_job.summary())
+                    model_title = self.model_to_name_func(trainer.summary())
                 else:
                     model_title = None
                 trainer._plot_one_prediction(
@@ -122,7 +119,7 @@ class FittedTrainerList(UserList[T], Generic[T]):
         )
         return heatmap_data
 
-    def final_loss_heatmap(self, column_name: str = "nr_genes"):
+    def final_loss_heatmap(self, column_name: str = "nr_genes", ax=None):
         """Plot heatmap of showing the final loss for each fitted model
 
         Args:

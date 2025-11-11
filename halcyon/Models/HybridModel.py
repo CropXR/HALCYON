@@ -97,3 +97,10 @@ class HybridModel(Model):
                     (genes_and_conditions, condition_flags)
                 )
             model.set_conditions(genes_and_conditions)
+
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        """Get hyperparameters, for now only use ML ones as we assume the MM has none
+
+        These are used to e.g. generate the save file path
+        """
+        return self._ml.get_hyperparams()

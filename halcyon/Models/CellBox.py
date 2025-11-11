@@ -26,12 +26,16 @@ class CellBox(MachineLearningModel):
         self.phi = phi
         self.self_activations = self_activations
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
+        # Init parameters as decribed in paper
         self.W = nn.Parameter(
-            torch.randn(
-                (self.n_genes, self.n_genes), dtype=torch.float32, device=self.device
+            torch.normal(
+                mean=0.01,
+                std=1,
+                size=(self.n_genes, self.n_genes),
+                dtype=torch.float32,
+                device=self.device,
             )
         )
-        # Init as 1 as decribed in paper
         self.decay_params = nn.Parameter(
             torch.ones(self.n_genes, dtype=torch.float32, device=self.device)
         )
@@ -43,7 +47,7 @@ class CellBox(MachineLearningModel):
         out_list = []
         for name, value in zip(
             ["device", "phi", "self_activations"],
-            [self.device, self.phi, self.self_activations],
+            [self.device, self.phi.__name__, self.self_activations],
         ):
             out_list.append((name, value))
         return out_list
