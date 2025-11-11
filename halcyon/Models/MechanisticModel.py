@@ -29,6 +29,9 @@ class MechanisticModel(Model):
         """Return the regulatory network of the model."""
         pass
 
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        return []
+
 
 class PyTorchODE(MechanisticModel):
     alternative_max_name = "max_rate"

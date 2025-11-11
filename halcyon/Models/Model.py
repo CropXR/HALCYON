@@ -158,3 +158,7 @@ class Model(ABC, nn.Module):
 
     def get_name(self):
         return self.__class__.__name__
+
+    @abstractmethod
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        pass

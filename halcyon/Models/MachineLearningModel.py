@@ -16,7 +16,3 @@ class MachineLearningModel(Model, ABC):
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         """Extract the inferred network"""
         pass
-
-    @abstractmethod
-    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
-        pass
