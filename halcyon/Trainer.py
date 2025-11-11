@@ -146,7 +146,7 @@ class Trainer:
         expression_data = expression_data.to(self.model.device)
         return experiment_data, expression_data
 
-    def train(self, n_epochs: int):
+    def train(self):
         """Perform model training on batches.
 
         Args:
@@ -154,7 +154,7 @@ class Trainer:
         """
         loss_history = []
 
-        for epoch in range(n_epochs):
+        for epoch in range(self.nr_training_steps):
             epoch_loss = 0.0
             for batch in self.dataloader:
                 loss = self._calculate_loss_from_batch(batch)
@@ -169,7 +169,7 @@ class Trainer:
         self.loss_history = loss_history
 
     def run_for_parallelisation_and_save(self):
-        self.train(self.nr_training_steps)
+        self.train()
         self.save(self.save_path)
 
         logging.info(

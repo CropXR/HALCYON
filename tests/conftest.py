@@ -3,6 +3,8 @@ from pathlib import Path
 import random
 from typing import Tuple
 import networkx as nx
+from halcyon.Models.HybridModel import HybridModel
+from halcyon.Models.MechanisticModel import PyTorchODE
 import numpy as np
 
 import pytest
@@ -57,7 +59,58 @@ def sim_result() -> SimulationResult:
 
 
 @pytest.fixture
-def trainers_for_all_models(sim_result) -> list[Trainer]:
+def expr_data_from_sim(sim_result):
+    expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+        sim_result.data_path
+        / f"{sim_result.network_name}_nonoise_knockout_timeseries.tsv"
+    )
+    return expr_data
+
+
+@pytest.fixture
+def mech_model_from_sim_result(sim_result, expr_data_from_sim):
+    model = PyTorchODE.from_sbml(
+        sim_result.data_path / "integration_test_network.xml",
+        condition_names=expr_data_from_sim.all_environments,
+        from_gnw=True,
+    )
+    return model
+
+
+@pytest.fixture
+def ml_model_from_sim_result(expr_data_from_sim):
+    model = PhoenixAddAndProdLayers(
+        expr_data_from_sim.genes, expr_data_from_sim.all_environments, hidden_size=2
+    )
+    return deepcopy(model)
+
+
+@pytest.fixture
+def hybrid_model(mech_model_from_sim_result, ml_model_from_sim_result):
+    return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
+
+@pytest.fixture
+def hybrid_model_with_zero_ml_influence(
+    mech_model_from_sim_result, ml_model_from_sim_result
+):
+    ml_model_from_sim_result = deepcopy(ml_model_from_sim_result)
+    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
+    return HybridModel(
+        mech_model_from_sim_result,
+        ml_model_from_sim_result,
+    )
+
+
+@pytest.fixture
+def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_result):
+    mech_model_from_sim_result = deepcopy(mech_model_from_sim_result)
+    mech_model_from_sim_result.select_genes([f"Node_{i}" for i in range(9)])
+    return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+
+
+@pytest.fixture
+def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Trainer]:
     trainers: list[Trainer] = []
     for model_class, model_args in zip(
         [CellBox, PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
@@ -81,6 +134,16 @@ def trainers_for_all_models(sim_result) -> list[Trainer]:
             optimizer_kwargs={"lr": 0.001},
         )
         trainers.append(trainer)
+
+    # Add hybrid model
+    trainers.append(
+        Trainer(
+            hybrid_model_mm_no_node_9,
+            sim_result,
+            nr_training_steps=2,
+            optimizer_kwargs={"lr": 0.001},
+        )
+    )
 
     return trainers
 
