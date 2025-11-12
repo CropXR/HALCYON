@@ -22,6 +22,7 @@ from halcyon.Models.Model import Model
 class MechanisticModel(Model):
     def __init__(self, modelled_gene_labels: List[str], condition_names: List[str]):
         super().__init__(modelled_gene_labels, condition_names)
+        self.register_buffer("time_scaler", torch.tensor(1.0))
 
     @property
     @abstractmethod
@@ -31,6 +32,9 @@ class MechanisticModel(Model):
 
     def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
         return []
+
+    def set_timescaler(self, new_value: torch.Tensor):
+        self.time_scaler = new_value
 
 
 class PyTorchODE(MechanisticModel):
@@ -122,7 +126,7 @@ class PyTorchODE(MechanisticModel):
         if decay.dim() == 1:
             decay = decay.unsqueeze(0)
 
-        return synthesis * self.ko_masks - decay
+        return (synthesis * self.ko_masks - decay) * self.time_scaler
 
     def set_parameters(self, param_values: dict):
         """

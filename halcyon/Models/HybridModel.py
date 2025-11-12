@@ -63,6 +63,9 @@ class HybridModel(Model):
         output.index_add_(dim=1, index=self._ml_indices, source=ml_output)
         return output
 
+    def set_timescaler(self, new_value: torch.Tensor):
+        self._mm.set_timescaler(new_value)
+
     def _get_ml_forward(self, t, state) -> torch.Tensor:
         ml_input = state[:, self._ml_indices]
         ml_output = self._ml.forward(t, ml_input)

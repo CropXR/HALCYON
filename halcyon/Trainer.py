@@ -24,6 +24,7 @@ class Trainer:
         self,
         model: Model,
         sim_result: SimulationResult,
+        do_time_scaling: bool = True,
         dataset: ExpressionDataWithConditions | None = None,
         nr_training_steps: int = 10,
         optimizer_fn: Callable = torch.optim.Adam,
@@ -52,8 +53,13 @@ class Trainer:
             self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
         else:
             self.dataset = dataset
-        # If we want to scale time again click here
-        # self.dataset.scale_time_series()
+        # Normalise time scale to be from 0 to 1. Helps ODEs not explode
+        if do_time_scaling:
+            original_max = max(self.dataset._get_time_points())
+            self.dataset.scale_time_series()
+            new_max = max(self.dataset._get_time_points())
+            scaling_factor = torch.tensor(original_max / new_max)
+            self.model.set_timescaler(scaling_factor)
 
         # Ensure that expressions match the order of the modelled genes
         self.dataset.match_genes_to_list(model.modelled_gene_labels)

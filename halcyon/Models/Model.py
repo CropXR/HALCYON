@@ -33,6 +33,10 @@ class Model(ABC, nn.Module):
     def n_conditions(self):
         return len(self.condition_names)
 
+    def set_timescaler(self, new_value):
+        """Allows polymorphism so even classes that do not have a mech model subclass do not throw error"""
+        return
+
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """Get the derivative at a given time point."""

@@ -6,12 +6,21 @@ import sympytorch
 import torch
 
 from halcyon.Models.MechanisticModel import PyTorchODE
+from torch.testing import assert_close
 
 
 def test_select_subset_genes(test_pytorchode_model):
     nodes_to_select = ["Node_0", "Node_2"]
     test_pytorchode_model.select_genes(nodes_to_select)
     assert test_pytorchode_model.modelled_gene_labels == nodes_to_select
+
+
+def test_adjust_time_scale(mech_model_from_sim_result, test_batch):
+    _, expressions = test_batch
+    forward = mech_model_from_sim_result(None, expressions[:, :, 0])
+    mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
+    scaled_forward = mech_model_from_sim_result(None, expressions[:, :, 0])
+    assert_close(forward * 1000, scaled_forward)
 
 
 def test_steady_state_derivateives_zero(test_pytorchode_model, ss_initial_values):

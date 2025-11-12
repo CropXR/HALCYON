@@ -14,11 +14,11 @@ def test_final_loss_heatmap(result_list_from_jobs: FittedTrainerList):
     expected_df = pd.DataFrame(
         {
             10: {
-                "CellBox_hidden_nan": 0.259135,
-                "PhoenixAddAndProdLayers_hidden_2.0": 7.319915,
-                "PhoenixOnlyAddLayers_hidden_2.0": 120.158865,
+                "CellBox_hidden_nan": 0.031754466332495214,
+                "PhoenixAddAndProdLayers_hidden_2.0": 0.05905715750795935,
+                "PhoenixOnlyAddLayers_hidden_2.0": 0.05513774564024061,
             }
-        },
+        }
     )
     expected_df.index.name = "model_overall_name"
     expected_df.columns.name = "nr_genes"
