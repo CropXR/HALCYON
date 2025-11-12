@@ -132,7 +132,6 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Train
             sim_result,
             nr_training_steps=2,
             optimizer_kwargs={"lr": 0.1},
-            do_time_scaling=True,
         )
         trainers.append(trainer)
 

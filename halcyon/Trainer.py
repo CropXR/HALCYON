@@ -25,7 +25,6 @@ class Trainer:
         model: Model,
         sim_result: SimulationResult,
         do_time_scaling: bool = True,
-        dataset: ExpressionDataWithConditions | None = None,
         nr_training_steps: int = 10,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
@@ -49,20 +48,28 @@ class Trainer:
         self.nr_training_steps = nr_training_steps
 
         self.sim_result = sim_result
-        if dataset is None:
-            self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
-        else:
-            self.dataset = dataset
-        # Normalise time scale to be from 0 to 1. Helps ODEs not explode
-        if do_time_scaling:
-            original_max = max(self.dataset._get_time_points())
-            self.dataset.scale_time_series()
-            new_max = max(self.dataset._get_time_points())
-            scaling_factor = torch.tensor(original_max / new_max)
-            self.model.set_timescaler(scaling_factor)
 
-        # Ensure that expressions match the order of the modelled genes
-        self.dataset.match_genes_to_list(model.modelled_gene_labels)
+        self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
+        self.double_ko_dataset = self.sim_result.get_double_ko_expressiondata()
+
+        for my_dataset in [self.dataset, self.double_ko_dataset]:
+            # Normalise time scale to be from 0 to 1. Helps ODEs not explode
+            if do_time_scaling:
+                scaling_factors = []
+                original_max = max(my_dataset._get_time_points())
+                my_dataset.scale_time_series()
+                new_max = max(my_dataset._get_time_points())
+                scaling_factor = torch.tensor(original_max / new_max)
+                scaling_factors.append(scaling_factor)
+
+            # Ensure that expressions match the order of the modelled genes
+            my_dataset.match_genes_to_list(model.modelled_gene_labels)
+
+        if do_time_scaling:
+            assert all(
+                x == scaling_factors[0] for x in scaling_factors
+            ), "Not all timescalers are identical. Check if same timescale used by both double and single KO"
+            self.model.set_timescaler(scaling_factor)
         self.dataloader = DataLoader(
             self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True
         )
@@ -102,7 +109,7 @@ class Trainer:
 
     @property
     def final_loss(self):
-        return self.loss_history[-1]
+        return self.loss_history[-1] if self.loss_history else np.nan
 
     def get_time_points(self) -> torch.Tensor:
         """Get time points at which the expressions were measured."""
@@ -205,14 +212,19 @@ class Trainer:
         return self.loss_fn(expression_pred, expression_true, self.model)
 
     def _plot_from_expressions(
-        self, expressions: np.ndarray, title: str | None, axs: Axes, show_legend: bool
+        self,
+        expressions: np.ndarray,
+        title: str | None,
+        axs: Axes,
+        show_legend: bool,
+        **kwargs,
     ):
         df_real = pd.DataFrame(
             expressions,
             columns=self.dataset._get_time_points(),
             index=self.dataset.genes,
         )
-        ExpressionData(df_real).plot_expressions(axis=axs, legend=show_legend)
+        ExpressionData(df_real).plot_expressions(axis=axs, legend=show_legend, **kwargs)
         if title is not None:
             axs.set_title(title)
 
@@ -223,13 +235,14 @@ class Trainer:
         env: torch.Tensor,
         axs: Axes,
         show_legend: bool,
+        **kwargs,
     ):
         """Simulate and plot prediction"""
         self.model.set_conditions(env.unsqueeze(0))
         with torch.no_grad():
             predictions = self.integrate_model(initial_states_tensor=initial_condition)
             predictions = predictions.squeeze(0).detach().cpu().numpy()
-            self._plot_from_expressions(predictions, title, axs, show_legend)
+            self._plot_from_expressions(predictions, title, axs, show_legend, **kwargs)
 
     def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
