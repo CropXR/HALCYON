@@ -19,6 +19,7 @@ class PhoenixABC(MachineLearningModel, ABC):
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
         hidden_size: int,
+        synthesis_only_positive: bool = False,
         **kwargs,
     ):
         """Class that is inherited, so shouldn't be called on its own."""
@@ -26,6 +27,9 @@ class PhoenixABC(MachineLearningModel, ABC):
         self.hidden_size = hidden_size
         self.decay_params = nn.Parameter(torch.rand(self.n_genes))
         self.per_gene_multipliers = nn.Parameter(torch.ones(self.n_genes))
+        self.register_buffer(
+            "synthesis_only_positive", torch.tensor(synthesis_only_positive)
+        )
 
     def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
         for layer in model:
@@ -49,7 +53,8 @@ class PhoenixABC(MachineLearningModel, ABC):
     def get_hyperparams(self):
         out_list = []
         for name, value in zip(
-            ["device", "hidden_size"], [self.device, self.hidden_size]
+            ["device", "hidden_size", "synthesis_only_positive"],
+            [self.device, self.hidden_size, self.synthesis_only_positive],
         ):
             out_list.append((name, value))
 
@@ -84,7 +89,10 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
         decay = self._get_decay(state)
-        output = (self.neural_net(nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        synthesis = self.neural_net(nn_input) * self.ko_masks
+        if self.synthesis_only_positive:
+            synthesis = torch.nn.functional.relu(synthesis)
+        output = (synthesis - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
@@ -131,7 +139,10 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         prod_out = torch.exp(self.prod_nn(first_layer_input))
         combined_nn_input = torch.cat((sum_out, prod_out), dim=1)
 
+        synthesis = self.combine_layer_nn(combined_nn_input) * self.ko_masks
         decay = self._get_decay(state)
-        output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        if self.synthesis_only_positive:
+            synthesis = torch.nn.functional.relu(synthesis)
+        output = (synthesis - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output

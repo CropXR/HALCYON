@@ -1,3 +1,4 @@
+from textwrap import fill
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -126,7 +127,11 @@ class FittedTrainerList:
                     )
                 if row_index == 0:
                     # First row should have titles
-                    model_title = trainer.get_save_file_name()[:-3]
+                    model_title = trainer.get_save_file_name().removesuffix(
+                        trainer.file_name_suffix
+                    )
+                    model_title = model_title.removeprefix(trainer.file_name_prefix)
+                    model_title = fill(model_title.replace("_", " "), width=30)
                 else:
                     model_title = None
                 trainer._plot_one_prediction(

@@ -30,6 +30,7 @@ class Trainer:
         optimizer_kwargs=None,
         loss: nn.Module = MSELossFlexible(),
         batch_size: int = 1,
+        file_name_prefix="trained_trainer_",
     ):
         """Class to handle training of models
 
@@ -51,10 +52,13 @@ class Trainer:
 
         self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
         self.double_ko_dataset = self.sim_result.get_double_ko_expressiondata()
+        self.do_time_scaling = do_time_scaling
+        self.file_name_prefix = file_name_prefix
+        self.file_name_suffix = ".pt"
 
         for my_dataset in [self.dataset, self.double_ko_dataset]:
             # Normalise time scale to be from 0 to 1. Helps ODEs not explode
-            if do_time_scaling:
+            if self.do_time_scaling:
                 scaling_factors = []
                 original_max = max(my_dataset._get_time_points())
                 my_dataset.scale_time_series()
@@ -65,7 +69,7 @@ class Trainer:
             # Ensure that expressions match the order of the modelled genes
             my_dataset.match_genes_to_list(model.modelled_gene_labels)
 
-        if do_time_scaling:
+        if self.do_time_scaling:
             assert all(
                 x == scaling_factors[0] for x in scaling_factors
             ), "Not all timescalers are identical. Check if same timescale used by both double and single KO"
@@ -86,7 +90,7 @@ class Trainer:
         self.loss_history = []
 
     def get_save_file_name(self) -> str:
-        file_name = f"trained_trainer_{self.model.__class__.__name__}"
+        file_name = f"{self.file_name_prefix}{self.model.__class__.__name__}"
         for hyperparam_name, hyperparam_value in self.model.get_hyperparams():
             if hyperparam_name == "device":
                 continue
@@ -94,7 +98,7 @@ class Trainer:
         if self.optimizer_kwargs:
             for kwarg_name, value in self.optimizer_kwargs.items():
                 file_name += f"_{kwarg_name}_{value}"
-        file_name += ".pt"
+        file_name += self.file_name_suffix
         return file_name
 
     def __repr__(self):
@@ -166,6 +170,12 @@ class Trainer:
             n_epochs (int): Number of epochs to train
         """
         loss_history = []
+
+        if self.nr_training_steps == 0:
+            # Cannot train mechanistic model so just calculate loss on dataset as only loss data point.
+            loss_history.append(
+                np.mean(self.calculate_loss_from_expression_data(self.dataset))
+            )
 
         for epoch in range(self.nr_training_steps):
             epoch_loss = 0.0
@@ -333,7 +343,8 @@ class Trainer:
             expressions_to_predict.genes == self.model.modelled_gene_labels
         ), "Gene labels do not match"
         self.model.eval()
-        expressions_to_predict.scale_time_series()
+        if self.do_time_scaling:
+            expressions_to_predict.scale_time_series()
         my_dataloader = DataLoader(
             expressions_to_predict, batch_size=1, shuffle=False, pin_memory=True
         )
