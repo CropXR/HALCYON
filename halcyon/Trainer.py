@@ -329,7 +329,19 @@ class Trainer:
         checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.loss_history = checkpoint["loss_history"]
-        self.model.load_state_dict(checkpoint["model_state_dict"])
+        try:
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+        except RuntimeError:
+            # Get rid of some weird keys that might be saved in this model
+            new_dict = {}
+            for key, value in checkpoint["model_state_dict"].items():
+                if key.startswith("_mm._synthesis_module") or key.startswith(
+                    "_mm._decay_module"
+                ):
+                    continue
+                new_dict[key] = value
+
+            self.model.load_state_dict(new_dict)
 
     def calculate_loss_from_expression_data(
         self, expressions_to_predict: ExpressionDataWithConditions
