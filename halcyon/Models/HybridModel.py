@@ -33,8 +33,9 @@ class HybridModel(Model):
         )
         self._mm = mm
         self._ml = ml
-        self._mm.to(self.device)
-        self._ml.to(self.device)
+        for model in [self._mm, self._ml]:
+            model.device = self.device
+            model.to(self.device)
         # Precompute indices
         self._mm_indices = torch.tensor(
             [self.modelled_gene_labels.index(g) for g in mm.modelled_gene_labels],

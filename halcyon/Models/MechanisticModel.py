@@ -20,8 +20,10 @@ from halcyon.Models.Model import Model
 
 
 class MechanisticModel(Model):
-    def __init__(self, modelled_gene_labels: List[str], condition_names: List[str]):
-        super().__init__(modelled_gene_labels, condition_names)
+    def __init__(
+        self, modelled_gene_labels: List[str], condition_names: List[str], **kwargs
+    ):
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.register_buffer("time_scaler", torch.tensor(1.0))
 
     @property
@@ -47,8 +49,9 @@ class PyTorchODE(MechanisticModel):
         synthesis_dict: Dict[str, sp.Expr],
         decay_dict: Dict[str, sp.Expr],
         param_dict: Dict[str, float],
+        **kwargs,
     ):
-        super().__init__(modelled_gene_labels, condition_names)
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
         # Convert param_dict to a trainable ParameterDict
@@ -162,7 +165,11 @@ class PyTorchODE(MechanisticModel):
 
     @classmethod
     def from_sbml(
-        cls, sbml_path: str | Path, condition_names: list[str], from_gnw: bool = False
+        cls,
+        sbml_path: str | Path,
+        condition_names: list[str],
+        from_gnw: bool = False,
+        **kwargs,
     ) -> Self:
         """
         Create a MechanisticModel from an SBML file.
@@ -232,6 +239,7 @@ class PyTorchODE(MechanisticModel):
             synthesis_expression_dict,
             decay_expression_dict,
             param_dict,
+            **kwargs,
         )
 
     @classmethod
