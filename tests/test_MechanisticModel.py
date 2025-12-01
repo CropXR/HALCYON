@@ -50,7 +50,9 @@ def in_folder() -> Path:
 @pytest.fixture
 def test_pytorchode_model(in_folder) -> PyTorchODE:
     sbml_path = in_folder / "integration_test_network.xml"
-    model = PyTorchODE.from_sbml(sbml_path, condition_names=(), from_gnw=True)
+    model = PyTorchODE.from_sbml(
+        sbml_path, condition_names=(), from_gnw=True, device="cpu"
+    )
     return model
 
 

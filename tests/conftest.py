@@ -73,6 +73,7 @@ def mech_model_from_sim_result(sim_result, expr_data_from_sim):
         sim_result.data_path / "integration_test_network.xml",
         condition_names=expr_data_from_sim.all_environments,
         from_gnw=True,
+        device="cpu",
     )
     return model
 
@@ -106,7 +107,11 @@ def hybrid_model_with_zero_ml_influence(
 def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_result):
     mech_model_from_sim_result = deepcopy(mech_model_from_sim_result)
     mech_model_from_sim_result.select_genes([f"Node_{i}" for i in range(9)])
-    return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
+    return HybridModel(
+        deepcopy(mech_model_from_sim_result),
+        deepcopy(ml_model_from_sim_result),
+        device="cpu",
+    )
 
 
 @pytest.fixture
@@ -135,17 +140,15 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Train
         )
         trainers.append(trainer)
 
-    # # Add hybrid model
-    # # TODO remove this hotfix
-    # #  But for now keeping it out
-    # trainers.append(
-    #     Trainer(
-    #         hybrid_model_mm_no_node_9,
-    #         sim_result,
-    #         nr_training_steps=2,
-    #         optimizer_kwargs={"lr": 0.1},
-    #     )
-    # )
+    # Add hybrid model
+    trainers.append(
+        Trainer(
+            hybrid_model_mm_no_node_9,
+            sim_result,
+            nr_training_steps=5,
+            optimizer_kwargs={"lr": 0.1},
+        )
+    )
 
     return trainers
 
@@ -157,7 +160,7 @@ def result_list_from_jobs(trainers_for_all_models) -> FittedTrainerList:
         trainer.save_path = (
             trainer.save_path.parent.parent / "expected_output" / trainer.save_path.name
         )
-    result_list = FittedTrainerList.from_train_jobs(trainers)
+    result_list = FittedTrainerList.load_saved_jobs(trainers)
     return result_list
 
 

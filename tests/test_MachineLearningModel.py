@@ -57,7 +57,7 @@ def test_cellbox_forward(my_cellbox):
     assert_close(
         forward_pass,
         torch.tanh(torch.tensor([5.0, 4.0, 3.0], device=my_cellbox.device).unsqueeze(0))
-        - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
+        - torch.nn.functional.softplus(my_cellbox.decay_params)
         * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device).unsqueeze(0),
     )
 
@@ -75,12 +75,14 @@ def test_cellbox_integrate(my_cellbox):
         output,
         torch.tensor(
             [
-                [1.0000, 1.8991, 2.7381],
-                [2.0000, 2.8320, 3.6085],
-                [3.0000, 3.7639, 4.4780],
+                [
+                    [1.0000, 1.2211, 1.3308],
+                    [2.0000, 1.7203, 1.5794],
+                    [3.0000, 2.2175, 1.8259],
+                ]
             ],
             device=my_cellbox.device,
-        ).unsqueeze(0),
+        ),
         atol=1e-4,
         rtol=1e-4,
     )
@@ -123,14 +125,14 @@ def test_cellbox_gene_knockout(my_cellbox):
     assert_close(
         forward_pass[0, :],
         torch.tanh(torch.tensor([5.0, 4.0, 3.0], device=my_cellbox.device))
-        - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
+        - torch.nn.functional.softplus(my_cellbox.decay_params)
         * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device),
     )
 
     assert_close(
         forward_pass[1, :],
         torch.tanh(torch.tensor([5.0, 0.0, 3.0], device=my_cellbox.device))
-        - torch.nn.functional.softplus(my_cellbox.decay_params, beta=10)
+        - torch.nn.functional.softplus(my_cellbox.decay_params)
         * torch.tensor([1.0, 2.0, 3.0], device=my_cellbox.device),
     )
 

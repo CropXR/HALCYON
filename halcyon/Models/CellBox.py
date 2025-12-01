@@ -87,7 +87,7 @@ class CellBox(MachineLearningModel):
             state.unsqueeze(2),  # type: ignore
         ).squeeze(2)
         # Decay always has to be negative, hence the softplus
-        decay = nn.functional.softplus(self.decay_params, beta=10)
+        decay = nn.functional.softplus(self.decay_params)
         gene_expression_changes = self.epsilon * self.phi(input_term) - decay * state
         return gene_expression_changes
 

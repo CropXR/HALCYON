@@ -145,7 +145,7 @@ class GNWSimRunner:
         step1_process = subprocess.run(
             step_1_args, check=True, capture_output=True, text=True
         )
-
+        logging.info(step1_process.stderr)
         network = RegulatoryNetwork.from_stderr_gnw(
             step1_process.stderr, n_genes, network_name
         )

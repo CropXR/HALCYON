@@ -31,7 +31,7 @@ class FittedTrainerList:
         )
 
     @classmethod
-    def from_train_jobs(cls, train_jobs: list[Trainer]) -> Self:
+    def load_saved_jobs(cls, train_jobs: list[Trainer]) -> Self:
         results = []
         for job in train_jobs:
             try:
