@@ -92,7 +92,7 @@ class PhoenixOnlyAddLayers(PhoenixABC):
         synthesis = self.neural_net(nn_input) * self.ko_masks
         if self.synthesis_only_positive:
             synthesis = torch.nn.functional.softplus(synthesis)
-        output = (synthesis - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        output = (synthesis - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
@@ -143,6 +143,6 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         decay = self._get_decay(state)
         if self.synthesis_only_positive:
             synthesis = torch.nn.functional.softplus(synthesis)
-        output = (synthesis - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        output = (synthesis - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output

@@ -326,7 +326,9 @@ class Trainer:
         torch.save(checkpoint, checkpoint_path)
 
     def load(self, checkpoint_path: Path):
-        checkpoint = torch.load(checkpoint_path, map_location=self.model.device)
+        checkpoint = torch.load(
+            checkpoint_path, map_location=self.model.device, weights_only=False
+        )
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         self.loss_history = checkpoint["loss_history"]
         try:
