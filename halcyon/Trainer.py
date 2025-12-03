@@ -411,7 +411,6 @@ class Trainer:
             ground_truth_df["model"] = "ground_truth"
             full_df = pd.concat([ground_truth_df, predicted_df])
             full_df["condition"] = f"KO: {', '.join(condition.ko_gene)}"
-            print()
             all_predictions.append(full_df)
         self.model.train()
         return all_predictions
