@@ -137,8 +137,27 @@ class Trainer:
 
     def losses_on_double_ko(self):
         double_ko_expressions = self.sim_result.get_double_ko_expressiondata()
-        loss = self.calculate_loss_from_expression_data(double_ko_expressions)
+        loss = self.predict_and_calculate_loss_from_expression_data(
+            double_ko_expressions
+        )
         return loss
+
+    def _plot_one_prediction(
+        self,
+        initial_condition: torch.Tensor,
+        title: str,
+        env: torch.Tensor,
+        axs: Axes,
+        show_legend: bool,
+        **kwargs,
+    ):
+        """Simulate and plot prediction"""
+        with torch.no_grad():
+            predictions = self._calculate_model_prediction_at_conditions(
+                env.unsqueeze(0), initial_condition
+            )
+            predictions = predictions.squeeze(0).detach().cpu().numpy()
+            self._plot_from_expressions(predictions, title, axs, show_legend, **kwargs)
 
     def _calculate_model_prediction_at_conditions(
         self, experiment_data: torch.Tensor, initial_state: torch.Tensor
@@ -154,8 +173,7 @@ class Trainer:
         output = self._calculate_model_prediction_at_conditions(
             experiment_data, expression_data[:, :, 0]
         )
-        loss = self.calculate_loss_expression_vs_pred(expression_data, output)
-        return loss
+        return self.loss_fn(output, expression_data, self.model)
 
     def preprocess_batch(self, batch):
         experiment_data, expression_data = batch
@@ -174,7 +192,9 @@ class Trainer:
         if self.nr_training_steps == 0:
             # Cannot train mechanistic model so just calculate loss on dataset as only loss data point.
             loss_history.append(
-                np.mean(self.calculate_loss_from_expression_data(self.dataset))
+                np.mean(
+                    self.predict_and_calculate_loss_from_expression_data(self.dataset)
+                )
             )
 
         for epoch in range(self.nr_training_steps):
@@ -215,12 +235,6 @@ class Trainer:
         ax.set_ylim((0, 1.5 * max(self.loss_history)))
         return fig, ax
 
-    def calculate_loss_expression_vs_pred(
-        self, expression_true: torch.Tensor, expression_pred: torch.Tensor
-    ) -> torch.Tensor:
-        """Calculate the loss between a given model output and the actual expressions."""
-        return self.loss_fn(expression_pred, expression_true, self.model)
-
     def _plot_from_expressions(
         self,
         expressions: np.ndarray,
@@ -237,22 +251,6 @@ class Trainer:
         ExpressionData(df_real).plot_expressions(axis=axs, legend=show_legend, **kwargs)
         if title is not None:
             axs.set_title(title)
-
-    def _plot_one_prediction(
-        self,
-        initial_condition: torch.Tensor,
-        title: str,
-        env: torch.Tensor,
-        axs: Axes,
-        show_legend: bool,
-        **kwargs,
-    ):
-        """Simulate and plot prediction"""
-        self.model.set_conditions(env.unsqueeze(0))
-        with torch.no_grad():
-            predictions = self.integrate_model(initial_states_tensor=initial_condition)
-            predictions = predictions.squeeze(0).detach().cpu().numpy()
-            self._plot_from_expressions(predictions, title, axs, show_legend, **kwargs)
 
     def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
         """Plot fitted model vs measured data"""
@@ -337,15 +335,21 @@ class Trainer:
             # Get rid of some weird keys that might be saved in this model
             new_dict = {}
             for key, value in checkpoint["model_state_dict"].items():
-                if key.startswith("_mm._synthesis_module") or key.startswith(
-                    "_mm._decay_module"
-                ):
-                    continue
-                new_dict[key] = value
+                possible_beginnings_to_skip = [
+                    "_mm._synthesis_module",
+                    "_mm._decay_module",
+                    "_synthesis_module",
+                    "_decay_module",
+                ]
+                for beginning_to_skip in possible_beginnings_to_skip:
+                    if key.startswith(beginning_to_skip):
+                        break
+                else:
+                    new_dict[key] = value
 
             self.model.load_state_dict(new_dict)
 
-    def calculate_loss_from_expression_data(
+    def predict_and_calculate_loss_from_expression_data(
         self, expressions_to_predict: ExpressionDataWithConditions
     ):
         """Provide Expressiondata (e.g. with double knockouts) and calculate loss on them.

@@ -61,49 +61,58 @@ class FittedTrainerList:
         # Remove duplicates
         return list(set(double_ko_list))
 
-    def plot_all_model_fits_into_one_fig(
-        self,
-        first_n_results: int = None,
-        only_double_ko: bool = False,
-        ymin: float = 0,
-        ymax: float = 1.1,
-    ):
+    def _get_gene_colourmap(self):
+        """Used to consistently map gene to same colour"""
         all_genes = self.get_all_genes()
-        if only_double_ko:
-            conditions_to_map = self.get_double_ko_combinations()
-        else:
-            # Single knockouts
-            conditions_to_map = all_genes
-
-        if first_n_results:
-            conditions_to_map = conditions_to_map[:first_n_results]
-
-        condition_to_row_map = {
-            condition: row_index
-            for row_index, condition in enumerate(conditions_to_map)
-        }
         colour_map = dict(
             zip(
                 [g[0] for g in all_genes],
                 sns.color_palette("tab20", n_colors=len(all_genes)),
             )
         )
+        return colour_map
+
+    def plot_double_ko(self):
+        # Get dataset from trainer object
+        dataset_getter = lambda trainer: trainer.double_ko_dataset
+        conditions_to_map = self.get_double_ko_combinations()
+        self._plot_all_model_fits_for_specified_kos(conditions_to_map, dataset_getter)
+
+    def plot_single_ko(self):
+        # Single KOs so conditions of knockouts should be each gene
+        dataset_getter = lambda trainer: trainer.dataset
+        conditions_to_map = self.get_all_genes()
+        self._plot_all_model_fits_for_specified_kos(conditions_to_map, dataset_getter)
+
+    def _plot_all_model_fits_for_specified_kos(
+        self,
+        kos_to_plot: list[tuple[str]],
+        dataset_getter: Callable,
+        first_n_results: int = None,
+        ymin: float = 0,
+        ymax: float = 1.1,
+    ):
+        colour_map = self._get_gene_colourmap()
+        if first_n_results:
+            kos_to_plot = kos_to_plot[:first_n_results]
+
+        ko_to_row_map = {
+            condition: row_index for row_index, condition in enumerate(kos_to_plot)
+        }
+
         n_cols = len(self.trainer_list) + 1
-        n_rows = len(condition_to_row_map)
+        n_rows = len(ko_to_row_map)
         fig, axs = plt.subplots(
             n_rows, n_cols, sharey=True, sharex="col", figsize=(4 * n_cols, 3 * n_rows)
         )
 
         for column_index, trainer in enumerate(self.trainer_list):
-            if only_double_ko:
-                dataset = trainer.double_ko_dataset
-            else:
-                dataset = trainer.dataset
+            dataset: ExpressionDataWithConditions = dataset_getter(trainer)
 
-            for ko_gene, row_index in condition_to_row_map.items():
+            for ko_genes, row_index in ko_to_row_map.items():
                 try:
                     condition, expressions = (
-                        dataset._get_condition_and_expression_under_ko_gene(ko_gene)
+                        dataset._get_condition_and_expression_under_ko_gene(ko_genes)
                     )
                 except KeyError:
                     # Condition not predicted by model

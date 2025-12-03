@@ -49,7 +49,9 @@ def test_final_loss_heatmap(result_list_from_jobs: FittedTrainerList):
 
 
 def test_plot_double_ko(result_list_from_jobs: FittedTrainerList):
-    fig = result_list_from_jobs.plot_all_model_fits_into_one_fig(only_double_ko=True)
+    fig = result_list_from_jobs._plot_all_model_fits_for_specified_kos(
+        only_double_ko=True
+    )
     titles = [ax.get_title() for ax in fig.axes]
     assert titles == [
         "Ground truth (KO: Node_0, Node_4)",
