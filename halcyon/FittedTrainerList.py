@@ -82,7 +82,28 @@ class FittedTrainerList:
         # Single KOs so conditions of knockouts should be each gene
         dataset_getter = lambda trainer: trainer.dataset
         conditions_to_map = self.get_all_genes()
-        self._plot_all_model_fits_for_specified_kos(conditions_to_map, dataset_getter)
+        return self._plot_all_model_fits_for_specified_kos(
+            conditions_to_map, dataset_getter
+        )
+
+    def tidy_dataframe_for_all_models_specific_kos(
+        self,
+        kos_to_predict: list[tuple[str]],
+        dataset_getter: Callable,
+    ):
+        # Create tidy dataframe
+        out_records = []
+        for trainer in self.trainer_list:
+            # Get the correct GT dataset
+            dataset: ExpressionDataWithConditions = dataset_getter(trainer)
+            # TODO add the network info?
+            # Calculate the predictions per model.
+            new_predictions = trainer.tidy_df_of_predictions_on_dataset(
+                dataset, kos_to_predict
+            )
+            out_records.extend(new_predictions)
+
+        return pd.concat(out_records)
 
     def _plot_all_model_fits_for_specified_kos(
         self,
@@ -92,68 +113,83 @@ class FittedTrainerList:
         ymin: float = 0,
         ymax: float = 1.1,
     ):
-        colour_map = self._get_gene_colourmap()
+        # colour_map = self._get_gene_colourmap()
         if first_n_results:
             kos_to_plot = kos_to_plot[:first_n_results]
+
+        tidy_df = self.tidy_dataframe_for_all_models_specific_kos(
+            kos_to_plot, dataset_getter
+        )
+
+        g = sns.relplot(
+            data=tidy_df,
+            col="model",
+            row="condition",
+            hue="gene",
+            x="time",
+            y="expression",
+            kind="line",
+        )
+        return g
 
         ko_to_row_map = {
             condition: row_index for row_index, condition in enumerate(kos_to_plot)
         }
 
-        n_cols = len(self.trainer_list) + 1
-        n_rows = len(ko_to_row_map)
-        fig, axs = plt.subplots(
-            n_rows, n_cols, sharey=True, sharex="col", figsize=(4 * n_cols, 3 * n_rows)
-        )
+        # n_cols = len(self.trainer_list) + 1
+        # n_rows = len(ko_to_row_map)
+        # fig, axs = plt.subplots(
+        #     n_rows, n_cols, sharey=True, sharex="col", figsize=(4 * n_cols, 3 * n_rows)
+        # )
 
-        for column_index, trainer in enumerate(self.trainer_list):
-            dataset: ExpressionDataWithConditions = dataset_getter(trainer)
+        # for column_index, trainer in enumerate(self.trainer_list):
+        #     dataset: ExpressionDataWithConditions = dataset_getter(trainer)
 
-            for ko_genes, row_index in ko_to_row_map.items():
-                try:
-                    condition, expressions = (
-                        dataset._get_condition_and_expression_under_ko_gene(ko_genes)
-                    )
-                except KeyError:
-                    # Condition not predicted by model
-                    continue
-                env_tensor, expressions_tensor = (
-                    condition.as_tensor(),
-                    expressions.as_tensor(),
-                )
-                env_tensor = env_tensor.to(trainer.model.device)
-                expressions_tensor = expressions_tensor.to(trainer.model.device)
+        #     for ko_genes, row_index in ko_to_row_map.items():
+        #         try:
+        #             condition, expressions = (
+        #                 dataset._get_condition_and_expression_under_ko_gene(ko_genes)
+        #             )
+        #         except KeyError:
+        #             # Condition not predicted by model
+        #             continue
+        #         env_tensor, expressions_tensor = (
+        #             condition.as_tensor(),
+        #             expressions.as_tensor(),
+        #         )
+        #         env_tensor = env_tensor.to(trainer.model.device)
+        #         expressions_tensor = expressions_tensor.to(trainer.model.device)
 
-                if column_index == 0:
-                    # Plot ground truth in first column
-                    ko_title = f"Ground truth (KO: {', '.join(condition.ko_gene)})"
-                    trainer._plot_from_expressions(
-                        expressions=expressions_tensor.detach().cpu().numpy(),
-                        title=ko_title,
-                        axs=axs[row_index, 0],
-                        show_legend=False,
-                        palette=colour_map,
-                    )
-                if row_index == 0:
-                    # First row should have titles
-                    model_title = trainer.get_save_file_name().removesuffix(
-                        trainer.file_name_suffix
-                    )
-                    model_title = model_title.removeprefix(trainer.file_name_prefix)
-                    model_title = fill(model_title.replace("_", " "), width=30)
-                else:
-                    model_title = None
-                trainer._plot_one_prediction(
-                    expressions_tensor[:, 0].unsqueeze(0),
-                    model_title,
-                    env_tensor,
-                    axs[row_index, column_index + 1],
-                    show_legend=False,
-                    palette=colour_map,
-                )
-        for ax in np.ravel(axs):
-            ax.set_ylim(ymin, ymax)
-        return fig
+        #         if column_index == 0:
+        #             # Plot ground truth in first column
+        #             ko_title = f"Ground truth (KO: {', '.join(condition.ko_gene)})"
+        #             trainer._plot_from_expressions(
+        #                 expressions=expressions_tensor.detach().cpu().numpy(),
+        #                 title=ko_title,
+        #                 axs=axs[row_index, 0],
+        #                 show_legend=False,
+        #                 palette=colour_map,
+        #             )
+        #         if row_index == 0:
+        #             # First row should have titles
+        #             model_title = trainer.get_save_file_name().removesuffix(
+        #                 trainer.file_name_suffix
+        #             )
+        #             model_title = model_title.removeprefix(trainer.file_name_prefix)
+        #             model_title = fill(model_title.replace("_", " "), width=30)
+        #         else:
+        #             model_title = None
+        #         trainer._plot_one_prediction(
+        #             expressions_tensor[:, 0].unsqueeze(0),
+        #             model_title,
+        #             env_tensor,
+        #             axs[row_index, column_index + 1],
+        #             show_legend=False,
+        #             palette=colour_map,
+        #         )
+        # for ax in np.ravel(axs):
+        #     ax.set_ylim(ymin, ymax)
+        # return fig
 
     def _get_final_loss_heatmap_data(self, column_name: str = "nr_genes"):
         df = self.summary_dataframe()

@@ -165,15 +165,24 @@ class Trainer:
         self.optimizer.zero_grad()
         self.model.set_conditions(experiment_data)
         output = self.integrate_model(initial_states_tensor=initial_state)
-
         return output
 
-    def _calculate_loss_from_batch(self, batch: torch.Tensor):
+    def _calculate_model_prediction_from_batch(
+        self, batch: torch.Tensor, return_true_expression=False
+    ):
         experiment_data, expression_data = self.preprocess_batch(batch)
         output = self._calculate_model_prediction_at_conditions(
             experiment_data, expression_data[:, :, 0]
         )
-        return self.loss_fn(output, expression_data, self.model)
+        if return_true_expression:
+            return output, expression_data
+        return output
+
+    def _calculate_loss_from_batch(self, batch: torch.Tensor):
+        output, true_expresssion = self._calculate_model_prediction_from_batch(
+            batch, return_true_expression=True
+        )
+        return self.loss_fn(output, true_expresssion, self.model)
 
     def preprocess_batch(self, batch):
         experiment_data, expression_data = batch
@@ -348,6 +357,82 @@ class Trainer:
                     new_dict[key] = value
 
             self.model.load_state_dict(new_dict)
+
+    def tidy_df_of_predictions_on_dataset(
+        self,
+        expressions_to_predict: ExpressionDataWithConditions,
+        kos_to_predict: list[tuple[str]],
+    ):
+        all_predictions = []
+        self.model.eval()
+        for ko in kos_to_predict:
+            try:
+                condition, ground_truth_expressions = (
+                    expressions_to_predict._get_condition_and_expression_under_ko_gene(
+                        ko
+                    )
+                )
+            except KeyError:
+                # Gene(s) not in model. Just do not return a dataframe for these?
+                continue
+            assert (
+                expressions_to_predict.genes == self.model.modelled_gene_labels
+            ), "Gene labels do not match"
+
+            if self.do_time_scaling:
+                expressions_to_predict.scale_time_series()
+
+            initial_state = ground_truth_expressions.as_tensor()[:, 0].unsqueeze(0)
+            condition_tensor = condition.as_tensor().unsqueeze(0)
+            initial_state = initial_state.to(self.model.device)
+            condition_tensor = condition_tensor.to(self.model.device)
+
+            with torch.no_grad():
+                prediction = self._calculate_model_prediction_at_conditions(
+                    condition_tensor, initial_state
+                )
+                prediction = prediction.squeeze(0).detach().cpu().numpy()
+
+            df_predicted = pd.DataFrame(
+                prediction,
+                columns=self.dataset._get_time_points(),
+                index=self.dataset.genes,
+            )
+            predicted_df = df_predicted.melt(
+                ignore_index=False, var_name="time", value_name="expression"
+            ).reset_index(names="gene")
+            model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
+            model_title = model_title.removeprefix(self.file_name_prefix)
+            predicted_df["model"] = model_title
+
+            ground_truth_df = ground_truth_expressions.df.melt(
+                ignore_index=False, var_name="time", value_name="expression"
+            ).reset_index(names="gene")
+            ground_truth_df["model"] = "ground_truth"
+            full_df = pd.concat([ground_truth_df, predicted_df])
+            full_df["condition"] = f"KO: {', '.join(condition.ko_gene)}"
+            print()
+            all_predictions.append(full_df)
+        self.model.train()
+        return all_predictions
+
+    def predict_dataframe_from_expression_data(
+        self, expressions_to_predict: ExpressionDataWithConditions
+    ):
+        assert (
+            expressions_to_predict.genes == self.model.modelled_gene_labels
+        ), "Gene labels do not match"
+        self.model.eval()
+        if self.do_time_scaling:
+            expressions_to_predict.scale_time_series()
+
+        all_predictions = []
+        with torch.no_grad():
+            for batch in expressions_to_predict:
+                predictions = self._calculate_model_prediction_from_batch(batch)
+                all_predictions.append(predictions.detach().cpu().item())
+        self.model.train()
+        return all_predictions
 
     def predict_and_calculate_loss_from_expression_data(
         self, expressions_to_predict: ExpressionDataWithConditions
