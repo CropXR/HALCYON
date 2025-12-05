@@ -358,7 +358,7 @@ class Trainer:
 
             self.model.load_state_dict(new_dict)
 
-    def tidy_df_of_predictions_on_dataset(
+    def _tidy_df_of_predictions_on_dataset(
         self,
         expressions_to_predict: ExpressionDataWithConditions,
         kos_to_predict: list[tuple[str]],

@@ -3,14 +3,21 @@ from typing import List
 from typing_extensions import Self
 import networkx as nx
 import matplotlib.pyplot as plt
+import seaborn as sns
+
+import networkx.algorithms.community as nxcom
 
 
 class RegulatoryNetwork:
     def __init__(self, network: nx.DiGraph):
         self._graph = network
+        self._clustering = []
 
     def __eq__(self, other: Self):
         return nx.is_isomorphic(self._graph, other._graph)
+
+    def do_clustering(self):
+        self._clustering = nxcom.louvain_communities(self._graph)
 
     def get_ingoing_interactions(self, gene_name: str) -> List:
         """Get interactions that influence a certain gene
@@ -70,11 +77,24 @@ class RegulatoryNetwork:
         """
         return RegulatoryNetwork(self._graph.subgraph(nodes).copy())
 
+    def _get_node_colours(self):
+        if not self._clustering:
+            return None
+        else:
+            palette = sns.color_palette("tab20", len(self._clustering))
+            node_to_colour = {}
+            for i, community in enumerate(self._clustering):
+                for gene in community:
+                    node_to_colour[gene] = palette[i]
+            return [node_to_colour[n] for n in self._graph.nodes()]
+
     def plot(self, ax=None):
         """Plot the network using networkx's draw function."""
         pos = nx.kamada_kawai_layout(self._graph)
         # Extract edge colors from the attribute
         edge_colors = [self._graph[u][v]["color"] for u, v in self._graph.edges()]
+        node_colours = self._get_node_colours()
+
         if ax is None:
             fig, ax = plt.subplots()
         else:
@@ -87,6 +107,7 @@ class RegulatoryNetwork:
             with_labels=True,
             arrows=True,
             edge_color=edge_colors,
+            node_color=node_colours,
         )
         return fig, ax
 
