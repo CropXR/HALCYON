@@ -39,8 +39,7 @@ class TidyDfResults:
         )
         return merged
 
-    def plot_mse_for_kos(self) -> sns.FacetGrid:
-        """Make a plot that shows the MSE for each model. Split by if the genes are in the MM or not."""
+    def _get_mse_split_by_genes_in_mm(self) -> pd.DataFrame:
         merged = self._get_df_with_gene_is_in_mm_column()
 
         mse_split = (
@@ -53,6 +52,11 @@ class TidyDfResults:
             )
             .reset_index(name=self.MSE_COL)
         )
+        return mse_split
+
+    def plot_mse_for_kos(self) -> sns.FacetGrid:
+        """Make a plot that shows the MSE for each model. Split by if the genes are in the MM or not."""
+        mse_split = self._get_mse_split_by_genes_in_mm()
 
         g = sns.catplot(
             kind="bar",
