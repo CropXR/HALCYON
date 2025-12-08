@@ -15,7 +15,7 @@ from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import Model
 import torch.nn as nn
 import seaborn as sns
-
+from halcyon.TidyDfResults import TidyDfColNames
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 
 
@@ -398,19 +398,25 @@ class Trainer:
                 columns=self.dataset._get_time_points(),
                 index=self.dataset.genes,
             )
-            predicted_df = df_predicted.melt(
-                ignore_index=False, var_name="time", value_name="expression"
-            ).reset_index(names="gene")
+            df_predicted = df_predicted.melt(
+                ignore_index=False,
+                var_name=TidyDfColNames.TIME,
+                value_name=TidyDfColNames.EXPRESSION,
+            ).reset_index(names=TidyDfColNames.GENE)
+
             model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
             model_title = model_title.removeprefix(self.file_name_prefix)
-            predicted_df["model"] = model_title
-
+            df_predicted[TidyDfColNames.MODEL] = model_title
+            # Add the ground truth measurements, too.
             ground_truth_df = ground_truth_expressions.df.melt(
-                ignore_index=False, var_name="time", value_name="expression"
-            ).reset_index(names="gene")
-            ground_truth_df["model"] = "ground_truth"
-            full_df = pd.concat([ground_truth_df, predicted_df])
-            full_df["condition"] = f"KO: {', '.join(condition.ko_gene)}"
+                ignore_index=False,
+                var_name=TidyDfColNames.TIME,
+                value_name=TidyDfColNames.EXPRESSION,
+            ).reset_index(names=TidyDfColNames.GENE)
+            ground_truth_df[TidyDfColNames.MODEL] = TidyDfColNames.GROUND_TRUTH
+
+            full_df = pd.concat([ground_truth_df, df_predicted])
+            full_df[TidyDfColNames.CONDITION] = f"KO: {', '.join(condition.ko_gene)}"
             all_predictions.append(full_df)
         self.model.train()
         return all_predictions
