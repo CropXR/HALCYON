@@ -7,7 +7,8 @@ class TidyDfResults:
     def __init__(self, df):
         self.df = df
 
-    def _get_df_with_ground_truth_in_column(self):
+    def _get_df_with_ground_truth_in_column(self) -> pd.DataFrame:
+        """Return a dataframe where there is a column present called "ground_truth" which contains the ground truth expression values."""
         gt = self.df[self.df["model"] == "ground_truth"][
             ["gene", "time", "condition", "expression"]
         ].rename(columns={"expression": "ground_truth"})
@@ -17,12 +18,9 @@ class TidyDfResults:
         )
         return merged
 
-    def plot_mse_for_kos(self):
-        merged = self._get_df_with_ground_truth_in_column()
-        total_nr_models = merged["model"].nunique()
-        merged["is_in_mm"] = merged.groupby("gene")["model"].transform(
-            lambda x: x.nunique() == total_nr_models
-        )
+    def plot_mse_for_kos(self) -> sns.FacetGrid:
+        """Make a plot that shows the MSE for each model. Split by if the genes are in the MM or not."""
+        merged = self._get_df_with_gene_is_in_mm_column()
 
         mse_split = (
             merged.groupby(["model", "is_in_mm"])
@@ -34,14 +32,37 @@ class TidyDfResults:
         )
 
         g = sns.catplot(
-            kind="bar", data=mse_split, col="is_in_mm", y="MSE", x="model", hue="model"
+            kind="bar",
+            data=mse_split,
+            col="is_in_mm",
+            y="MSE",
+            x="model",
+            hue="model",
+            aspect=0.5,
+            height=5,
         )
-        g.set_xticklabels(rotation=90)
+        g.set_xticklabels(rotation=45, ha="right")
         return g
 
-    def plot_scatterplot(self):
+    def _get_df_with_gene_is_in_mm_column(self) -> pd.DataFrame:
+        """Return DF that contains a column 'is_in_mm' that indicates if the gene is in the MM or not."""
         merged = self._get_df_with_ground_truth_in_column()
-        return sns.relplot(data=merged, x="ground_truth", y="expression", hue="model")
+        total_nr_models = merged["model"].nunique()
+        merged["is_in_mm"] = merged.groupby("gene")["model"].transform(
+            lambda x: x.nunique() == total_nr_models
+        )
+        return merged
+
+    def plot_scatterplot(self):
+        """Plot scatterplot of ground truth vs predicted expression. Split by if the gene is in the MM or not."""
+        mse_split = self._get_df_with_gene_is_in_mm_column()
+        return sns.relplot(
+            data=mse_split,
+            x="ground_truth",
+            y="expression",
+            hue="model",
+            col="is_in_mm",
+        )
 
     def plot_scatterplot_per_ko(self):
         merged = self._get_df_with_ground_truth_in_column()
@@ -55,6 +76,7 @@ class TidyDfResults:
         )
 
     def plot_model_plots(self):
+        """Plot lineplots of expression over time for each model, split by conditions."""
         g = sns.relplot(
             data=self.df,
             col="model",
@@ -64,7 +86,7 @@ class TidyDfResults:
             y="expression",
             kind="line",
         )
-        return
+        return g
 
     def to_csv(self, filepath):
         self.df.to_csv(filepath, index=False)
@@ -73,3 +95,11 @@ class TidyDfResults:
     def from_csv(cls, filepath):
         df = pd.read_csv(filepath)
         return cls(df)
+
+    @classmethod
+    def from_parquet(cls, filepath):
+        df = pd.read_parquet(filepath)
+        return cls(df)
+
+    def to_parquet(self, filepath):
+        self.df.to_parquet(filepath, index=False)
