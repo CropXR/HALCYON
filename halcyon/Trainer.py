@@ -15,7 +15,7 @@ from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import Model
 import torch.nn as nn
 import seaborn as sns
-from halcyon.TidyDfResults import TidyDfColNames
+from halcyon.TidyDfResults import TidyDfResults
 from halcyon.Simulators.GNWSimRunner import SimulationResult
 
 
@@ -400,23 +400,23 @@ class Trainer:
             )
             df_predicted = df_predicted.melt(
                 ignore_index=False,
-                var_name=TidyDfColNames.TIME,
-                value_name=TidyDfColNames.EXPRESSION,
-            ).reset_index(names=TidyDfColNames.GENE)
+                var_name=TidyDfResults.TIME_COL,
+                value_name=TidyDfResults.EXPRESSION_COL,
+            ).reset_index(names=TidyDfResults.GENE_COL)
 
             model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
             model_title = model_title.removeprefix(self.file_name_prefix)
-            df_predicted[TidyDfColNames.MODEL] = model_title
+            df_predicted[TidyDfResults.MODEL_COL] = model_title
             # Add the ground truth measurements, too.
             ground_truth_df = ground_truth_expressions.df.melt(
                 ignore_index=False,
-                var_name=TidyDfColNames.TIME,
-                value_name=TidyDfColNames.EXPRESSION,
-            ).reset_index(names=TidyDfColNames.GENE)
-            ground_truth_df[TidyDfColNames.MODEL] = TidyDfColNames.GROUND_TRUTH
+                var_name=TidyDfResults.TIME_COL,
+                value_name=TidyDfResults.EXPRESSION_COL,
+            ).reset_index(names=TidyDfResults.GENE_COL)
+            ground_truth_df[TidyDfResults.MODEL_COL] = TidyDfResults.GROUND_TRUTH_COL
 
             full_df = pd.concat([ground_truth_df, df_predicted])
-            full_df[TidyDfColNames.CONDITION] = f"KO: {', '.join(condition.ko_gene)}"
+            full_df[TidyDfResults.CONDITION_COL] = f"KO: {', '.join(condition.ko_gene)}"
             all_predictions.append(full_df)
         self.model.train()
         return all_predictions

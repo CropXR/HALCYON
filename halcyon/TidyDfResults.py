@@ -1,45 +1,39 @@
 from sklearn.metrics import mean_squared_error
 import seaborn as sns
 import pandas as pd
-from enum import Enum
-
-
-class TidyDfColNames(Enum):
-    """Enforce column names used in TidyDfResults."""
-
-    MODEL = "model"
-    GENE = "gene"
-    TIME = "time"
-    CONDITION = "condition"
-    IS_IN_MM = "is_in_mm"
-    EXPRESSION = "expression"
-    GROUND_TRUTH = "ground_truth"
-    MSE = "MSE"
 
 
 class TidyDfResults:
+    # Store column names here
+    MODEL_COL = "model"
+    GENE_COL = "gene"
+    TIME_COL = "time"
+    CONDITION_COL = "condition"
+    IS_IN_MM_COL = "is_in_mm"
+    EXPRESSION_COL = "expression"
+    GROUND_TRUTH_COL = "ground_truth"
+    MSE_COL = "MSE"
+
     def __init__(self, df: pd.DataFrame):
         self.df = df
 
     def _get_df_with_ground_truth_in_column(self) -> pd.DataFrame:
         """Return a dataframe where there is a column present called "ground_truth" which contains the ground truth expression values."""
-        gt = self.df[self.df[TidyDfColNames.MODEL] == TidyDfColNames.GROUND_TRUTH][
+        gt = self.df[self.df[self.MODEL_COL] == self.GROUND_TRUTH_COL][
             [
-                TidyDfColNames.GENE,
-                TidyDfColNames.TIME,
-                TidyDfColNames.CONDITION,
-                TidyDfColNames.EXPRESSION,
+                self.GENE_COL,
+                self.TIME_COL,
+                self.CONDITION_COL,
+                self.EXPRESSION_COL,
             ]
-        ].rename(columns={TidyDfColNames.EXPRESSION: TidyDfColNames.GROUND_TRUTH})
+        ].rename(columns={self.EXPRESSION_COL: self.GROUND_TRUTH_COL})
 
-        merged = self.df[
-            self.df[TidyDfColNames.MODEL] != TidyDfColNames.GROUND_TRUTH
-        ].merge(
+        merged = self.df[self.df[self.MODEL_COL] != self.GROUND_TRUTH_COL].merge(
             gt,
             on=[
-                TidyDfColNames.GENE,
-                TidyDfColNames.TIME,
-                TidyDfColNames.CONDITION,
+                self.GENE_COL,
+                self.TIME_COL,
+                self.CONDITION_COL,
             ],
             how="left",
         )
@@ -50,23 +44,23 @@ class TidyDfResults:
         merged = self._get_df_with_gene_is_in_mm_column()
 
         mse_split = (
-            merged.groupby([TidyDfColNames.MODEL, TidyDfColNames.IS_IN_MM])
+            merged.groupby([self.MODEL_COL, self.IS_IN_MM_COL])
             .apply(
                 lambda g: mean_squared_error(
-                    g[TidyDfColNames.GROUND_TRUTH], g[TidyDfColNames.EXPRESSION]
+                    g[self.GROUND_TRUTH_COL], g[self.EXPRESSION_COL]
                 ),
                 include_groups=False,
             )
-            .reset_index(name=TidyDfColNames.MSE)
+            .reset_index(name=self.MSE_COL)
         )
 
         g = sns.catplot(
             kind="bar",
             data=mse_split,
-            col=TidyDfColNames.IS_IN_MM,
-            y=TidyDfColNames.MSE,
-            x=TidyDfColNames.MODEL,
-            hue=TidyDfColNames.MODEL,
+            col=self.IS_IN_MM_COL,
+            y=self.MSE_COL,
+            x=self.MODEL_COL,
+            hue=self.MODEL_COL,
             aspect=0.5,
             height=5,
         )
@@ -76,9 +70,9 @@ class TidyDfResults:
     def _get_df_with_gene_is_in_mm_column(self) -> pd.DataFrame:
         """Return DF that contains a column 'is_in_mm' that indicates if the gene is in the MM or not."""
         merged = self._get_df_with_ground_truth_in_column()
-        total_nr_models = merged[TidyDfColNames.MODEL].nunique()
-        merged[TidyDfColNames.IS_IN_MM] = merged.groupby(TidyDfColNames.GENE)[
-            TidyDfColNames.MODEL
+        total_nr_models = merged[self.MODEL_COL].nunique()
+        merged[self.IS_IN_MM_COL] = merged.groupby(self.GENE_COL)[
+            self.MODEL_COL
         ].transform(lambda x: x.nunique() == total_nr_models)
         return merged
 
@@ -87,20 +81,20 @@ class TidyDfResults:
         mse_split = self._get_df_with_gene_is_in_mm_column()
         return sns.relplot(
             data=mse_split,
-            x=TidyDfColNames.GROUND_TRUTH,
-            y=TidyDfColNames.EXPRESSION,
-            hue=TidyDfColNames.MODEL,
-            col=TidyDfColNames.IS_IN_MM,
+            x=self.GROUND_TRUTH_COL,
+            y=self.EXPRESSION_COL,
+            hue=self.MODEL_COL,
+            col=self.IS_IN_MM_COL,
         )
 
     def plot_scatterplot_per_ko(self):
         merged = self._get_df_with_ground_truth_in_column()
         return sns.relplot(
             data=merged,
-            x=TidyDfColNames.GROUND_TRUTH,
-            y=TidyDfColNames.EXPRESSION,
-            hue=TidyDfColNames.MODEL,
-            col=TidyDfColNames.CONDITION,
+            x=self.GROUND_TRUTH_COL,
+            y=self.EXPRESSION_COL,
+            hue=self.MODEL_COL,
+            col=self.CONDITION_COL,
             col_wrap=3,
         )
 
@@ -108,11 +102,11 @@ class TidyDfResults:
         """Plot lineplots of expression over time for each model, split by conditions."""
         g = sns.relplot(
             data=self.df,
-            col=TidyDfColNames.MODEL,
-            row=TidyDfColNames.CONDITION,
-            hue=TidyDfColNames.GENE,
-            x=TidyDfColNames.TIME,
-            y=TidyDfColNames.EXPRESSION,
+            col=self.MODEL_COL,
+            row=self.CONDITION_COL,
+            hue=self.GENE_COL,
+            x=self.TIME_COL,
+            y=self.EXPRESSION_COL,
             kind="line",
         )
         return g
