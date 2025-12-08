@@ -42,9 +42,9 @@ class PhoenixABC(MachineLearningModel, ABC):
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
 
-    def _set_per_gene_multipliers_to_zero(self):
+    def _set_per_gene_multipliers(self, value=-50):
         with torch.no_grad():
-            self.per_gene_multipliers.zero_()
+            self.per_gene_multipliers.fill_(value)
 
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:

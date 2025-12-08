@@ -96,7 +96,7 @@ def hybrid_model_with_zero_ml_influence(
     mech_model_from_sim_result, ml_model_from_sim_result
 ):
     ml_model_from_sim_result = deepcopy(ml_model_from_sim_result)
-    ml_model_from_sim_result._set_per_gene_multipliers_to_zero()
+    ml_model_from_sim_result._set_per_gene_multipliers(-50)
     return HybridModel(
         mech_model_from_sim_result,
         ml_model_from_sim_result,
