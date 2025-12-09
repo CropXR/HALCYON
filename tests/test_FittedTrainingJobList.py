@@ -48,112 +48,17 @@ def test_final_loss_heatmap(result_list_from_jobs: FittedTrainerList):
     result_list_from_jobs.final_loss_heatmap()
 
 
-def test_plot_double_ko(result_list_from_jobs: FittedTrainerList):
-    fig = result_list_from_jobs._plot_all_model_fits_for_specified_kos(
-        only_double_ko=True
+def test_generate_tidy_df(result_list_from_jobs: FittedTrainerList):
+    dataset_getter = lambda trainer: trainer.dataset
+    conditions_to_map = result_list_from_jobs.get_all_genes()
+    tidy_df = result_list_from_jobs.predict_tidy_dataframe_for_all_models_specific_kos(
+        conditions_to_map, dataset_getter
     )
-    titles = [ax.get_title() for ax in fig.axes]
-    assert titles == [
-        "Ground truth (KO: Node_0, Node_4)",
-        "CellBox phi tanh self\nactivations True lr 0.1",
-        "PhoenixOnlyAddLayers hidden\nsize 2 synthesis only positive\nFalse lr 0.1",
-        "PhoenixAddAndProdLayers hidden\nsize 2 synthesis only positive\nFalse lr 0.1",
-        "HybridModel hidden size 2\nsynthesis only positive False\nlr 0.1",
-        "Ground truth (KO: Node_1, Node_6)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_2, Node_3)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_1, Node_5)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_0, Node_2)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_0, Node_3)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_0, Node_7)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_2, Node_4)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_3, Node_4)",
-        "",
-        "",
-        "",
-        "",
-    ]
-
-
-def test_plot_single_ko(result_list_from_jobs):
-    fig = result_list_from_jobs.plot_all_model_fits_into_one_fig()
-    titles = [ax.get_title() for ax in fig.axes]
-    assert titles == [
-        "Ground truth (KO: Node_0)",
-        "CellBox phi tanh self\nactivations True lr 0.1",
-        "PhoenixOnlyAddLayers hidden\nsize 2 synthesis only positive\nFalse lr 0.1",
-        "PhoenixAddAndProdLayers hidden\nsize 2 synthesis only positive\nFalse lr 0.1",
-        "HybridModel hidden size 2\nsynthesis only positive False\nlr 0.1",
-        "Ground truth (KO: Node_1)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_2)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_3)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_4)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_5)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_6)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_7)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_8)",
-        "",
-        "",
-        "",
-        "",
-        "Ground truth (KO: Node_9)",
-        "",
-        "",
-        "",
-        "",
+    # Just check column titles
+    assert tidy_df.df.columns.tolist() == [
+        tidy_df.GENE_COL,
+        tidy_df.TIME_COL,
+        tidy_df.EXPRESSION_COL,
+        tidy_df.MODEL_COL,
+        tidy_df.CONDITION_COL,
     ]
