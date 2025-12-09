@@ -27,5 +27,5 @@ dependencies:
   - pip:
       - plotly==6.3.0
       - sympytorch==0.1.4
-      - torch==2.8.0
+      - torch==2.8.0+cpu
       - torchdiffeq==0.2.5
