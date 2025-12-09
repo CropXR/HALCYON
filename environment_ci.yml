@@ -16,6 +16,8 @@ dependencies:
   - pytest-cov=6.0.0=pyhd8ed1ab_1
   - python=3.10.16=he725a3c_1_cpython
   - python-libsbml=5.20.5=py310h1a6248f_0
+  - pytorch=2.8.*=cpu*
+  - cpuonly
   - pyyaml=6.0.2=py310h89163eb_2
   - scikit-learn=1.6.1=py310h27f47ee_0
   - scipy=1.15.2=py310h1d65ade_0
@@ -27,5 +29,4 @@ dependencies:
   - pip:
       - plotly==6.3.0
       - sympytorch==0.1.4
-      - torch==2.8.0+cpu
       - torchdiffeq==0.2.5
