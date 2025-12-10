@@ -17,6 +17,7 @@ import torch.nn as nn
 import seaborn as sns
 from halcyon.TidyDfResults import TidyDfResults
 from halcyon.Simulators.GNWSimRunner import SimulationResult
+from tqdm import tqdm
 
 
 class Trainer:
@@ -365,7 +366,7 @@ class Trainer:
     ):
         all_predictions = []
         self.model.eval()
-        for ko in kos_to_predict:
+        for ko in tqdm(kos_to_predict):
             try:
                 condition, ground_truth_expressions = (
                     expressions_to_predict._get_condition_and_expression_under_ko_gene(
