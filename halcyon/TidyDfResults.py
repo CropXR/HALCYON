@@ -144,10 +144,8 @@ class TidyDfResults:
             height=5,
             margin_titles=True,
             sharey="row",
+            log_scale=y_log_scale,
         )
-        if y_log_scale:
-            for ax in g.axes.flatten():
-                ax.set_yscale("log")
         self._rotate_x_tick_labels(g)
         # g.figure.subplots_adjust(bottom=0.4)
         return g
