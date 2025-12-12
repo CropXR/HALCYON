@@ -3,6 +3,8 @@ import pytest
 from halcyon.TidyDfResults import TidyDfResults
 import numpy as np
 
+from sklearn.metrics import mean_squared_error
+
 
 @pytest.fixture
 def tidy_df():
@@ -20,7 +22,14 @@ def tidy_df():
             for t in time_points:
                 gt_data.append([gene, t, np.random.rand(), "ground_truth", cond])
     df_gt = pd.DataFrame(
-        gt_data, columns=["gene", "time", "expression", "model", "condition"]
+        gt_data,
+        columns=[
+            TidyDfResults.GENE_COL,
+            TidyDfResults.TIME_COL,
+            TidyDfResults.EXPRESSION_COL,
+            TidyDfResults.MODEL_COL,
+            TidyDfResults.CONDITION_COL,
+        ],
     )
 
     # Other models with random deviations
@@ -30,14 +39,21 @@ def tidy_df():
             for gene in genes:
                 for t in time_points:
                     gt_expr = df_gt[
-                        (df_gt.gene == gene)
-                        & (df_gt.time == t)
-                        & (df_gt.condition == cond)
-                    ]["expression"].values[0]
+                        (df_gt[TidyDfResults.GENE_COL] == gene)
+                        & (df_gt[TidyDfResults.TIME_COL] == t)
+                        & (df_gt[TidyDfResults.CONDITION_COL] == cond)
+                    ][TidyDfResults.EXPRESSION_COL].values[0]
                     expr = gt_expr + np.random.normal(scale=0.1)
                     other_data.append([gene, t, expr, model, cond])
     df_other = pd.DataFrame(
-        other_data, columns=["gene", "time", "expression", "model", "condition"]
+        other_data,
+        columns=[
+            TidyDfResults.GENE_COL,
+            TidyDfResults.TIME_COL,
+            TidyDfResults.EXPRESSION_COL,
+            TidyDfResults.MODEL_COL,
+            TidyDfResults.CONDITION_COL,
+        ],
     )
 
     # Mechanistic model (perfect match for Node_0 and Node_2)
@@ -50,10 +66,17 @@ def tidy_df():
                         (df_gt.gene == gene)
                         & (df_gt.time == t)
                         & (df_gt.condition == cond)
-                    ]["expression"].values[0]
+                    ][TidyDfResults.EXPRESSION_COL].values[0]
                     mech_data.append([gene, t, gt_expr, model, cond])
     df_mechanistic = pd.DataFrame(
-        mech_data, columns=["gene", "time", "expression", "model", "condition"]
+        mech_data,
+        columns=[
+            TidyDfResults.GENE_COL,
+            TidyDfResults.TIME_COL,
+            TidyDfResults.EXPRESSION_COL,
+            TidyDfResults.MODEL_COL,
+            TidyDfResults.CONDITION_COL,
+        ],
     )
 
     # Combine all
@@ -62,13 +85,28 @@ def tidy_df():
 
 
 def test_calculate_mse(tidy_df):
-    mse_df = tidy_df._get_mse_split_by_genes_in_mm()
+    mse_df = tidy_df._groupby_and_apply_func(
+        mean_squared_error,
+        TidyDfResults.MSE_COL,
+        groupby_list=[
+            TidyDfResults.MODEL_COL,
+            TidyDfResults.GENE_COL,
+            TidyDfResults.GENE_IS_IN_MM_COL,
+            TidyDfResults.CONDITION_COL,
+        ],
+    )
     # For mech model it should have MSE=0.
     assert (
-        mse_df[(mse_df["model"] == "Mech_model") & (mse_df["is_in_mm"] == True)][
-            "MSE"
-        ].values[0]
+        mse_df[
+            (mse_df[TidyDfResults.MODEL_COL] == "Mech_model")
+            & (mse_df[TidyDfResults.GENE_IS_IN_MM_COL] == True)
+        ][TidyDfResults.MSE_COL].values[0]
         == 0.0
     )
     # For the others it should be > 0
-    assert all(mse_df[(mse_df["model"] != "Mech_model")]["MSE"].values > 0)
+    assert all(
+        mse_df[(mse_df[TidyDfResults.MODEL_COL] != "Mech_model")][
+            TidyDfResults.MSE_COL
+        ].values
+        > 0
+    )
