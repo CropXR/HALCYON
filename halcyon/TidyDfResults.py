@@ -10,7 +10,7 @@ class TidyDfResults:
     GENE_COL = "gene"
     TIME_COL = "time"
     CONDITION_COL = "condition"
-    IS_IN_MM_COL = "gene_is_in_mm"
+    GENE_IS_IN_MM_COL = "gene_is_in_mm"
     EXPRESSION_COL = "expression"
     GROUND_TRUTH_COL = "ground_truth"
     MSE_COL = "MSE"
@@ -18,6 +18,14 @@ class TidyDfResults:
     KO_IN_MM_COL = "ko_in_mm"
 
     def __init__(self, df: pd.DataFrame):
+        # Check if the columns are correct
+        assert set(df.columns) == {
+            self.GENE_COL,
+            self.TIME_COL,
+            self.EXPRESSION_COL,
+            self.MODEL_COL,
+            self.CONDITION_COL,
+        }
         self.df = df
 
     def _get_df_with_ground_truth_in_column(self) -> pd.DataFrame:
@@ -46,7 +54,7 @@ class TidyDfResults:
         self, func_to_apply: Callable, col_title: str, groupby_list: list[str]
     ):
         merged = self._get_df_with_gene_is_in_mm_column()
-        mse_split = (
+        df_split_and_function_applied = (
             merged.groupby(groupby_list)
             .apply(
                 lambda g: func_to_apply(
@@ -57,7 +65,7 @@ class TidyDfResults:
             .reset_index(name=col_title)
         )
 
-        return mse_split
+        return df_split_and_function_applied
 
     def _get_df_with_gene_is_in_mm_column(self) -> pd.DataFrame:
         """Return DF that contains a column 'is_in_mm' that indicates if the gene is in the MM or not."""
@@ -66,7 +74,7 @@ class TidyDfResults:
         gene_is_in_mm = self._flag_groups_with_all_models(
             merged, col_to_group=self.GENE_COL
         )
-        merged[self.IS_IN_MM_COL] = gene_is_in_mm
+        merged[self.GENE_IS_IN_MM_COL] = gene_is_in_mm
 
         return merged
 
@@ -82,7 +90,7 @@ class TidyDfResults:
     def plot_r2(self, split_by_condition_in_mm=True):
         """Make a plot that shows the R2 for each model. Split by if the genes are in the MM or not."""
         # Do not show per-gene r2 because these can be massively different
-        groupby_list = [self.MODEL_COL, self.IS_IN_MM_COL]
+        groupby_list = [self.MODEL_COL, self.GENE_IS_IN_MM_COL]
 
         if split_by_condition_in_mm:
             groupby_list.append(self.CONDITION_COL)
@@ -98,7 +106,7 @@ class TidyDfResults:
         g = sns.catplot(
             kind="bar",
             data=r2_split,
-            col=self.IS_IN_MM_COL,
+            col=self.GENE_IS_IN_MM_COL,
             col_order=[True, False],
             row=self.KO_IN_MM_COL if split_by_condition_in_mm else None,
             row_order=[True, False] if split_by_condition_in_mm else None,
@@ -117,9 +125,13 @@ class TidyDfResults:
         self, split_by_condition_in_mm=True, y_log_scale=True
     ) -> sns.FacetGrid:
         """Make a plot that shows the MSE for each model. Split by if the genes are in the MM or not."""
-        groupby_list = [self.MODEL_COL, self.GENE_COL, self.IS_IN_MM_COL]
-        if split_by_condition_in_mm:
-            groupby_list.append(self.CONDITION_COL)
+        groupby_list = [
+            self.MODEL_COL,
+            self.GENE_COL,
+            self.GENE_IS_IN_MM_COL,
+            self.CONDITION_COL,
+        ]
+
         mse_split = self._groupby_and_apply_func(
             mean_squared_error, self.MSE_COL, groupby_list=groupby_list
         )
@@ -133,7 +145,7 @@ class TidyDfResults:
         g = sns.catplot(
             kind="boxen",
             data=mse_split,
-            col=self.IS_IN_MM_COL,
+            col=self.GENE_IS_IN_MM_COL,
             col_order=[True, False],
             row=self.KO_IN_MM_COL if split_by_condition_in_mm else None,
             row_order=[True, False] if split_by_condition_in_mm else None,
@@ -142,12 +154,11 @@ class TidyDfResults:
             hue=self.MODEL_COL,
             aspect=1,
             height=5,
-            margin_titles=True,
-            sharey="row",
+            margin_titles=True if split_by_condition_in_mm else None,
+            sharey="row" if split_by_condition_in_mm else True,
             log_scale=y_log_scale,
         )
         self._rotate_x_tick_labels(g)
-        # g.figure.subplots_adjust(bottom=0.4)
         return g
 
     def _rotate_x_tick_labels(self, g, rotation=45):
@@ -157,18 +168,45 @@ class TidyDfResults:
                 label.set_horizontalalignment("right")
         g.figure.tight_layout()
 
-    def plot_scatterplot(self):
-        """Plot scatterplot of ground truth vs predicted expression. Split by if the gene is in the MM or not."""
-        mse_split = self._get_df_with_gene_is_in_mm_column()
-        return sns.relplot(
-            data=mse_split,
+    def kde_plot(self, subsample_first=False):
+        """Show KDE of points in ground truth vs predicted plot. Set subsample=True to speed up calculation of KDE by subsampling DF first."""
+        df = self._get_df_with_gene_is_in_mm_column()
+        condition_in_mm = self._flag_groups_with_all_models(
+            df, col_to_group=self.CONDITION_COL
+        )
+        df[self.KO_IN_MM_COL] = condition_in_mm
+        if subsample_first:
+            df = df.groupby(
+                [self.KO_IN_MM_COL, self.GENE_IS_IN_MM_COL, self.MODEL_COL]
+            ).sample(n=10000, replace=True, random_state=42)
+        return sns.displot(
+            data=df,
+            kind="kde",
             x=self.GROUND_TRUTH_COL,
             y=self.EXPRESSION_COL,
-            row=self.MODEL_COL,
-            col=self.IS_IN_MM_COL,
-            hue=self.TIME_COL,
-            s=2,
-            facet_kws={"sharey": "row", "margin_titles": True},
+            col=self.GENE_IS_IN_MM_COL,
+            row=self.KO_IN_MM_COL,
+            hue=self.MODEL_COL,
+            levels=3,
+            thresh=0.01,
+        )
+
+    def plot_scatterplot(self):
+        """Plot scatterplot of ground truth vs predicted expression. Split by if the gene is in the MM or not."""
+        df = self._get_df_with_gene_is_in_mm_column()
+        condition_in_mm = self._flag_groups_with_all_models(
+            df, col_to_group=self.CONDITION_COL
+        )
+        df[self.KO_IN_MM_COL] = condition_in_mm
+
+        return sns.relplot(
+            data=df,
+            x=self.GROUND_TRUTH_COL,
+            y=self.EXPRESSION_COL,
+            col=self.GENE_IS_IN_MM_COL,
+            row=self.KO_IN_MM_COL,
+            hue=self.MODEL_COL,
+            marker=".",
         )
 
     def plot_scatterplot_per_ko(self):
