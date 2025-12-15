@@ -2,6 +2,9 @@ from sklearn.metrics import mean_squared_error, r2_score
 import seaborn as sns
 import pandas as pd
 from typing import Callable
+from matplotlib.colors import LogNorm
+import matplotlib.pyplot as plt
+import scipy.cluster.hierarchy as sch
 
 
 class TidyDfResults:
@@ -219,6 +222,59 @@ class TidyDfResults:
             col=self.CONDITION_COL,
             col_wrap=3,
         )
+
+    def per_gene_mse_heatmap(self, cmap="viridis") -> sns.FacetGrid:
+        groupby_list = [
+            self.MODEL_COL,
+            self.GENE_COL,
+            self.CONDITION_COL,
+        ]
+        mse_df = self._groupby_and_apply_func(
+            mean_squared_error, self.MSE_COL, groupby_list=groupby_list
+        )
+
+        norm = LogNorm(
+            vmin=mse_df[self.MSE_COL].min(),
+            vmax=mse_df[self.MSE_COL].max(),
+        )
+
+        # Use correlations between conditions to order columns
+        full_pivot = mse_df.pivot(
+            index=[self.GENE_COL, self.MODEL_COL],
+            columns=self.CONDITION_COL,
+            values=self.MSE_COL,
+        )
+        corr = full_pivot.corr()
+        linkage = sch.linkage(corr, method="average")
+        col_order = full_pivot.columns[sch.leaves_list(linkage)]
+
+        # Use how often gene shows up (i.e. if it is in MM or not) to order rows
+        gene_order = mse_df[self.GENE_COL].value_counts().index
+
+        # Do the actual plotting
+        g = sns.FacetGrid(
+            mse_df, col=self.MODEL_COL, margin_titles=True, aspect=0.4, height=10
+        )
+
+        def _plot_heatmap_func(data, **kwargs):
+            df_pivot = data.pivot(
+                index=self.GENE_COL, columns=self.CONDITION_COL, values=self.MSE_COL
+            ).reindex(index=gene_order, columns=col_order)
+            sns.heatmap(data=df_pivot, cmap=cmap, norm=norm, cbar=False, **kwargs)
+
+        g.map_dataframe(_plot_heatmap_func)
+
+        # Remove all gene and condition names
+        for ax in g.axes.flat:
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        # add ONE shared colourbar
+        mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+        mappable.set_array([])
+        g.figure.colorbar(mappable, ax=g.axes, fraction=0.02, pad=0.01, label="MSE")
+
+        return g
 
     def plot_model_plots(self):
         """Plot lineplots of expression over time for each model, split by conditions."""
