@@ -1,3 +1,4 @@
+import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 import seaborn as sns
 import pandas as pd
@@ -148,17 +149,17 @@ class TidyDfResults:
         g = sns.catplot(
             kind="boxen",
             data=mse_split,
-            col=self.GENE_IS_IN_MM_COL,
-            col_order=[True, False],
-            row=self.KO_IN_MM_COL if split_by_condition_in_mm else None,
-            row_order=[True, False] if split_by_condition_in_mm else None,
+            # col=self.GENE_IS_IN_MM_COL,
+            # col_order=[True, False],
+            col=self.KO_IN_MM_COL if split_by_condition_in_mm else None,
+            col_order=[True, False] if split_by_condition_in_mm else None,
             y=self.MSE_COL,
-            x=self.MODEL_COL,
             hue=self.MODEL_COL,
+            x=self.GENE_IS_IN_MM_COL,
             aspect=1,
             height=5,
             margin_titles=True if split_by_condition_in_mm else None,
-            sharey="row" if split_by_condition_in_mm else True,
+            # sharey="row" if split_by_condition_in_mm else True,
             log_scale=y_log_scale,
         )
         self._rotate_x_tick_labels(g)
@@ -223,7 +224,7 @@ class TidyDfResults:
             col_wrap=3,
         )
 
-    def per_gene_mse_heatmap(self, cmap="viridis") -> sns.FacetGrid:
+    def per_gene_mse_heatmap(self, cmap="viridis", robust=False) -> sns.FacetGrid:
         groupby_list = [
             self.MODEL_COL,
             self.GENE_COL,
@@ -232,11 +233,14 @@ class TidyDfResults:
         mse_df = self._groupby_and_apply_func(
             mean_squared_error, self.MSE_COL, groupby_list=groupby_list
         )
-
-        norm = LogNorm(
-            vmin=mse_df[self.MSE_COL].min(),
-            vmax=mse_df[self.MSE_COL].max(),
-        )
+        if robust:
+            vmin, vmax = np.percentile(mse_df[self.MSE_COL].dropna(), [1, 99])
+            norm = LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            norm = LogNorm(
+                vmin=mse_df[self.MSE_COL].min(),
+                vmax=mse_df[self.MSE_COL].max(),
+            )
 
         # Use correlations between conditions to order columns
         full_pivot = mse_df.pivot(
