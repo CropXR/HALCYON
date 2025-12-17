@@ -158,7 +158,7 @@ class TidyDfResults:
             x=self.GENE_IS_IN_MM_COL,
             aspect=1,
             height=5,
-            margin_titles=True if split_by_condition_in_mm else None,
+            # margin_titles=True if split_by_condition_in_mm else None,
             # sharey="row" if split_by_condition_in_mm else True,
             log_scale=y_log_scale,
         )
