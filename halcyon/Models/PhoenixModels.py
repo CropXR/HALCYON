@@ -18,16 +18,17 @@ class PhoenixABC(MachineLearningModel, ABC):
         self,
         modelled_gene_labels: list[str],
         condition_names: tuple[str, ...],
+        hidden_size: int,
+        synthesis_only_positive: bool = False,
         **kwargs,
     ):
         """Class that is inherited, so shouldn't be called on its own."""
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
-
-        self.decay_params = nn.Parameter(
-            torch.full(size=(self.n_genes,), fill_value=0.1)
-        )
-        self.per_gene_multipliers = nn.Parameter(
-            torch.full(size=(self.n_genes,), fill_value=1.0)
+        self.hidden_size = hidden_size
+        self.decay_params = nn.Parameter(torch.rand(self.n_genes))
+        self.per_gene_multipliers = nn.Parameter(torch.ones(self.n_genes))
+        self.register_buffer(
+            "synthesis_only_positive", torch.tensor(synthesis_only_positive)
         )
 
     def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
@@ -41,9 +42,23 @@ class PhoenixABC(MachineLearningModel, ABC):
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
 
+    def _set_per_gene_multipliers(self, value=-50):
+        with torch.no_grad():
+            self.per_gene_multipliers.fill_(value)
+
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         pass
+
+    def get_hyperparams(self):
+        out_list = []
+        for name, value in zip(
+            ["device", "hidden_size", "synthesis_only_positive"],
+            [self.device, self.hidden_size, self.synthesis_only_positive],
+        ):
+            out_list.append((name, value))
+
+        return out_list
 
 
 class PhoenixOnlyAddLayers(PhoenixABC):
@@ -60,11 +75,11 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             modelled_gene_labels (list[str]): List of genes that the model models.
             condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes.
         """
-        super().__init__(modelled_gene_labels, condition_names, **kwargs)
+        super().__init__(modelled_gene_labels, condition_names, hidden_size, **kwargs)
         self.neural_net = nn.Sequential(
             PhoenixSumActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
-            nn.Linear(hidden_size, self.n_genes),
+            nn.Linear(self.n_genes + self.n_conditions, self.hidden_size),
+            nn.Linear(self.hidden_size, self.n_genes),
         )
         self.init_sparse_weights(self.neural_net)
 
@@ -74,7 +89,10 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
         decay = self._get_decay(state)
-        output = (self.neural_net(nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        synthesis = self.neural_net(nn_input) * self.ko_masks
+        if self.synthesis_only_positive:
+            synthesis = torch.nn.functional.softplus(synthesis)
+        output = (synthesis - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
@@ -95,17 +113,19 @@ class PhoenixAddAndProdLayers(PhoenixABC):
             condition_names (tuple[str]): names of the conditions that the model models. The length of this is used to create extra input nodes.
             hidden_size (int): size of the hidden state.
         """
-        super().__init__(modelled_gene_labels, condition_names, **kwargs)
+        super().__init__(modelled_gene_labels, condition_names, hidden_size, **kwargs)
         self.sum_nn = nn.Sequential(
             PhoenixSumActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
+            nn.Linear(self.n_genes + self.n_conditions, self.hidden_size),
         )
         self.prod_nn = nn.Sequential(
             PhoenixProdActivation(),
-            nn.Linear(self.n_genes + self.n_conditions, hidden_size),
+            nn.Linear(self.n_genes + self.n_conditions, self.hidden_size),
         )
 
-        self.combine_layer_nn = nn.Sequential(nn.Linear(2 * hidden_size, self.n_genes))
+        self.combine_layer_nn = nn.Sequential(
+            nn.Linear(2 * self.hidden_size, self.n_genes)
+        )
         for model in [self.sum_nn, self.prod_nn, self.combine_layer_nn]:
             self.init_sparse_weights(model)
 
@@ -119,7 +139,10 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         prod_out = torch.exp(self.prod_nn(first_layer_input))
         combined_nn_input = torch.cat((sum_out, prod_out), dim=1)
 
+        synthesis = self.combine_layer_nn(combined_nn_input) * self.ko_masks
         decay = self._get_decay(state)
-        output = (self.combine_layer_nn(combined_nn_input) * self.ko_masks - decay) * torch.nn.functional.relu(self.per_gene_multipliers)  # type: ignore
+        if self.synthesis_only_positive:
+            synthesis = torch.nn.functional.softplus(synthesis)
+        output = (synthesis - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output

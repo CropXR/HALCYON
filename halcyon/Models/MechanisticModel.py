@@ -20,14 +20,24 @@ from halcyon.Models.Model import Model
 
 
 class MechanisticModel(Model):
-    def __init__(self, modelled_gene_labels: List[str]):
-        super().__init__(modelled_gene_labels)
+    def __init__(
+        self, modelled_gene_labels: List[str], condition_names: List[str], **kwargs
+    ):
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
+        self.register_buffer("time_scaler", torch.tensor(1.0))
 
     @property
     @abstractmethod
     def regulatory_network(self) -> RegulatoryNetwork:
         """Return the regulatory network of the model."""
         pass
+
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        return []
+
+    def set_timescaler(self, new_value: torch.Tensor):
+        new_value = new_value.to(device=self.device)
+        self.time_scaler = new_value
 
 
 class PyTorchODE(MechanisticModel):
@@ -36,14 +46,24 @@ class PyTorchODE(MechanisticModel):
     def __init__(
         self,
         modelled_gene_labels: List[str],
+        condition_names: list[str],
         synthesis_dict: Dict[str, sp.Expr],
         decay_dict: Dict[str, sp.Expr],
         param_dict: Dict[str, float],
+        **kwargs,
     ):
-        super().__init__(modelled_gene_labels)
+        super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
-        self.param_dict = param_dict
+        # Convert param_dict to a trainable ParameterDict
+        self.param_dict = nn.ParameterDict(
+            {
+                key: nn.Parameter(
+                    torch.tensor(value, dtype=torch.float32), requires_grad=True
+                )
+                for key, value in param_dict.items()
+            }
+        )
         self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
         self._synthesis_module: Optional[nn.Module] = (
             None  # compiled synthesis modules will be stored here after compilation
@@ -56,8 +76,105 @@ class PyTorchODE(MechanisticModel):
     def regulatory_network(self) -> RegulatoryNetwork:
         raise NotImplementedError("This method needs to be implemented in subclass.")
 
+    def integrate(
+        self,
+        initial_state: torch.Tensor,
+        t_eval: torch.Tensor,
+    ) -> torch.Tensor:
+        self._synthesis_module = None
+        self._decay_module = None
+        self._compiled_ready = False
+        self._compile_expressions()
+        return super().integrate(initial_state, t_eval)
+
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """
+        Get the derivative at a given time point.
+        Parameters:
+            t (torch.Tensor): The time point at which to evaluate the ODE.
+            state (torch.Tensor): The current state of the system.
+        Returns:
+            torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
+        """
+        if state.isinf().any() or state.isnan().any():
+            raise ValueError("NaN or inf in state tensor.")
+
+        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
+        # most likely, the steps are slightly too large and lead to negative concentrations
+        state = torch.clamp(state, min=0.0)
+        if not self._compiled_ready:
+            self._compile_expressions()
+        batch_size, n_genes = state.shape
+
+        if self._synthesis_module is None or self._decay_module is None:
+            raise RuntimeError("SymPy modules were not initialised correctly.")
+
+        self.ko_masks = self.ko_masks.to(device=self.device)
+
+        inputs = {
+            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
+        }
+        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
+        inputs["cell"] = torch.full(
+            (batch_size,),
+            1.0,
+            dtype=state.dtype,
+            device=self.device,
+        )
+
+        synthesis = self._synthesis_module(**inputs)
+        decay = self._decay_module(**inputs)
+        # If output is 1D (single sample), unsqueeze to add batch dimension
+        if synthesis.dim() == 1:
+            synthesis = synthesis.unsqueeze(0)
+        if decay.dim() == 1:
+            decay = decay.unsqueeze(0)
+
+        return (synthesis * self.ko_masks - decay) * self.time_scaler
+
+    def set_parameters(self, param_values: dict):
+        """
+        Set parameter values in the model. Accepts a dict of {name: value} and updates the corresponding nn.Parameter in param_dict.
+        Useful for testing and manual parameter updates.
+        """
+        for k, v in param_values.items():
+            if k in self.param_dict:
+                self.param_dict[k].data = torch.tensor(
+                    v,
+                    dtype=self.param_dict[k].dtype,
+                    device=self.param_dict[k].device,
+                    requires_grad=True,
+                )
+        self._compiled_ready = False  # recompile expressions with new parameter values
+
+    def select_genes(self, genes_to_keep: list[str]):
+        assert all(
+            gene_to_keep in self.modelled_gene_labels for gene_to_keep in genes_to_keep
+        ), "Not all genes that need to be kept are in the model"
+        genes_to_remove = list(set(self.modelled_gene_labels) ^ set(genes_to_keep))
+
+        new_synthesis_dict = dict()
+        new_decay_dict = dict()
+
+        # Heuristic, set all gene expressions to 0 for genes that are not modelled
+        replacement_dict = {unmodeled_gene: 0 for unmodeled_gene in genes_to_remove}
+        for gene in genes_to_keep:
+            synthesis_formula = self.synthesis_dict[gene]
+            new_synthesis_dict[gene] = synthesis_formula.subs(replacement_dict)
+            new_decay_dict[gene] = self.decay_dict[gene]
+        self._compiled_ready = False
+        self.synthesis_dict = new_synthesis_dict
+        self.decay_dict = new_decay_dict
+        self.modelled_gene_labels = genes_to_keep
+
     @classmethod
-    def from_sbml(cls, sbml_path: str | Path, from_gnw: bool = False) -> Self:
+    def from_sbml(
+        cls,
+        sbml_path: str | Path,
+        condition_names: list[str],
+        from_gnw: bool = False,
+        **kwargs,
+    ) -> Self:
         """
         Create a MechanisticModel from an SBML file.
 
@@ -120,65 +237,14 @@ class PyTorchODE(MechanisticModel):
                 raise NameError(
                     f"Reaction {reaction_id} does not end with _synthesis or _degradation."
                 )
-
         return cls(
             base_node_names,
+            condition_names,
             synthesis_expression_dict,
             decay_expression_dict,
             param_dict,
+            **kwargs,
         )
-
-    def _compile_expressions(self) -> None:
-        """Pre-compile SymPy expressions into torch modules via sympytorch."""
-        param_subs = {symbols(name): value for name, value in self.param_dict.items()}
-
-        def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
-            """Prepare SymPy expressions for compilation.
-            Takes a dictionary of expressions and applies parameter substitutions from the parameter dictionary as well as float hiding. This ensures this is only done once per expression before compilation and not at each forward pass.
-            Float hiding prevents SymPy from automatically evaluating or simplifying expressions that contain floats, which can be important for preserving the exact structure of symbolic expressions
-
-            Args:
-                expr_dict (Dict[str, sp.Expr]): A dictionary expression name keys and SymPy expressions values.
-
-            Returns:
-                List[sp.Expr]: A list of prepared SymPy expressions.
-            """
-            prepared: List[sp.Expr] = []
-            for gene in self.modelled_gene_labels:
-                expr = expr_dict[gene].subs(
-                    param_subs
-                )  # Apply parameter substitutions, take parameter values from param_dict
-                expr = sympytorch.hide_floats(expr)
-                prepared.append(expr)
-            return prepared
-
-        synthesis_exprs = _prepare_expressions(self.synthesis_dict)
-        decay_exprs = _prepare_expressions(self.decay_dict)
-
-        try:
-            self._synthesis_module = sympytorch.SymPyModule(expressions=synthesis_exprs)
-            self._decay_module = sympytorch.SymPyModule(expressions=decay_exprs)
-        except KeyError as err:
-            func_name = (
-                getattr(err.args[0], "__name__", str(err.args[0]))
-                if err.args
-                else "unknown"
-            )  # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
-            raise ValueError(
-                f"Unsupported sympy function '{func_name}' in SBML expression. "
-                "Provide a torch implementation via sympytorch."
-            ) from err
-
-        self._synthesis_module.to(device=self.device)
-        self._decay_module.to(device=self.device)
-        self._compiled_ready = True
-
-    def _set_all_parameters_to_zero(self):
-        new_param_dict = {}
-        for key in self.param_dict.keys():
-            new_param_dict[key] = 0.0
-        self.param_dict = new_param_dict
-        self._compiled_ready = False
 
     @classmethod
     def parse_one_reaction(
@@ -229,6 +295,69 @@ class PyTorchODE(MechanisticModel):
 
         return base_node_name, sympy_formula, param_dict
 
+    def _set_all_parameters_to_zero(self):
+        for key in self.param_dict.keys():
+            self.param_dict[key].data = torch.tensor(
+                0,
+                dtype=self.param_dict[key].dtype,
+                device=self.device,
+                requires_grad=True,
+            )
+        self._compiled_ready = False  # recompile expressions with new parameter values
+
+    def _compile_expressions(self) -> None:
+        """Pre-compile SymPy expressions into torch modules via sympytorch."""
+        if (
+            sympytorch is None
+        ):  # pragma: no cover - executed only when missing dependency
+            raise ImportError(
+                "sympytorch is required for MechanisticModel. Install it via 'pip install sympytorch'."
+            )
+
+        param_subs = {symbols(name): value for name, value in self.param_dict.items()}
+
+        def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
+            """Prepare SymPy expressions for compilation.
+            Takes a dictionary of expressions and applies parameter substitutions from the parameter dictionary as well as float hiding. This ensures this is only done once per expression before compilation and not at each forward pass.
+            Float hiding prevents SymPy from automatically evaluating or simplifying expressions that contain floats, which can be important for preserving the exact structure of symbolic expressions
+
+            Args:
+                expr_dict (Dict[str, sp.Expr]): A dictionary expression name keys and SymPy expressions values.
+
+            Returns:
+                List[sp.Expr]: A list of prepared SymPy expressions.
+            """
+            prepared: List[sp.Expr] = []
+            for gene in self.modelled_gene_labels:
+                expr = expr_dict[gene].subs(
+                    param_subs
+                )  # Apply parameter substitutions, take parameter values from param_dict
+                expr = sympytorch.hide_floats(expr)
+                prepared.append(expr)
+            return prepared
+
+        synthesis_exprs = _prepare_expressions(self.synthesis_dict)
+        decay_exprs = _prepare_expressions(self.decay_dict)
+
+        try:
+            self._synthesis_module = sympytorch.SymPyModule(expressions=synthesis_exprs)
+            self._decay_module = sympytorch.SymPyModule(expressions=decay_exprs)
+        except KeyError as err:
+            # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
+            func_name = (
+                getattr(err.args[0], "__name__", str(err.args[0]))
+                if err.args
+                else "unknown"
+            )
+            raise ValueError(
+                f"Unsupported sympy function '{func_name}' in SBML expression. "
+                "Provide a torch implementation via sympytorch."
+            ) from err
+
+        self._synthesis_module.to(device=self.device)
+        self._decay_module.to(device=self.device)
+        self._compiled_ready = True
+
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:
         """
@@ -257,7 +386,7 @@ class PyTorchODE(MechanisticModel):
             Use `PyTorchODE.from_sbml(path, from_gnw=True)` to automatically apply this fix.
         """
 
-        def find_matching_closing_parenthesis(formula_str: str, start_pos: int) -> int:
+        def _find_matching_closing_parenthesis(formula_str: str, start_pos: int) -> int:
             """
             Find the position of the matching closing parenthesis for an opening parenthesis.
 
@@ -284,7 +413,7 @@ class PyTorchODE(MechanisticModel):
 
             return pos - 1 if count == 0 else -1
 
-        def fix_division_at_position(formula_str: str, div_pos: int) -> str:
+        def _fix_division_at_position(formula_str: str, div_pos: int) -> str:
             """
             Fix a division operator at a specific position by grouping subsequent multiplication terms.
 
@@ -345,7 +474,7 @@ class PyTorchODE(MechanisticModel):
 
                 if formula_str[pos] == "(":
                     # Parenthetical expression
-                    end_paren = find_matching_closing_parenthesis(formula_str, pos)
+                    end_paren = _find_matching_closing_parenthesis(formula_str, pos)
                     if end_paren != -1:
                         terms.append(formula_str[pos : end_paren + 1])
                         pos = end_paren + 1
@@ -362,7 +491,7 @@ class PyTorchODE(MechanisticModel):
 
                     # Handle function calls like pow(...)
                     if pos < len(formula_str) and formula_str[pos] == "(":
-                        end_paren = find_matching_closing_parenthesis(formula_str, pos)
+                        end_paren = _find_matching_closing_parenthesis(formula_str, pos)
                         if end_paren != -1:
                             pos = end_paren + 1
 
@@ -389,119 +518,6 @@ class PyTorchODE(MechanisticModel):
 
         # Process divisions from right to left to avoid position shifts
         for div_pos in reversed(div_positions):
-            result = fix_division_at_position(result, div_pos)
+            result = _fix_division_at_position(result, div_pos)
 
         return result
-
-    def integrate(
-        self,
-        initial_state: torch.Tensor,
-        t_eval: torch.Tensor,
-    ) -> torch.Tensor:
-        self._synthesis_module = None
-        self._decay_module = None
-        self._compiled_ready = False
-        self._compile_expressions()
-        return super().integrate(initial_state, t_eval)
-
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        """
-        Get the derivative at a given time point.
-        Parameters:
-            t (torch.Tensor): The time point at which to evaluate the ODE.
-            state (torch.Tensor): The current state of the system.
-        Returns:
-            torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
-        """
-        if state.isinf().any() or state.isnan().any():
-            raise ValueError("NaN or inf in state tensor.")
-
-        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
-        # most likely, the steps are slightly too large and lead to negative concentrations
-        state = torch.clamp(state, min=0.0)
-        if not self._compiled_ready:
-            self._compile_expressions()
-        batch_size, n_genes = state.shape
-
-        if self._synthesis_module is None or self._decay_module is None:
-            raise RuntimeError("SymPy modules were not initialised correctly.")
-
-        self.ko_masks = self.ko_masks.to(device=self.device)
-
-        inputs = {
-            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
-        }
-        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
-        inputs["cell"] = torch.full(
-            (batch_size,),
-            1.0,
-            dtype=state.dtype,
-            device=self.device,
-        )
-
-        synthesis = self._synthesis_module(**inputs)
-        decay = self._decay_module(**inputs)
-        # If output is 1D (single sample), unsqueeze to add batch dimension
-        if synthesis.dim() == 1:
-            synthesis = synthesis.unsqueeze(0)
-        if decay.dim() == 1:
-            decay = decay.unsqueeze(0)
-
-        return synthesis * self.ko_masks - decay
-
-
-class TorchLinearODE(MechanisticModel):
-    def __init__(self, regulatory_network: RegulatoryNetwork):
-        super().__init__(list(regulatory_network.nodes))
-        self._regulatory_network = regulatory_network
-
-        # Initialize the adjacency/weight matrix
-        self.weight_matrix = torch.zeros(
-            (self.n_genes, self.n_genes), dtype=torch.float32
-        )
-
-        for (
-            from_gene,
-            to_gene,
-            property_dict,
-        ) in regulatory_network.get_all_interactions():
-            if from_gene in self.gene_index and to_gene in self.gene_index:
-                from_idx = self.gene_index[from_gene]
-                to_idx = self.gene_index[to_gene]
-                self.weight_matrix[to_idx, from_idx] = property_dict["influence"]
-        self.weight_matrix = nn.Parameter(self.weight_matrix, requires_grad=True)
-
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        # Handle both single samples and batches
-        if state.dim() == 1:
-            # Single sample case - add batch dimension
-            state = state.unsqueeze(0)
-            squeeze_output = True
-        else:
-            squeeze_output = False
-
-        # Perform batch matrix multiplication
-        result = torch.bmm(
-            self.weight_matrix.unsqueeze(0).expand(state.shape[0], -1, -1),
-            state.unsqueeze(2),
-        ).squeeze(2)
-
-        # Return in the same format as input
-        if squeeze_output:
-            return result.squeeze(0)
-        return result
-
-    def _make_weight_matrix_zeroes(self):
-        """Initialize the weight matrix by setting everything to 0."""
-        self.weight_matrix = nn.Parameter(
-            torch.zeros_like(self.weight_matrix, dtype=torch.float32),
-            requires_grad=True,
-        )
-
-    def set_conditions(self, conditions):
-        logging.warning("Currently TorchLinearODE does not parse the conditions")
-        pass
-
-    @property
-    def regulatory_network(self) -> RegulatoryNetwork:
-        return self._regulatory_network

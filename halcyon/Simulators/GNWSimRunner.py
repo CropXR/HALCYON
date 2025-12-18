@@ -1,8 +1,14 @@
 import logging
 from pathlib import Path
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, fields
+import networkx as nx
+import matplotlib.pyplot as plt
+
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
 @dataclass
@@ -17,6 +23,7 @@ class SimulationResult:
         sparsity (float): How sparse the network is
             (higher values mean fewer connections).
         keep_self_interactions (bool): Whether self-interactions are kept.
+        network (RegulatoryNetwork): The generated gene regulatory network.
     """
 
     data_path: Path
@@ -25,6 +32,7 @@ class SimulationResult:
     nr_modules: int
     sparsity: float
     keep_self_interactions: bool
+    network: RegulatoryNetwork
 
     def items(self):
         """Iterate over field names and their values (as if this were a dict)"""
@@ -39,6 +47,13 @@ class SimulationResult:
         assert out_path.exists()
         return out_path
 
+    def get_double_ko_expressiondata(self) -> ExpressionDataWithConditions:
+        double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
+            expression_file_path=self.double_ko_timeseries_nonoise_file_path(),
+            ko_file_path=self.double_ko_index_file_path(),
+        )
+        return double_ko_expressions
+
     def double_ko_index_file_path(self) -> Path:
         """Get path to double knockout index file."""
         out_path = (
@@ -46,6 +61,17 @@ class SimulationResult:
         )
         assert out_path.exists()
         return out_path
+
+    def get_no_noise_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
+        """Get knockout timeseries without noise data."""
+        out_path = (
+            self.data_path / f"{self.network_name}_nonoise_knockout_timeseries.tsv"
+        )
+        assert out_path.exists()
+
+        return ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+            out_path
+        )
 
 
 class GNWSimRunner:
@@ -116,7 +142,13 @@ class GNWSimRunner:
             step_1_args.append("--keep-self-interactions")
         if sparsity == 0:
             raise ValueError("Sparsity cannot be zero.")
-        step1_process = subprocess.run(step_1_args, check=True)
+        step1_process = subprocess.run(
+            step_1_args, check=True, capture_output=True, text=True
+        )
+        logging.info(step1_process.stderr)
+        network = RegulatoryNetwork.from_stderr_gnw(
+            step1_process.stderr, n_genes, network_name
+        )
 
         # Step 2 run simulation
         logging.info("Simulating network expression over time")
@@ -143,4 +175,5 @@ class GNWSimRunner:
             nr_modules=num_modules,
             sparsity=sparsity,
             keep_self_interactions=keep_self_interactions,
+            network=network,
         )

@@ -89,6 +89,22 @@ class ExpressionDataWithConditions(Dataset):
         expression_data = self._ko_dict[experiment_condition]
         return experiment_condition, expression_data
 
+    def _get_condition_and_expression_under_ko_gene(
+        self, ko_gene: tuple[str]
+    ) -> tuple[ExperimentCondition, ExpressionData]:
+        """Get objects of experimental condition and expression data at an index."""
+        # ugly but works:
+        possible_keys = []
+        for condition in self._ko_dict.keys():
+            if condition.ko_gene == ko_gene:
+                possible_keys.append(condition)
+        if not len(possible_keys) == 1:
+            raise KeyError(
+                f"Found {len(possible_keys)} matching conditions found for KO {ko_gene}"
+            )
+        condition_to_use = possible_keys[0]
+        return condition_to_use, self._ko_dict[condition_to_use]
+
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data."""
         experiment_condition, expression_data = (
@@ -104,9 +120,13 @@ class ExpressionDataWithConditions(Dataset):
         """
         new_dict = dict()
         for experiment_condition, expression_data in self._ko_dict.items():
-            new_experiment_condition = (
-                experiment_condition.return_with_changed_gene_list(genes)
-            )
+            try:
+                new_experiment_condition = (
+                    experiment_condition.return_with_changed_gene_list(genes)
+                )
+            except KeyError:
+                # If genes are not in dataset (e.g. for mechanistic model), we'll get a keyerror, so skip it
+                continue
             new_dict[new_experiment_condition] = expression_data.match_genes_to_list(
                 genes
             )
@@ -128,7 +148,7 @@ class ExpressionDataWithConditions(Dataset):
             experiment_condition = ExperimentCondition(
                 all_genes=tuple(headers),
                 ko_gene=(gene_name,),
-                all_environments=("test", "test2"),
+                all_environments=(),
                 environment=None,
             )
             df = pd.read_csv(StringIO(block), sep="\t", names=headers).T
@@ -167,7 +187,7 @@ class ExpressionDataWithConditions(Dataset):
             experiment_condition = ExperimentCondition(
                 all_genes=tuple(headers),
                 ko_gene=tuple(ko_for_this_expression_block),
-                all_environments=("test", "test2"),
+                all_environments=(),
                 environment=None,
             )
 

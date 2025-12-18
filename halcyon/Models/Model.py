@@ -8,14 +8,21 @@ import logging
 
 
 class Model(ABC, nn.Module):
-    def __init__(self, modelled_gene_labels: List[str], device=None):
+    def __init__(
+        self,
+        modelled_gene_labels: List[str],
+        condition_names: List[str],
+        device=None,
+        integration_method="dopri5",
+    ):
         super().__init__()
         self.modelled_gene_labels = natsorted(modelled_gene_labels)
-        self.gene_index = {gene: i for i, gene in enumerate(self.modelled_gene_labels)}
         if device is not None:
             self.device = torch.device(device)
         else:
             self.device = self.get_compatible_device()
+        self.condition_names = condition_names
+        self.integration_method = integration_method
         self.reset_conditions()
 
     @property
@@ -24,11 +31,20 @@ class Model(ABC, nn.Module):
 
     @property
     def n_conditions(self):
-        return len(self.env_flags) if hasattr(self, "env_flags") else 0
+        return len(self.condition_names)
+
+    def set_timescaler(self, new_value):
+        """Allows polymorphism so even classes that do not have a mech model subclass do not throw error"""
+        return
 
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """Get the derivative at a given time point."""
+        pass
+
+    @abstractmethod
+    def set_conditions(self, conditions: torch.Tensor) -> None:
+        """Set the environmental conditions."""
         pass
 
     def integrate(
@@ -44,8 +60,16 @@ class Model(ABC, nn.Module):
             t_eval.dim() == 1
         ), f"t_eval should be a 1D tensor, but got shape {t_eval.shape}"
 
-        output: torch.Tensor = odeint(self, initial_state, t_eval)  # type: ignore
-        return output.permute(1, 2, 0)  # Permute dimensions to [Batch, Genes, Time]
+        output: torch.Tensor = odeint(self, initial_state, t_eval, method=self.integration_method)  # type: ignore
+
+        # Permute dimensions to [Batch, Genes, Time]
+        output = output.permute(1, 2, 0)
+
+        assert not torch.isnan(
+            output
+        ).any(), "NaNs in output. Perhaps your parameters are too high"
+
+        return output
 
     def parse_env_data(
         self, environment_data: torch.Tensor
@@ -61,7 +85,7 @@ class Model(ABC, nn.Module):
         """
         assert (
             environment_data.shape[1] == self.n_genes + self.n_conditions
-        ), f"Environment data should be of shape (B, G + C). Expected (B, {self.n_genes + self.n_conditions}) but got {environment_data.shape} where B = {environment_data.shape[0]}, G={self.n_genes}, C={self.n_conditions} and environment_flags = {env_flags}"
+        ), f"Environment data should be of shape (B, G + C). Expected (B, {self.n_genes + self.n_conditions}) but got {environment_data.shape}"
         knockout_flags = environment_data[:, : self.n_genes]
         env_flags = environment_data[:, self.n_genes :]
         knockout_masks = 1.0 - knockout_flags
@@ -135,3 +159,10 @@ class Model(ABC, nn.Module):
             logging.error(f"Unexpected error checking GPU compatibility: {e}")
             logging.info("Falling back to CPU.")
             return torch.device("cpu")
+
+    def get_name(self):
+        return self.__class__.__name__
+
+    @abstractmethod
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        pass

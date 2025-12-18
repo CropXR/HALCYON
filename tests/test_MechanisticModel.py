@@ -6,9 +6,25 @@ import sympytorch
 import torch
 
 from halcyon.Models.MechanisticModel import PyTorchODE
+from torch.testing import assert_close
 
 
-def test_steady_state_derivateives_zero(ss_initial_values):
+def test_select_subset_genes(test_pytorchode_model):
+    nodes_to_select = ["Node_0", "Node_2"]
+    test_pytorchode_model.select_genes(nodes_to_select)
+    assert test_pytorchode_model.modelled_gene_labels == nodes_to_select
+
+
+def test_adjust_time_scale(mech_model_from_sim_result, test_batch):
+    _, expressions = test_batch
+    expressions = expressions.to(device=mech_model_from_sim_result.device)
+    forward = mech_model_from_sim_result(None, expressions[:, :, 0])
+    mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
+    scaled_forward = mech_model_from_sim_result(None, expressions[:, :, 0])
+    assert_close(forward * 1000, scaled_forward)
+
+
+def test_steady_state_derivateives_zero(test_pytorchode_model, ss_initial_values):
     """
     Test the integration of the model with multiplicative interactions.
     1. Load a predefined SBML model that includes multiplicative interactions.
@@ -18,30 +34,30 @@ def test_steady_state_derivateives_zero(ss_initial_values):
     5. Assert that the computed derivatives are close to zero, indicating that
        the system is indeed at steady state.
     """
-    in_folder = Path("tests/4_genes_multplicative_interactions")
-    sbml_path = in_folder / "integration_test_network.xml"
-
-    my_model = PyTorchODE.from_sbml(sbml_path, from_gnw=True)
-
-    forward_results = my_model.forward(t=torch.tensor([0]), state=ss_initial_values)
-
-    torch.testing.assert_close(
-        forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0
+    forward_results = test_pytorchode_model.forward(
+        t=torch.tensor([0]), state=ss_initial_values
     )
+
+    assert_close(forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0)
 
 
 @pytest.fixture
-def test_pytorchode_model() -> PyTorchODE:
-    in_folder = Path("tests/4_genes_multplicative_interactions")
+def in_folder() -> Path:
+    return Path("tests/4_genes_multplicative_interactions")
+
+
+@pytest.fixture
+def test_pytorchode_model(in_folder) -> PyTorchODE:
     sbml_path = in_folder / "integration_test_network.xml"
-    model = PyTorchODE.from_sbml(sbml_path, from_gnw=True)
+    model = PyTorchODE.from_sbml(
+        sbml_path, condition_names=(), from_gnw=True, device="cpu"
+    )
     return model
 
 
 @pytest.fixture
-def ss_initial_values(test_pytorchode_model) -> torch.Tensor:
+def ss_initial_values(in_folder, test_pytorchode_model) -> torch.Tensor:
     """Fixture for steady-state initial values."""
-    in_folder = Path("tests/4_genes_multplicative_interactions")
     # sbml_path = in_folder / "integration_test_network.xml"
     ss_values = pd.read_csv(
         in_folder / "integration_test_network_nonoise_wildtype.tsv", sep="\t"
@@ -82,7 +98,7 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
     baseline = test_pytorchode_model.forward(
         torch.tensor([0.0]), ss_initial_values
     ).squeeze(0)
-    torch.testing.assert_close(baseline, torch.zeros_like(baseline), atol=1e-5, rtol=0)
+    assert_close(baseline, torch.zeros_like(baseline), atol=1e-5, rtol=0)
 
     ko_tensor = torch.zeros(1, test_pytorchode_model.n_genes)
     ko_index = 0
@@ -98,16 +114,21 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
         for idx, gene in enumerate(test_pytorchode_model.modelled_gene_labels)
     }
     state_dict["cell"] = 1.0
-    subs_dict = test_pytorchode_model.param_dict | state_dict
+    # Convert param_dict to a dict of floats for sympy substitution
+    param_values = {
+        k: float(v.detach().cpu().numpy())
+        for k, v in test_pytorchode_model.param_dict.items()
+    }
+    subs_dict = {**param_values, **state_dict}
     expected = -float(test_pytorchode_model.decay_dict[target_gene].subs(subs_dict))
-    torch.testing.assert_close(
+    assert_close(
         ko_result[ko_index],
         torch.tensor(expected),
         atol=1e-5,
         rtol=0,
         check_device=False,
     )
-    torch.testing.assert_close(
+    assert_close(
         ko_result[ko_index + 1 :],
         baseline[ko_index + 1 :],
         atol=1e-5,
@@ -157,9 +178,7 @@ def test_zero_parameters_leads_to_zero_derivatives(
     derivatives = test_pytorchode_model.forward(torch.tensor([0.0]), ss_initial_values)
 
     # Assert that all derivatives are close to zero
-    torch.testing.assert_close(
-        derivatives, torch.zeros_like(derivatives), atol=1e-5, rtol=0
-    )
+    assert_close(derivatives, torch.zeros_like(derivatives), atol=1e-5, rtol=0)
 
 
 def test_forward_compiles_and_uses_torch_ops():
@@ -167,7 +186,7 @@ def test_forward_compiles_and_uses_torch_ops():
     synth_expr = sp.Symbol("alpha_Gene") * (sp.sin(gene) + sp.Max(gene, 0))
     decay_expr = sp.Symbol("beta_Gene") * gene
     params = {"alpha_Gene": 1.5, "beta_Gene": 0.3}
-    model = PyTorchODE(["Gene"], {"Gene": synth_expr}, {"Gene": decay_expr}, params)
+    model = PyTorchODE(["Gene"], (), {"Gene": synth_expr}, {"Gene": decay_expr}, params)
     assert not model._compiled_ready
 
     state = torch.tensor([[0.4]], requires_grad=True, device=model.device)
@@ -183,7 +202,7 @@ def test_forward_compiles_and_uses_torch_ops():
         )
         - params["beta_Gene"] * state_clamped
     )
-    torch.testing.assert_close(result, expected)
+    assert_close(result, expected)
 
     result.sum().backward()
     assert state.grad is not None
@@ -193,7 +212,7 @@ def test_forward_compiles_and_uses_torch_ops():
         "cell": torch.ones_like(state_clamped[:, 0]),
     }
     synthesis_output = model._synthesis_module(**module_inputs)
-    torch.testing.assert_close(
+    assert_close(
         synthesis_output,
         params["alpha_Gene"]
         * (
@@ -209,7 +228,7 @@ def test_compile_expressions_rejects_unknown_sympy_function():
     synth_expr = sp.gamma(gene)
     decay_expr = sp.Symbol("delta_Gene") * gene
     params = {"delta_Gene": 0.5}
-    model = PyTorchODE(["Gene"], {"Gene": synth_expr}, {"Gene": decay_expr}, params)
+    model = PyTorchODE(["Gene"], (), {"Gene": synth_expr}, {"Gene": decay_expr}, params)
 
     with pytest.raises(ValueError, match="Unsupported sympy function 'gamma'"):
         model.forward(torch.tensor([0.0]), torch.ones(1, 1))
