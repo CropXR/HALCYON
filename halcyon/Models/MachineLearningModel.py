@@ -1,8 +1,6 @@
-from typing import Generator
-import torch
-from halcyon.Models.Model import Model
 from abc import abstractmethod, ABC
 
+from halcyon.Models.Model import Model
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 

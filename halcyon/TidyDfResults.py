@@ -4,6 +4,8 @@ import pandas as pd
 
 
 class TidyDfResults:
+    """Class to easily make plots from tidy dataframe (and sometimes convert to other formats). Dataframe keeps track of predictions of different models for different genes under different conditions at different times."""
+
     # Store column names here
     MODEL_COL = "model"
     GENE_COL = "gene"
@@ -92,6 +94,7 @@ class TidyDfResults:
         )
 
     def plot_scatterplot_per_ko(self):
+        """Plot scatterplot of ground truth vs predicted expression. Split by condition (KO)."""
         merged = self._get_df_with_ground_truth_in_column()
         return sns.relplot(
             data=merged,
@@ -116,6 +119,7 @@ class TidyDfResults:
         return g
 
     def to_csv(self, filepath):
+        """Save to csv file."""
         self.df.to_csv(filepath, index=False)
 
     @classmethod
@@ -129,4 +133,5 @@ class TidyDfResults:
         return cls(df)
 
     def to_parquet(self, filepath):
+        """Save to parquet file."""
         self.df.to_parquet(filepath, index=False)

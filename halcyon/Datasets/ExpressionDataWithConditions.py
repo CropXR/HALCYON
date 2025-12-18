@@ -125,6 +125,7 @@ class ExpressionDataWithConditions(Dataset):
                     experiment_condition.return_with_changed_gene_list(genes)
                 )
             except KeyError:
+                # If genes are not in dataset (e.g. for mechanistic model), we'll get a keyerror, so skip it
                 continue
             new_dict[new_experiment_condition] = expression_data.match_genes_to_list(
                 genes

@@ -106,11 +106,11 @@ class Trainer:
         return f"Training {self.model.get_name()} on {self.sim_result}. Saving to {self.save_path}"
 
     def load_if_exists(self):
-        if self.save_path.exists():
-            logging.info(f"Loading from {self.save_path}")
+        try:
             self.load(self.save_path)
-        else:
-            raise FileNotFoundError(f"No existing model found at {self.save_path}.")
+        except FileNotFoundError as e:
+            logging.info(f"No existing model found to load at self.save_path. \n {e}")
+            return False
 
     @property
     def final_loss(self):
@@ -192,11 +192,7 @@ class Trainer:
         return experiment_data, expression_data
 
     def train(self):
-        """Perform model training on batches.
-
-        Args:
-            n_epochs (int): Number of epochs to train
-        """
+        """Perform model training on batches."""
         loss_history = []
 
         if self.nr_training_steps == 0:
@@ -334,6 +330,11 @@ class Trainer:
         torch.save(checkpoint, checkpoint_path)
 
     def load(self, checkpoint_path: Path):
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"No existing model found at {self.save_path}.")
+
+        logging.info(f"Loading from {self.save_path}")
+
         checkpoint = torch.load(
             checkpoint_path, map_location=self.model.device, weights_only=False
         )
