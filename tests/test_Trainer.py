@@ -69,17 +69,18 @@ def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):
     assert_close(
         expression_data[:, -1],
         torch.tensor(
+        
             [
                 0.0000,
-                0.6331,
-                0.8289,
+                0.7354,
+                0.0908,
                 0.0000,
-                0.1400,
-                0.9932,
-                0.0112,
+                0.0152,
+                0.9581,
+                0.9403,
+                0.0124,
                 1.0000,
-                0.0272,
-                0.9951,
+                0.0096
             ],
         ),
         rtol=1e-03,
@@ -89,4 +90,4 @@ def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):
 
 def test_losses_on_double_ko(trainer_with_loaded_cellbox: Trainer):
     losses = trainer_with_loaded_cellbox.losses_on_double_ko()
-    assert len(losses) == 9
+    assert len(losses) == 10

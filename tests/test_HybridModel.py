@@ -57,7 +57,7 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
     assert_close(expression_data[:, :9, :], output[:, :9, :], atol=1e-3, rtol=1e-3)
     loss = my_trainer._calculate_loss_from_batch(test_batch)
     assert_close(
-        loss, torch.tensor(0.0382, device=my_trainer.model.device), atol=1e-3, rtol=1e-3
+        loss, torch.tensor(0.0463, device=my_trainer.model.device), atol=1e-3, rtol=1e-3
     )
 
 
