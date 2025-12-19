@@ -36,7 +36,7 @@ class FittedTrainerList:
         results = []
         for job in train_jobs:
             try:
-                job.load_if_exists()
+                job.load(job.save_path)
                 results.append(job)
             except FileNotFoundError as e:
                 logging.error(f"Error loading model for job {job.save_path}: {e}")
@@ -67,7 +67,7 @@ class FittedTrainerList:
         all_genes = self.get_all_genes()
         colour_map = dict(
             zip(
-                [g[0] for g in all_genes],
+                [gene[0] for gene in all_genes],
                 sns.color_palette("tab20", n_colors=len(all_genes)),
             )
         )
@@ -77,13 +77,13 @@ class FittedTrainerList:
         # Get dataset from trainer object
         dataset_getter = lambda trainer: trainer.double_ko_dataset
         conditions_to_map = self.get_double_ko_combinations()
-        self._plot_all_model_fits_for_specified_kos(conditions_to_map, dataset_getter)
+        self.plot_all_model_fits_for_specified_kos(conditions_to_map, dataset_getter)
 
     def plot_single_ko(self):
         # Single KOs so conditions of knockouts should be each gene
         dataset_getter = lambda trainer: trainer.dataset
         conditions_to_map = self.get_all_genes()
-        return self._plot_all_model_fits_for_specified_kos(
+        return self.plot_all_model_fits_for_specified_kos(
             conditions_to_map, dataset_getter
         )
 
@@ -107,7 +107,7 @@ class FittedTrainerList:
 
         return TidyDfResults(pd.concat(out_records))
 
-    def _plot_all_model_fits_for_specified_kos(
+    def plot_all_model_fits_for_specified_kos(
         self,
         kos_to_plot: list[tuple[str]],
         dataset_getter: Callable,

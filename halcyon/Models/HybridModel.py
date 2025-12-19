@@ -107,4 +107,4 @@ class HybridModel(Model):
 
         These are used to e.g. generate the save file path
         """
-        return self._ml.get_hyperparams()
+        return self._ml.get_hyperparams() + self._mm.get_hyperparams()

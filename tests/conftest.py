@@ -73,7 +73,6 @@ def mech_model_from_sim_result(sim_result, expr_data_from_sim):
         sim_result.data_path / "integration_test_network.xml",
         condition_names=expr_data_from_sim.all_environments,
         from_gnw=True,
-        device="cpu",
     )
     return model
 

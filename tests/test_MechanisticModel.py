@@ -17,6 +17,7 @@ def test_select_subset_genes(test_pytorchode_model):
 
 def test_adjust_time_scale(mech_model_from_sim_result, test_batch):
     _, expressions = test_batch
+    expressions = expressions.to(device=mech_model_from_sim_result.device)
     forward = mech_model_from_sim_result(None, expressions[:, :, 0])
     mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
     scaled_forward = mech_model_from_sim_result(None, expressions[:, :, 0])
@@ -37,9 +38,7 @@ def test_steady_state_derivateives_zero(test_pytorchode_model, ss_initial_values
         t=torch.tensor([0]), state=ss_initial_values
     )
 
-    torch.testing.assert_close(
-        forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0
-    )
+    assert_close(forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0)
 
 
 @pytest.fixture
@@ -99,7 +98,7 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
     baseline = test_pytorchode_model.forward(
         torch.tensor([0.0]), ss_initial_values
     ).squeeze(0)
-    torch.testing.assert_close(baseline, torch.zeros_like(baseline), atol=1e-5, rtol=0)
+    assert_close(baseline, torch.zeros_like(baseline), atol=1e-5, rtol=0)
 
     ko_tensor = torch.zeros(1, test_pytorchode_model.n_genes)
     ko_index = 0
@@ -122,14 +121,14 @@ def test_knockout_masks_zero_synthesis_for_target_gene(
     }
     subs_dict = {**param_values, **state_dict}
     expected = -float(test_pytorchode_model.decay_dict[target_gene].subs(subs_dict))
-    torch.testing.assert_close(
+    assert_close(
         ko_result[ko_index],
         torch.tensor(expected),
         atol=1e-5,
         rtol=0,
         check_device=False,
     )
-    torch.testing.assert_close(
+    assert_close(
         ko_result[ko_index + 1 :],
         baseline[ko_index + 1 :],
         atol=1e-5,
@@ -179,9 +178,7 @@ def test_zero_parameters_leads_to_zero_derivatives(
     derivatives = test_pytorchode_model.forward(torch.tensor([0.0]), ss_initial_values)
 
     # Assert that all derivatives are close to zero
-    torch.testing.assert_close(
-        derivatives, torch.zeros_like(derivatives), atol=1e-5, rtol=0
-    )
+    assert_close(derivatives, torch.zeros_like(derivatives), atol=1e-5, rtol=0)
 
 
 def test_forward_compiles_and_uses_torch_ops():
@@ -205,7 +202,7 @@ def test_forward_compiles_and_uses_torch_ops():
         )
         - params["beta_Gene"] * state_clamped
     )
-    torch.testing.assert_close(result, expected)
+    assert_close(result, expected)
 
     result.sum().backward()
     assert state.grad is not None
@@ -215,7 +212,7 @@ def test_forward_compiles_and_uses_torch_ops():
         "cell": torch.ones_like(state_clamped[:, 0]),
     }
     synthesis_output = model._synthesis_module(**module_inputs)
-    torch.testing.assert_close(
+    assert_close(
         synthesis_output,
         params["alpha_Gene"]
         * (

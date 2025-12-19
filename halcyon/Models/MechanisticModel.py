@@ -36,6 +36,7 @@ class MechanisticModel(Model):
         return []
 
     def set_timescaler(self, new_value: torch.Tensor):
+        new_value = new_value.to(device=self.device)
         self.time_scaler = new_value
 
 
@@ -57,10 +58,10 @@ class PyTorchODE(MechanisticModel):
         # Convert param_dict to a trainable ParameterDict
         self.param_dict = nn.ParameterDict(
             {
-                k: nn.Parameter(
-                    torch.tensor(v, dtype=torch.float32), requires_grad=True
+                key: nn.Parameter(
+                    torch.tensor(value, dtype=torch.float32), requires_grad=True
                 )
-                for k, v in param_dict.items()
+                for key, value in param_dict.items()
             }
         )
         self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
@@ -139,7 +140,10 @@ class PyTorchODE(MechanisticModel):
         for k, v in param_values.items():
             if k in self.param_dict:
                 self.param_dict[k].data = torch.tensor(
-                    v, dtype=self.param_dict[k].dtype, device=self.param_dict[k].device
+                    v,
+                    dtype=self.param_dict[k].dtype,
+                    device=self.param_dict[k].device,
+                    requires_grad=True,
                 )
         self._compiled_ready = False  # recompile expressions with new parameter values
 
@@ -293,7 +297,12 @@ class PyTorchODE(MechanisticModel):
 
     def _set_all_parameters_to_zero(self):
         for key in self.param_dict.keys():
-            self.param_dict[key].data.fill_(0.0)
+            self.param_dict[key].data = torch.tensor(
+                0,
+                dtype=self.param_dict[key].dtype,
+                device=self.device,
+                requires_grad=True,
+            )
         self._compiled_ready = False  # recompile expressions with new parameter values
 
     def _compile_expressions(self) -> None:
