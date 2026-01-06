@@ -43,7 +43,7 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
     test_batch,
 ):
     hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
-    hybrid_model_mm_no_node_9._ml._set_per_gene_multipliers(-50)
+    hybrid_model_mm_no_node_9._ml._set_raw_per_gene_importance(-50)
     my_trainer = Trainer(
         hybrid_model_mm_no_node_9,
         sim_result,

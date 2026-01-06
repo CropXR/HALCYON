@@ -31,8 +31,8 @@ class HybridModel(Model):
             condition_names=mm.condition_names,
             **kwargs,
         )
-        self._mm = mm
-        self._ml = ml
+        self._mm: MechanisticModel = mm
+        self._ml: MachineLearningModel = ml
         for model in [self._mm, self._ml]:
             model.device = self.device
             model.to(self.device)
