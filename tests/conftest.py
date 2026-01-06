@@ -78,7 +78,7 @@ def mech_model_from_sim_result(sim_result, expr_data_from_sim):
 
 
 @pytest.fixture
-def ml_model_from_sim_result(expr_data_from_sim):
+def ml_model_from_sim_result(expr_data_from_sim) -> PhoenixAddAndProdLayers:
     model = PhoenixAddAndProdLayers(
         expr_data_from_sim.genes, expr_data_from_sim.all_environments, hidden_size=2
     )
@@ -92,10 +92,10 @@ def hybrid_model(mech_model_from_sim_result, ml_model_from_sim_result):
 
 @pytest.fixture
 def hybrid_model_with_zero_ml_influence(
-    mech_model_from_sim_result, ml_model_from_sim_result
+    mech_model_from_sim_result, ml_model_from_sim_result: PhoenixAddAndProdLayers
 ):
     ml_model_from_sim_result = deepcopy(ml_model_from_sim_result)
-    ml_model_from_sim_result._set_per_gene_multipliers(-50)
+    ml_model_from_sim_result._set_raw_per_gene_importance(-50)
     return HybridModel(
         mech_model_from_sim_result,
         ml_model_from_sim_result,
