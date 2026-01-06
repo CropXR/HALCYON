@@ -29,7 +29,9 @@ def test_hybrid_does_perfect_fit_if_ml_weights_zero(
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
     my_trainer = Trainer(hybrid_model_with_zero_ml_influence, sim_result, batch_size=2)
     experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
-    output = my_trainer._calculate_model_prediction_at_conditions(experiment_data)
+    output = my_trainer._calculate_model_prediction_at_conditions(
+        experiment_data, expression_data[:, :, 0]
+    )
     assert_close(expression_data, output, atol=1e-3, rtol=1e-3)
     loss = my_trainer._calculate_loss_from_batch(test_batch)
     assert_close(loss, torch.tensor(0.0, device=my_trainer.model.device))
@@ -48,7 +50,9 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
         batch_size=2,
     )
     experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
-    output = my_trainer._calculate_model_prediction_at_conditions(experiment_data)
+    output = my_trainer._calculate_model_prediction_at_conditions(
+        experiment_data, expression_data[:, :, 0]
+    )
     # First 9 genes will match perfectly
     assert_close(expression_data[:, :9, :], output[:, :9, :], atol=1e-3, rtol=1e-3)
     loss = my_trainer._calculate_loss_from_batch(test_batch)

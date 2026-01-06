@@ -14,7 +14,6 @@ class Model(ABC, nn.Module):
         condition_names: List[str],
         device=None,
         integration_method="dopri5",
-        initial_state: torch.Tensor = None,
     ):
         super().__init__()
         self.modelled_gene_labels = natsorted(modelled_gene_labels)
@@ -25,8 +24,6 @@ class Model(ABC, nn.Module):
         self.condition_names = condition_names
         self.integration_method = integration_method
         self.reset_conditions()
-
-        self.inital_value = nn.Parameter()
 
     @property
     def n_genes(self):
@@ -52,6 +49,7 @@ class Model(ABC, nn.Module):
 
     def integrate(
         self,
+        initial_state: torch.Tensor,
         t_eval: torch.Tensor,
     ) -> torch.Tensor:
         """Solve the system over time. Provide initial state in form of [Batch, Genes]. Returns tensor with [Batch, Genes, Time]."""
