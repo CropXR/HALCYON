@@ -160,9 +160,7 @@ class Trainer:
             predictions = predictions.squeeze(0).detach().cpu().numpy()
             self._plot_from_expressions(predictions, title, axs, show_legend, **kwargs)
 
-    def _calculate_model_prediction_at_conditions(
-        self, experiment_data: torch.Tensor, initial_state: torch.Tensor
-    ):
+    def _calculate_model_prediction_at_conditions(self, experiment_data: torch.Tensor):
         self.optimizer.zero_grad()
         self.model.set_conditions(experiment_data)
         output = self.integrate_model(initial_states_tensor=initial_state)
@@ -172,9 +170,7 @@ class Trainer:
         self, batch: torch.Tensor, return_true_expression=False
     ):
         experiment_data, expression_data = self.preprocess_batch(batch)
-        output = self._calculate_model_prediction_at_conditions(
-            experiment_data, expression_data[:, :, 0]
-        )
+        output = self._calculate_model_prediction_at_conditions(experiment_data)
         if return_true_expression:
             return output, expression_data
         return output
@@ -296,7 +292,6 @@ class Trainer:
 
     def integrate_model(
         self,
-        initial_states_tensor: torch.Tensor,
         time_points_tensor: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """Integrate the model over time
