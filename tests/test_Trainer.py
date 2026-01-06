@@ -69,7 +69,6 @@ def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):
     assert_close(
         expression_data[:, -1],
         torch.tensor(
-        
             [
                 0.0000,
                 0.7354,
@@ -80,7 +79,7 @@ def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):
                 0.9403,
                 0.0124,
                 1.0000,
-                0.0096
+                0.0096,
             ],
         ),
         rtol=1e-03,
