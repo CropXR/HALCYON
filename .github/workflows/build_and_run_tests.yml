@@ -24,6 +24,10 @@ jobs:
           init-shell: bash
           generate-run-shell: true
           cache-environment: true
+      - name: Check formatting with Black
+        shell: micromamba-shell {0}
+        run: |
+          black --check .
       - name: Test with Pytest
         shell: micromamba-shell {0}
         run: |

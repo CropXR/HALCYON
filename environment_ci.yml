@@ -5,6 +5,7 @@ channels:
   - defaults
   - nodefaults
 dependencies:
+  - black=24.2.0
   - coverage=7.6.12=py310h89163eb_0
   - matplotlib-base=3.10.1=py310h68603db_0
   - natsort=8.4.0=pyh29332c3_1
