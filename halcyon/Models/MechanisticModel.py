@@ -147,7 +147,24 @@ class PyTorchODE(MechanisticModel):
                 )
         self._compiled_ready = False  # recompile expressions with new parameter values
 
-    def select_genes(self, genes_to_keep: list[str]):
+    def select_genes(
+        self,
+        genes_to_keep: list[str],
+        goldstandard_signed_file_for_expression_substitution: None | Path = None,
+    ):
+        """From full set of genes that are modelled in this model, only keep the ones specified in this method.
+
+        Used when we first create a model on the full ground truth and then narrow it down to only a subset.
+
+        Args:
+            genes_to_keep (list[str]): List of gene names that the model should keep.
+            goldstandard_signed_file_for_expression_substitution (Path, optional): Path to a file (the *_goldstandard_signed.tsv file of GNW)
+                containing signed interactions between genes. Is used to 'fill in' the expression values for unmodeled genes.
+
+                If not provided, all non-modelled genes will be assumed to have an expression of 0.
+
+                If path is provided, infer the value to fill in: if activates substitute the expression with a 0, if represses substitute with a 1.
+        """
         assert all(
             gene_to_keep in self.modelled_gene_labels for gene_to_keep in genes_to_keep
         ), "Not all genes that need to be kept are in the model"
@@ -156,16 +173,66 @@ class PyTorchODE(MechanisticModel):
         new_synthesis_dict = dict()
         new_decay_dict = dict()
 
-        # Heuristic, set all gene expressions to 0 for genes that are not modelled
-        replacement_dict = {unmodeled_gene: 0 for unmodeled_gene in genes_to_remove}
+        # Check direction of regulatory interactions to get placeholder values
+        if goldstandard_signed_file_for_expression_substitution is not None:
+            replacement_dict = self._get_replacement_dict_from_regulation(
+                goldstandard_signed_file_for_expression_substitution, genes_to_remove
+            )
+
+        else:
+            logging.info(
+                "No regulatory file provided, setting all unmodelled gene expressions to 0 as heuristic."
+            )
+            logging.info(
+                f"Might be preferred to provide the file next time to the select_genes() method. <3"
+            )
+            # Heuristic, set all gene expressions to 0 for genes that are not modelled
+            replacement_dict = dict()
+            for gene in genes_to_keep:
+                replacement_dict[gene] = {
+                    unmodeled_gene: 0 for unmodeled_gene in genes_to_remove
+                }
+
         for gene in genes_to_keep:
             synthesis_formula = self.synthesis_dict[gene]
-            new_synthesis_dict[gene] = synthesis_formula.subs(replacement_dict)
+            new_synthesis_dict[gene] = synthesis_formula.subs(replacement_dict[gene])
             new_decay_dict[gene] = self.decay_dict[gene]
         self._compiled_ready = False
         self.synthesis_dict = new_synthesis_dict
         self.decay_dict = new_decay_dict
+        self.ko_masks = self.ko_masks[
+            [self.modelled_gene_labels.index(gene) for gene in genes_to_keep]
+        ]
         self.modelled_gene_labels = genes_to_keep
+
+    def _get_replacement_dict_from_regulation(
+        self, file_path: Path, genes_to_remove: list[str]
+    ) -> Dict[str, Dict[str, int]]:
+        """
+        Create a replacement dictionary for unmodelled genes based on their regulatory effects.
+
+        Args:
+            file_path (Path): Path to the goldstandard signed file containing regulatory interactions.
+            genes_to_remove (list[str]): List of gene names that are being removed from the model.
+
+        Returns:
+            Dict[str, Dict[str, int]]: A dictionary with first key the target gene, second the source gene, and third the value that should be used to replace them
+        """
+        out_dict = dict()
+
+        # Activators get 0, repressors get 1
+        sign_to_value = {"+": 0, "-": 1}
+        with file_path.open("r") as f:
+            for line in f.readlines():
+                source, target, direction = line.strip().split("\t")
+                if target in genes_to_remove:
+                    continue
+                if target not in out_dict:
+                    out_dict[target] = dict()
+                # Only keep entries for genes that are being removed
+                if source in genes_to_remove:
+                    out_dict[target][source] = sign_to_value[direction]
+        return out_dict
 
     @classmethod
     def from_sbml(
