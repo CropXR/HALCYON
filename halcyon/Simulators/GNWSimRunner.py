@@ -56,9 +56,7 @@ class SimulationResult:
 
     def double_ko_index_file_path(self) -> Path:
         """Get path to double knockout index file."""
-        out_path = (
-            self.data_path / f"{self.network_name}_dualknockouts_indexes.tsv"
-        )
+        out_path = self.data_path / f"{self.network_name}_dualknockouts_indexes.tsv"
         assert out_path.exists()
         return out_path
 

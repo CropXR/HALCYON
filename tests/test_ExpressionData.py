@@ -18,16 +18,16 @@ def test_extract_info(expression_data_from_gnw):
         initial_states,
         torch.tensor(
             [
-                0.1093, 
-                0.6281, 
-                0.7730, 
-                0.9152, 
-                0.5725, 
-                0.6522, 
-                0.3622, 
-                0.0797, 
+                0.1093,
+                0.6281,
+                0.7730,
+                0.9152,
+                0.5725,
+                0.6522,
+                0.3622,
+                0.0797,
                 0.7164,
-                0.4301
+                0.4301,
             ]
         ),
         atol=1e-3,
@@ -129,7 +129,7 @@ def test_match_genes_to_list(expression_data_from_gnw):
                 0.3622,
                 0.0797,
                 0.7164,
-                0.4301
+                0.4301,
             ]
         ),
         atol=1e-3,
