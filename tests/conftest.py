@@ -164,7 +164,7 @@ def result_list_from_jobs(trainers_for_all_models) -> FittedTrainerList:
 
 
 @pytest.fixture
-def test_batch():
+def expected_batch():
     experiment_data = torch.tensor(
         [
             [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],

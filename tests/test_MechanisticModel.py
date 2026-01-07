@@ -15,8 +15,8 @@ def test_select_subset_genes(test_pytorchode_model):
     assert test_pytorchode_model.modelled_gene_labels == nodes_to_select
 
 
-def test_adjust_time_scale(mech_model_from_sim_result, test_batch):
-    _, expressions = test_batch
+def test_adjust_time_scale(mech_model_from_sim_result, expected_batch):
+    _, expressions = expected_batch
     expressions = expressions.to(device=mech_model_from_sim_result.device)
     forward = mech_model_from_sim_result(None, expressions[:, :, 0])
     mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
