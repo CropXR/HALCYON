@@ -49,7 +49,7 @@ ssMultifactorial = 0
 # Generate steady states for perturbations as used in the DREAM4 time series
 ssDREAM4TimeSeries = 0
 # Generate steady states for dual knockouts
-ssDualKnockouts = 0
+ssDualKnockouts = 1
 
 # For deterministic simulations (ODEs), we return the steady-states as soon as convergence is reached.
 # If there is no convergence until time maxtSteadyStateODE_, the values at this point are returned and a

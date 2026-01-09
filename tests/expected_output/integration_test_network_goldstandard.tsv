@@ -1,8 +1,10 @@
+Node_0	Node_1	1
 Node_0	Node_2	1
 Node_0	Node_3	1
 Node_0	Node_4	1
 Node_0	Node_7	1
 Node_0	Node_8	1
+Node_1	Node_2	1
 Node_1	Node_5	1
 Node_1	Node_6	1
 Node_1	Node_9	1
@@ -11,16 +13,14 @@ Node_2	Node_3	1
 Node_3	Node_0	1
 Node_3	Node_2	1
 Node_3	Node_4	1
-Node_4	Node_0	1
 Node_4	Node_2	1
 Node_5	Node_1	1
+Node_5	Node_6	1
 Node_7	Node_8	1
-Node_0	Node_1	0
 Node_0	Node_5	0
 Node_0	Node_6	0
 Node_0	Node_9	0
 Node_1	Node_0	0
-Node_1	Node_2	0
 Node_1	Node_3	0
 Node_1	Node_4	0
 Node_1	Node_7	0
@@ -38,6 +38,7 @@ Node_3	Node_6	0
 Node_3	Node_7	0
 Node_3	Node_8	0
 Node_3	Node_9	0
+Node_4	Node_0	0
 Node_4	Node_1	0
 Node_4	Node_3	0
 Node_4	Node_5	0
@@ -49,7 +50,6 @@ Node_5	Node_0	0
 Node_5	Node_2	0
 Node_5	Node_3	0
 Node_5	Node_4	0
-Node_5	Node_6	0
 Node_5	Node_7	0
 Node_5	Node_8	0
 Node_5	Node_9	0

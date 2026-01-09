@@ -24,23 +24,23 @@ def test_merge_modelled_genes():
 
 
 def test_hybrid_does_perfect_fit_if_ml_weights_zero(
-    sim_result, test_batch, hybrid_model_with_zero_ml_influence: HybridModel
+    sim_result, expected_batch, hybrid_model_with_zero_ml_influence: HybridModel
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
     my_trainer = Trainer(hybrid_model_with_zero_ml_influence, sim_result, batch_size=2)
-    experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
+    experiment_data, expression_data = my_trainer.preprocess_batch(expected_batch)
     output = my_trainer._calculate_model_prediction_at_conditions(
         experiment_data, expression_data[:, :, 0]
     )
     assert_close(expression_data, output, atol=1e-3, rtol=1e-3)
-    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    loss = my_trainer._calculate_loss_from_batch(expected_batch)
     assert_close(loss, torch.tensor(0.0, device=my_trainer.model.device))
 
 
 def test_most_genes_perfect_fit_if_only_remove_gene_9(
     sim_result,
     hybrid_model_mm_no_node_9: HybridModel,
-    test_batch,
+    expected_batch,
 ):
     hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
     hybrid_model_mm_no_node_9._ml._set_per_gene_multipliers(-50)
@@ -49,19 +49,19 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
         sim_result,
         batch_size=2,
     )
-    experiment_data, expression_data = my_trainer.preprocess_batch(test_batch)
+    experiment_data, expression_data = my_trainer.preprocess_batch(expected_batch)
     output = my_trainer._calculate_model_prediction_at_conditions(
         experiment_data, expression_data[:, :, 0]
     )
     # First 9 genes will match perfectly
     assert_close(expression_data[:, :9, :], output[:, :9, :], atol=1e-3, rtol=1e-3)
-    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    loss = my_trainer._calculate_loss_from_batch(expected_batch)
     assert_close(
-        loss, torch.tensor(0.0382, device=my_trainer.model.device), atol=1e-3, rtol=1e-3
+        loss, torch.tensor(0.0463, device=my_trainer.model.device), atol=1e-3, rtol=1e-3
     )
 
 
-def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, test_batch):
+def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, expected_batch):
     my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=1)
 
     my_trainer = Trainer(
@@ -71,7 +71,7 @@ def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, test_batch):
         loss=my_l2_loss,
     )
 
-    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    loss = my_trainer._calculate_loss_from_batch(expected_batch)
 
     ml_params = [
         p
@@ -93,7 +93,7 @@ def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, test_batch):
     # Changing lambda should change overall loss as such
 
     my_trainer.loss_fn = MSELossPlusMachineLearningL2(lambda_param=0.5)
-    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    loss = my_trainer._calculate_loss_from_batch(expected_batch)
     assert_close(
         loss,
         torch.tensor(inferred_mse + 0.5 * loss_l2, device=my_trainer.model.device),
@@ -102,7 +102,7 @@ def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, test_batch):
     )
 
     my_trainer.loss_fn = MSELossFlexible()
-    loss = my_trainer._calculate_loss_from_batch(test_batch)
+    loss = my_trainer._calculate_loss_from_batch(expected_batch)
     assert_close(
         loss,
         torch.tensor(inferred_mse, device=my_trainer.model.device),

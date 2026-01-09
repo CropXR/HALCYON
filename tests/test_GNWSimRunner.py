@@ -31,7 +31,7 @@ def test_gnw_reproducible(sim_result):
             expected_file
         ), f"File {generated_file} does not match hash of {expected_file}"
 
-    # # Uncomment temporarily to save to json in case new network or smth
+    # Uncomment temporarily to save to json in case new network or smth
     # data = nx.node_link_data(sim_result.network._graph, edges="links")
     # with open(expected_data_path / "expected_network.json", "w") as f:
     #     json.dump(data, f)
