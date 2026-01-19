@@ -41,7 +41,7 @@ def test_integration_train_and_load(trainers_for_all_models: list[Trainer]):
 
 @pytest.fixture
 def trainer_with_loaded_cellbox(sim_result) -> Trainer:
-    dataset = sim_result.get_no_noise_ko_timeseries_expressiondata()
+    dataset = sim_result.get_ko_timeseries_expressiondata()
     my_model = CellBox(dataset.genes, dataset.all_environments)
     return Trainer(
         my_model,

@@ -10,6 +10,14 @@ import matplotlib.pyplot as plt
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
+from enum import Enum
+
+
+class NoiseLevel(str, Enum):
+    NONOISE = "_nonoise_"
+    NOEXPNOISE = "_noexpnoise_"
+    ALLNOISE = "_"
+
 
 @dataclass
 class SimulationResult:
@@ -33,23 +41,29 @@ class SimulationResult:
     sparsity: float
     keep_self_interactions: bool
     network: RegulatoryNetwork
+    noise_level: NoiseLevel
+
+    def _build_filename(self, filename_end: str) -> Path:
+        return (
+            self.data_path
+            / f"{self.network_name}{self.noise_level.value}{filename_end}"
+        )
 
     def items(self):
         """Iterate over field names and their values (as if this were a dict)"""
         for field in fields(self):
             yield field.name, getattr(self, field.name)
 
-    def double_ko_timeseries_nonoise_file_path(self) -> Path:
+    def double_ko_timeseries_file_path(self) -> Path:
         """Get path to double knockout timeseries file."""
-        out_path = (
-            self.data_path / f"{self.network_name}_nonoise_dualknockout_timeseries0.tsv"
-        )
+        out_path = self._build_filename("dualknockout_timeseries0.tsv")
+
         assert out_path.exists()
         return out_path
 
     def get_double_ko_expressiondata(self) -> ExpressionDataWithConditions:
         double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
-            expression_file_path=self.double_ko_timeseries_nonoise_file_path(),
+            expression_file_path=self.double_ko_timeseries_file_path(),
             ko_file_path=self.double_ko_index_file_path(),
         )
         return double_ko_expressions
@@ -60,11 +74,10 @@ class SimulationResult:
         assert out_path.exists()
         return out_path
 
-    def get_no_noise_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
+    def get_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
         """Get knockout timeseries without noise data."""
-        out_path = (
-            self.data_path / f"{self.network_name}_nonoise_knockout_timeseries0.tsv"
-        )
+        out_path = self._build_filename("knockout_timeseries0.tsv")
+
         assert out_path.exists()
 
         return ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
@@ -102,6 +115,7 @@ class GNWSimRunner:
         num_modules: int,
         network_name: str,
         output_path: Path,
+        noise_level: NoiseLevel,
         keep_self_interactions: bool = True,
         network_type: int = 1,
     ) -> SimulationResult:
@@ -174,4 +188,5 @@ class GNWSimRunner:
             sparsity=sparsity,
             keep_self_interactions=keep_self_interactions,
             network=network,
+            noise_level=noise_level,
         )

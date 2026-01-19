@@ -51,7 +51,7 @@ class Trainer:
 
         self.sim_result = sim_result
 
-        self.dataset = self.sim_result.get_no_noise_ko_timeseries_expressiondata()
+        self.dataset = self.sim_result.get_ko_timeseries_expressiondata()
         self.double_ko_dataset = self.sim_result.get_double_ko_expressiondata()
         self.do_time_scaling = do_time_scaling
         self.file_name_prefix = file_name_prefix

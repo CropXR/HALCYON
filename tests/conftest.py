@@ -17,7 +17,7 @@ from halcyon.Models.CellBox import CellBox
 from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
-from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
+from halcyon.Simulators.GNWSimRunner import GNWSimRunner, NoiseLevel, SimulationResult
 from halcyon.Trainer import Trainer
 
 
@@ -54,17 +54,21 @@ def sim_result() -> SimulationResult:
         num_modules=2,
         network_name="integration_test_network",
         output_path=generated_data_path,
+        noise_level=NoiseLevel.NONOISE,
     )
     return sim_result
 
 
 @pytest.fixture
 def expr_data_from_sim(sim_result):
-    expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
-        sim_result.data_path
-        / f"{sim_result.network_name}_nonoise_knockout_timeseries0.tsv"
-    )
-    return expr_data
+    # expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
+
+    # )
+
+    # #     sim_result.data_path
+    # #     / f"{sim_result.network_name}_nonoise_knockout_timeseries0.tsv"
+    # # )
+    return sim_result.get_ko_timeseries_expressiondata()
 
 
 @pytest.fixture
@@ -124,7 +128,7 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Train
             {"hidden_size": 2},
         ],
     ):
-        expr_data = sim_result.get_no_noise_ko_timeseries_expressiondata()
+        expr_data = sim_result.get_ko_timeseries_expressiondata()
 
         model = model_class(
             modelled_gene_labels=expr_data.genes,
