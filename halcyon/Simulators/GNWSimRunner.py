@@ -42,7 +42,7 @@ class SimulationResult:
     def double_ko_timeseries_nonoise_file_path(self) -> Path:
         """Get path to double knockout timeseries file."""
         out_path = (
-            self.data_path / f"{self.network_name}_nonoise_dualknockout_timeseries.tsv"
+            self.data_path / f"{self.network_name}_nonoise_dualknockout_timeseries0.tsv"
         )
         assert out_path.exists()
         return out_path
@@ -56,16 +56,14 @@ class SimulationResult:
 
     def double_ko_index_file_path(self) -> Path:
         """Get path to double knockout index file."""
-        out_path = (
-            self.data_path / f"{self.network_name}_dualknockout_timeseries_indexes.tsv"
-        )
+        out_path = self.data_path / f"{self.network_name}_dualknockouts_indexes.tsv"
         assert out_path.exists()
         return out_path
 
     def get_no_noise_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
         """Get knockout timeseries without noise data."""
         out_path = (
-            self.data_path / f"{self.network_name}_nonoise_knockout_timeseries.tsv"
+            self.data_path / f"{self.network_name}_nonoise_knockout_timeseries0.tsv"
         )
         assert out_path.exists()
 

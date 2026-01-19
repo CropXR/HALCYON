@@ -77,8 +77,8 @@ def test_ode_with_informed_substitution_forward(
     assert_close(forward_results, torch.tensor([[-0.0049, -0.0151]]), atol=1e-4, rtol=0)
 
 
-def test_adjust_time_scale(mech_model_from_sim_result, test_batch):
-    _, expressions = test_batch
+def test_adjust_time_scale(mech_model_from_sim_result, expected_batch):
+    _, expressions = expected_batch
     expressions = expressions.to(device=mech_model_from_sim_result.device)
     forward = mech_model_from_sim_result(None, expressions[:, :, 0])
     mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
