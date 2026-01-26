@@ -130,8 +130,9 @@ class Trainer:
         output_dict["model_cls"] = self.model.__class__.__name__
         for key, value in self.sim_result.items():
             output_dict[key] = value
-        for key, value in self.model.get_hyperparams():
-            output_dict[key] = value
+        if self.model.get_hyperparams() is not None:
+            for key, value in self.model.get_hyperparams():
+                output_dict[key] = value
         for key, value in self.optimizer_kwargs.items():
             output_dict[key] = value
         return output_dict
