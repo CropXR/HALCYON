@@ -1,0 +1,20 @@
+import torch
+from halcyon.Models.MachineLearningModel import MachineLearningModel
+
+
+class AlwaysDerivativeZero(MachineLearningModel):
+    def __init__(
+        self,
+        **kwargs,
+    ):
+        """A model that always returns zero derivative. Used as a 'baseline' model."""
+        super().__init__(**kwargs)
+
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        return torch.zeros_like(state)
+
+    def get_inferred_network(self, **kwargs):
+        pass
+
+    def get_hyperparams(self):
+        return {}
