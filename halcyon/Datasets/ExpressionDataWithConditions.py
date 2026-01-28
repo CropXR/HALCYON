@@ -103,7 +103,8 @@ class ExpressionDataWithConditions(Dataset):
                 f"Found {len(possible_keys)} matching conditions found for KO {ko_gene}"
             )
         condition_to_use = possible_keys[0]
-        return condition_to_use, self._ko_dict[condition_to_use]
+        expression_to_use = self._ko_dict[condition_to_use]
+        return condition_to_use, expression_to_use
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data."""

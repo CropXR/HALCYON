@@ -7,7 +7,7 @@ from torchdiffeq import odeint
 import logging
 
 
-class Model(ABC, nn.Module):
+class GeneExpressionModel(ABC, nn.Module):
     def __init__(
         self,
         modelled_gene_labels: List[str],

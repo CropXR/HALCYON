@@ -6,13 +6,14 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
 from typing import Callable
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Losses import MSELossFlexible
 from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.Model import Model
+from halcyon.Models.Model import GeneExpressionModel
 import torch.nn as nn
 import seaborn as sns
 from halcyon.TidyDfResults import TidyDfResults
@@ -23,10 +24,9 @@ from tqdm import tqdm
 class Trainer:
     def __init__(
         self,
-        model: Model,
+        model: GeneExpressionModel,
         sim_result: SimulationResult,
         do_time_scaling: bool = True,
-        nr_training_steps: int = 10,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
         loss: nn.Module = MSELossFlexible(),
@@ -47,7 +47,6 @@ class Trainer:
         """
         self.model = model
         self.loss_fn = loss
-        self.nr_training_steps = nr_training_steps
 
         self.sim_result = sim_result
 
@@ -82,6 +81,7 @@ class Trainer:
         self.optimizer_kwargs = dict() if optimizer_kwargs is None else optimizer_kwargs
 
         self.optimizer = optimizer_fn(model.parameters(), **self.optimizer_kwargs)
+
         self.model.to(self.model.device)
 
         file_name = self.get_save_file_name()
@@ -89,6 +89,9 @@ class Trainer:
 
         # Loss history after training. Is empty initially (because no training has been performed yet).
         self.loss_history = []
+
+        # Models predict KOs if they are missing one or both KO genes
+        self.also_predict_if_missing_ko_gene = True
 
     def get_save_file_name(self) -> str:
         file_name = f"{self.file_name_prefix}{self.model.__class__.__name__}"
@@ -125,7 +128,6 @@ class Trainer:
     def summary(self) -> dict:
         output_dict = {}
         output_dict["final_loss"] = self.final_loss
-        output_dict["nr_training_steps"] = self.nr_training_steps
         output_dict["model_path"] = str(self.save_path)
         output_dict["model_cls"] = self.model.__class__.__name__
         for key, value in self.sim_result.items():
@@ -192,11 +194,11 @@ class Trainer:
         expression_data = expression_data.to(self.model.device)
         return experiment_data, expression_data
 
-    def train(self):
+    def train(self, dataloader, nr_epochs: int):
         """Perform model training on batches."""
         loss_history = []
 
-        if self.nr_training_steps == 0:
+        if nr_epochs == 0:
             # Cannot train mechanistic model so just calculate loss on dataset as only loss data point.
             loss_history.append(
                 np.mean(
@@ -204,15 +206,15 @@ class Trainer:
                 )
             )
 
-        for epoch in range(self.nr_training_steps):
+        for epoch in range(nr_epochs):
             epoch_loss = 0.0
-            for batch in self.dataloader:
+            for batch in dataloader:
                 loss = self._calculate_loss_from_batch(batch)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
 
-            mean_epoch_loss = epoch_loss / len(self.dataloader)
+            mean_epoch_loss = epoch_loss / len(dataloader)
             loss_history.append(mean_epoch_loss)
             logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
 
@@ -372,12 +374,31 @@ class Trainer:
             try:
                 condition, ground_truth_expressions = (
                     expressions_to_predict._get_condition_and_expression_under_ko_gene(
-                        ko
+                        ko, handle_missing_ko_genes=self.also_predict_if_missing_ko_gene
                     )
                 )
             except KeyError:
-                # Gene(s) not in model. Just do not return a dataframe for these?
-                continue
+                if self.also_predict_if_missing_ko_gene:
+                    condition = list(expressions_to_predict._ko_dict.keys())[0]
+                    # Just use first condition to infer which initial conditions to provide
+                    ground_truth_expressions = expressions_to_predict._ko_dict[
+                        condition
+                    ]
+
+                    # Check which genes are still in dataset. Proceed with these for predictions. (e.g. only knockout one instead of both genes)
+                    kos_in_dataset = tuple(
+                        gene for gene in condition.ko_gene if gene in ko
+                    )
+                    condition = ExperimentCondition(
+                        ko_gene=kos_in_dataset,
+                        all_genes=condition.all_genes,
+                        environment=condition.environment,
+                        all_environments=condition.all_environments,
+                    )
+
+                else:
+                    continue
+
             assert (
                 expressions_to_predict.genes == self.model.modelled_gene_labels
             ), "Gene labels do not match"
@@ -410,16 +431,25 @@ class Trainer:
             model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
             model_title = model_title.removeprefix(self.file_name_prefix)
             df_predicted[TidyDfResults.MODEL_COL] = model_title
-            # Add the ground truth measurements, too.
-            ground_truth_df = ground_truth_expressions.df.melt(
-                ignore_index=False,
-                var_name=TidyDfResults.TIME_COL,
-                value_name=TidyDfResults.EXPRESSION_COL,
-            ).reset_index(names=TidyDfResults.GENE_COL)
-            ground_truth_df[TidyDfResults.MODEL_COL] = TidyDfResults.GROUND_TRUTH_COL
 
-            full_df = pd.concat([ground_truth_df, df_predicted])
-            full_df[TidyDfResults.CONDITION_COL] = f"KO: {', '.join(condition.ko_gene)}"
+            if ko == condition.ko_gene:
+                # Add the ground truth measurements, too.
+                # Only if the ground truth for the KO was saved in this case.
+                ground_truth_df = ground_truth_expressions.df.melt(
+                    ignore_index=False,
+                    var_name=TidyDfResults.TIME_COL,
+                    value_name=TidyDfResults.EXPRESSION_COL,
+                ).reset_index(names=TidyDfResults.GENE_COL)
+                ground_truth_df[TidyDfResults.MODEL_COL] = (
+                    TidyDfResults.GROUND_TRUTH_COL
+                )
+                full_df = pd.concat([ground_truth_df, df_predicted])
+            elif self.also_predict_if_missing_ko_gene:
+                full_df = df_predicted
+            else:
+                raise ValueError("This should not happen.")
+
+            full_df[TidyDfResults.CONDITION_COL] = f"KO: {', '.join(ko)}"
             all_predictions.append(full_df)
         self.model.train()
         return all_predictions

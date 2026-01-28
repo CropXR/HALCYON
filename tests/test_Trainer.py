@@ -1,14 +1,8 @@
 from copy import deepcopy
-from unittest.mock import MagicMock
-import numpy as np
 import pytest
 from pytest import approx
 import torch
 
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from halcyon.Models.CellBox import CellBox
-from halcyon.Models.PhoenixModels import PhoenixOnlyAddLayers, PhoenixAddAndProdLayers
-from halcyon.Simulators.GNWSimRunner import SimulationResult
 from halcyon.Trainer import Trainer
 
 
@@ -37,22 +31,6 @@ def test_integration_train_and_load(trainers_for_all_models: list[Trainer]):
             assert_close(
                 trained_model_state_dicts[weight_key], loaded_state_dict[weight_key]
             ), f"Mismatch in {weight_key}"
-
-
-@pytest.fixture
-def trainer_with_loaded_cellbox(sim_result) -> Trainer:
-    dataset = sim_result.get_ko_timeseries_expressiondata()
-    my_model = CellBox(dataset.genes, dataset.all_environments)
-    return Trainer(
-        my_model,
-        sim_result,
-        nr_training_steps=2,
-        optimizer_kwargs={"lr": 0.01},
-    )
-
-
-def test_plot_fit_vs_real(trainer_with_loaded_cellbox: Trainer):
-    trainer_with_loaded_cellbox.plot_fit_vs_real()
 
 
 def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):

@@ -35,7 +35,6 @@ def test_final_loss_heatmap(result_list_from_jobs: FittedTrainerList):
     expected_df = pd.DataFrame(
         {
             10: {
-                "CellBox_hidden_nan": 0.05148175451904535,
                 "HybridModel_hidden_2.0": 0.006076498026959598,
                 "PhoenixAddAndProdLayers_hidden_2.0": 0.07486253883689642,
                 "PhoenixOnlyAddLayers_hidden_2.0": 0.06326545365154743,

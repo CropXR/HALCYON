@@ -3,7 +3,7 @@ from halcyon.Models.ActivationFunctions import (
     PhoenixProdActivation,
     PhoenixSumActivation,
 )
-from halcyon.Models.MachineLearningModel import MachineLearningModel
+from halcyon.Models.Model import GeneExpressionModel
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
@@ -13,7 +13,7 @@ from torch import nn
 import logging
 
 
-class PhoenixABC(MachineLearningModel, ABC):
+class PhoenixABC(GeneExpressionModel, ABC):
     def __init__(
         self,
         modelled_gene_labels: list[str],

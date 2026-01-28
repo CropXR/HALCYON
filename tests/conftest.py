@@ -13,7 +13,6 @@ from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
 from halcyon.FittedTrainerList import FittedTrainerList
-from halcyon.Models.CellBox import CellBox
 from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
@@ -121,7 +120,7 @@ def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_resu
 def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Trainer]:
     trainers: list[Trainer] = []
     for model_class, model_args in zip(
-        [CellBox, PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
+        [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
         [
             {"self_activations": True},
             {"hidden_size": 2},

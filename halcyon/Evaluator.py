@@ -4,7 +4,6 @@ from sklearn.metrics import roc_auc_score
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.MachineLearningModel import MachineLearningModel
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
@@ -18,12 +17,12 @@ class Evaluator:
         self.gt_expressions = gt_expressions
 
     def compare_edge_jaccard_gt_vs_inferred_network(
-        self, fitted_model: HybridModel | MachineLearningModel
+        self, fitted_model: HybridModel
     ) -> float:
         """Compare the jaccard index (intersection over union) of edges in ground truth vs the predicted network.
 
         Args:
-            fitted_model (HybridModel | MachineLearningModel): Model that has been fitted on experimental data
+            fitted_model (HybridModel): Model that has been fitted on experimental data
 
         Returns:
             iou (float): Intersection over union (Jaccard score). 1 is max score, 0 is lowest.
@@ -36,13 +35,11 @@ class Evaluator:
         iou = len(intersection_edges) / len(union_edges)
         return iou
 
-    def auroc_score_edge_detection(
-        self, fitted_model: HybridModel | MachineLearningModel
-    ):
+    def auroc_score_edge_detection(self, fitted_model: HybridModel):
         """Calculate area under the receiver operator curve for network inference (edge prediction)
 
         Args:
-            fitted_model (HybridModel | MachineLearningModel): Model that has been fitted and can infer network.
+            fitted_model (HybridModel): Model that has been fitted and can infer network.
             I.e. it has the .get_inferred_network method that can be called with threshold=None to return raw prediction values.
         """
         inferred_network = fitted_model.get_inferred_network(threshold=None)

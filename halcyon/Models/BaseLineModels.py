@@ -1,8 +1,9 @@
 import torch
-from halcyon.Models.MachineLearningModel import MachineLearningModel
+
+from halcyon.Models.Model import GeneExpressionModel
 
 
-class AlwaysDerivativeZero(MachineLearningModel):
+class AlwaysDerivativeZero(GeneExpressionModel):
     def __init__(
         self,
         **kwargs,

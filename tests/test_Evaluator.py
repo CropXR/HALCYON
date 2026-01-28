@@ -5,7 +5,6 @@ import pytest
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Evaluator import Evaluator
-from halcyon.Models.CellBox import CellBox
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Datasets.ExpressionData import ExpressionData
 
@@ -82,12 +81,3 @@ def test_compare_inferred_network(synthetic_gene_network, synthetic_expressions)
         mock_model
     )
     assert comparison_output == 0
-
-
-def test_roc_auc_inferred_network(synthetic_gene_network, synthetic_expressions):
-
-    my_evaluator = Evaluator(synthetic_gene_network, synthetic_expressions)
-    cellbox = CellBox(synthetic_gene_network.node_names, [], self_activations=False)
-    cellbox._set_weight_matrix_to_ones()
-    comparison_output = my_evaluator.auroc_score_edge_detection(cellbox)
-    assert np.allclose(comparison_output, 0.625)

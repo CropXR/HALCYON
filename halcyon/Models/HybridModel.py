@@ -1,22 +1,21 @@
 import logging
 import torch
 
-from halcyon.Models.MachineLearningModel import MachineLearningModel
 from halcyon.Models.MechanisticModel import MechanisticModel
-from halcyon.Models.Model import Model
+from halcyon.Models.Model import GeneExpressionModel
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
 
-class HybridModel(Model):
-    def __init__(self, mm: MechanisticModel, ml: MachineLearningModel, **kwargs):
+class HybridModel(GeneExpressionModel):
+    def __init__(self, mm: MechanisticModel, ml: GeneExpressionModel, **kwargs):
         """
         Initialize the HybridModel with a mechanistic model and a machine learning model.
         Args:
             mm (MechanisticModel): The mechanistic model instance.
-            ml (Model): The machine learning model instance.
+            ml (GeneExpressionModel): The machine learning model instance.
         Attributes:
             mm (MechanisticModel): The mechanistic model instance.
-            ml (Model): The machine learning model instance.
+            ml (GeneExpressionModel): The machine learning model instance.
             mm_indices (torch.Tensor): Precomputed indices for the mechanistic model genes.
             ml_indices (torch.Tensor): Precomputed indices for the machine learning model genes.
         """
@@ -32,7 +31,7 @@ class HybridModel(Model):
             **kwargs,
         )
         self._mm: MechanisticModel = mm
-        self._ml: MachineLearningModel = ml
+        self._ml: GeneExpressionModel = ml
         for model in [self._mm, self._ml]:
             model.device = self.device
             model.to(self.device)

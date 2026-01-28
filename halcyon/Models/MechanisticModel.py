@@ -16,10 +16,10 @@ import sympytorch
 import logging
 
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
-from halcyon.Models.Model import Model
+from halcyon.Models.Model import GeneExpressionModel
 
 
-class MechanisticModel(Model):
+class MechanisticModel(GeneExpressionModel):
     def __init__(
         self, modelled_gene_labels: List[str], condition_names: List[str], **kwargs
     ):
