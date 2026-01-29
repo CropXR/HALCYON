@@ -16,8 +16,10 @@ from halcyon.FittedTrainerList import FittedTrainerList
 from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
-from halcyon.Simulators.GNWSimRunner import GNWSimRunner, NoiseLevel, SimulationResult
-from halcyon.Trainer import Trainer
+from halcyon.Simulators.GNWSimRunner import GNWSimRunner
+from halcyon.Simulators.NoiseLevel import NoiseLevel
+from halcyon.Simulators.SimulationResult import SimulationResult
+from halcyon.ModelRunner import ModelRunner
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -117,8 +119,8 @@ def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_resu
 
 
 @pytest.fixture
-def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Trainer]:
-    trainers: list[Trainer] = []
+def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[ModelRunner]:
+    trainers: list[ModelRunner] = []
     for model_class, model_args in zip(
         [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
         [
@@ -134,7 +136,7 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Train
             condition_names=expr_data.all_environments,
             **model_args,
         )
-        trainer = Trainer(
+        trainer = ModelRunner(
             model,
             sim_result,
             nr_training_steps=2,
@@ -144,7 +146,7 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Train
 
     # Add hybrid model
     trainers.append(
-        Trainer(
+        ModelRunner(
             hybrid_model_mm_no_node_9,
             sim_result,
             nr_training_steps=5,

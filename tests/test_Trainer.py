@@ -3,13 +3,13 @@ import pytest
 from pytest import approx
 import torch
 
-from halcyon.Trainer import Trainer
+from halcyon.ModelRunner import ModelRunner
 
 
 from torch.testing import assert_close
 
 
-def test_integration_train_and_load(trainers_for_all_models: list[Trainer]):
+def test_integration_train_and_load(trainers_for_all_models: list[ModelRunner]):
     for trainer in trainers_for_all_models:
         untrained_trainer = deepcopy(trainer)
 
@@ -33,7 +33,7 @@ def test_integration_train_and_load(trainers_for_all_models: list[Trainer]):
             ), f"Mismatch in {weight_key}"
 
 
-def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):
+def test_load_double_ko_tensors(trainer_with_loaded_cellbox: ModelRunner):
     double_ko_expressions = (
         trainer_with_loaded_cellbox.sim_result.get_double_ko_expressiondata()
     )
@@ -65,6 +65,6 @@ def test_load_double_ko_tensors(trainer_with_loaded_cellbox: Trainer):
     )
 
 
-def test_losses_on_double_ko(trainer_with_loaded_cellbox: Trainer):
+def test_losses_on_double_ko(trainer_with_loaded_cellbox: ModelRunner):
     losses = trainer_with_loaded_cellbox.losses_on_double_ko()
     assert len(losses) == 10

@@ -17,69 +17,40 @@ from halcyon.Models.Model import GeneExpressionModel
 import torch.nn as nn
 import seaborn as sns
 from halcyon.TidyDfResults import TidyDfResults
-from halcyon.Simulators.GNWSimRunner import SimulationResult
+from halcyon.Simulators.SimulationResult import SimulationResult
 from tqdm import tqdm
 
 
-class Trainer:
+class ModelRunner:
     def __init__(
         self,
         model: GeneExpressionModel,
-        sim_result: SimulationResult,
-        do_time_scaling: bool = True,
+        nr_epochs: int,
+        batch_size: int = 32,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
         loss: nn.Module = MSELossFlexible(),
-        batch_size: int = 1,
-        file_name_prefix="trained_trainer_",
+        file_name_prefix="trainer_",
     ):
-        """Class to handle training of models
+        """Class to handle running models on simulation resutls. Handles the integration between dataloader and model.
 
         Args:
             model (Model): Model to be trained
-            sim_result (SimulationResult): Simulator output that the model should be trained on.
-            dataset (ExpressionDataWithConditions | None, optional): Dataset to use for training. If None, will use no-noise KO timeseries from sim_result. Defaults to None.
-            nr_training_steps (int): How many epochs to run the training
+            nr_epochs (int): How many epochs to run the training
+            batch_size (int, optional): Batch size to use during training. Defaults to 32.
             optimizer_fn (Callable, optional): Optimizer function. Defaults to torch.optim.Adam.
             optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
             loss (Callable, optional): Loss functions. Defaults to mse loss.
-            batch_size (int, optional): Batch size to use during training. Defaults to 1.
         """
         self.model = model
+        self.nr_epochs = nr_epochs
+        self.batch_size = batch_size
         self.loss_fn = loss
 
-        self.sim_result = sim_result
-
-        self.dataset = self.sim_result.get_ko_timeseries_expressiondata()
-        self.double_ko_dataset = self.sim_result.get_double_ko_expressiondata()
-        self.do_time_scaling = do_time_scaling
         self.file_name_prefix = file_name_prefix
         self.file_name_suffix = ".pt"
 
-        for my_dataset in [self.dataset, self.double_ko_dataset]:
-            # Normalise time scale to be from 0 to 1. Helps ODEs not explode
-            if self.do_time_scaling:
-                scaling_factors = []
-                original_max = max(my_dataset._get_time_points())
-                my_dataset.scale_time_series()
-                new_max = max(my_dataset._get_time_points())
-                scaling_factor = torch.tensor(original_max / new_max)
-                scaling_factors.append(scaling_factor)
-
-            # Ensure that expressions match the order of the modelled genes
-            my_dataset.match_genes_to_list(model.modelled_gene_labels)
-
-        if self.do_time_scaling:
-            assert all(
-                x == scaling_factors[0] for x in scaling_factors
-            ), "Not all timescalers are identical. Check if same timescale used by both double and single KO"
-            self.model.set_timescaler(scaling_factor)
-        self.dataloader = DataLoader(
-            self.dataset, batch_size=batch_size, shuffle=True, pin_memory=True
-        )
-
         self.optimizer_kwargs = dict() if optimizer_kwargs is None else optimizer_kwargs
-
         self.optimizer = optimizer_fn(model.parameters(), **self.optimizer_kwargs)
 
         self.model.to(self.model.device)
@@ -105,9 +76,6 @@ class Trainer:
         file_name += self.file_name_suffix
         return file_name
 
-    def __repr__(self):
-        return f"Training {self.model.get_name()} on {self.sim_result}. Saving to {self.save_path}"
-
     def load_if_exists(self):
         try:
             self.load(self.save_path)
@@ -115,53 +83,11 @@ class Trainer:
             logging.info(f"No existing model found to load at self.save_path. \n {e}")
             return False
 
-    @property
-    def final_loss(self):
-        return self.loss_history[-1] if self.loss_history else np.nan
-
-    def get_time_points(self) -> torch.Tensor:
+    def get_time_points(self, dataset: ExpressionDataWithConditions) -> torch.Tensor:
         """Get time points at which the expressions were measured."""
-        time_points = self.dataset._get_time_points()
+        time_points = dataset._get_time_points()
         time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
         return time_points_tensor
-
-    def summary(self) -> dict:
-        output_dict = {}
-        output_dict["final_loss"] = self.final_loss
-        output_dict["model_path"] = str(self.save_path)
-        output_dict["model_cls"] = self.model.__class__.__name__
-        for key, value in self.sim_result.items():
-            output_dict[key] = value
-        if self.model.get_hyperparams() is not None:
-            for key, value in self.model.get_hyperparams():
-                output_dict[key] = value
-        for key, value in self.optimizer_kwargs.items():
-            output_dict[key] = value
-        return output_dict
-
-    def losses_on_double_ko(self):
-        double_ko_expressions = self.sim_result.get_double_ko_expressiondata()
-        loss = self.predict_and_calculate_loss_from_expression_data(
-            double_ko_expressions
-        )
-        return loss
-
-    def _plot_one_prediction(
-        self,
-        initial_condition: torch.Tensor,
-        title: str,
-        env: torch.Tensor,
-        axs: Axes,
-        show_legend: bool,
-        **kwargs,
-    ):
-        """Simulate and plot prediction"""
-        with torch.no_grad():
-            predictions = self._calculate_model_prediction_at_conditions(
-                env.unsqueeze(0), initial_condition
-            )
-            predictions = predictions.squeeze(0).detach().cpu().numpy()
-            self._plot_from_expressions(predictions, title, axs, show_legend, **kwargs)
 
     def _calculate_model_prediction_at_conditions(
         self, experiment_data: torch.Tensor, initial_state: torch.Tensor
@@ -172,8 +98,15 @@ class Trainer:
         return output
 
     def _calculate_model_prediction_from_batch(
-        self, batch: torch.Tensor, return_true_expression=False
+        self, batch: torch.Tensor, return_true_expression: bool = False
     ):
+        """Provide a batch from the dataloader as input and return model prediction
+
+        Args:
+            batch (torch.Tensor): Dataloader input data batch
+            return_true_expression (bool, optional): If true, also return the ground truth expression data. Can be used to calculate loss. Defaults to False.
+
+        """
         experiment_data, expression_data = self.preprocess_batch(batch)
         output = self._calculate_model_prediction_at_conditions(
             experiment_data, expression_data[:, :, 0]
@@ -194,19 +127,16 @@ class Trainer:
         expression_data = expression_data.to(self.model.device)
         return experiment_data, expression_data
 
-    def train(self, dataloader, nr_epochs: int):
-        """Perform model training on batches."""
+    def train(self, dataset: ExpressionDataWithConditions):
+        """Perform model training."""
+
+        dataloader = DataLoader(
+            dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True
+        )
+
         loss_history = []
 
-        if nr_epochs == 0:
-            # Cannot train mechanistic model so just calculate loss on dataset as only loss data point.
-            loss_history.append(
-                np.mean(
-                    self.predict_and_calculate_loss_from_expression_data(self.dataset)
-                )
-            )
-
-        for epoch in range(nr_epochs):
+        for epoch in range(self.nr_epochs):
             epoch_loss = 0.0
             for batch in dataloader:
                 loss = self._calculate_loss_from_batch(batch)
@@ -227,7 +157,6 @@ class Trainer:
         logging.info(
             f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
         )
-        return self.summary()
 
     def plot_loss_history(self, ax=None):
         """After training the model, plot the loss history"""
@@ -243,59 +172,6 @@ class Trainer:
         ax.set_ylabel("Loss")
         ax.set_ylim((0, 1.5 * max(self.loss_history)))
         return fig, ax
-
-    def _plot_from_expressions(
-        self,
-        expressions: np.ndarray,
-        title: str | None,
-        axs: Axes,
-        show_legend: bool,
-        **kwargs,
-    ):
-        df_real = pd.DataFrame(
-            expressions,
-            columns=self.dataset._get_time_points(),
-            index=self.dataset.genes,
-        )
-        ExpressionData(df_real).plot_expressions(axis=axs, legend=show_legend, **kwargs)
-        if title is not None:
-            axs.set_title(title)
-
-    def plot_fit_vs_real(self, top_n=None, show_legend: bool = True):
-        """Plot fitted model vs measured data"""
-        if len(self.dataset) == 0:
-            raise ValueError("Dataset is empty.")
-        if top_n is not None:
-            n = top_n
-        else:
-            n = len(self.dataset)
-        fig, axs = plt.subplots(n, 2, sharey=True, sharex="col", figsize=(7, 3 * n))
-        if n == 1:
-            axs = np.expand_dims(
-                axs, axis=0
-            )  # ensure consistent indexing for single row
-
-        for i in range(n):
-            env, expressions = self.dataset[i]
-            env = env.to(self.model.device)
-            expressions = expressions.to(self.model.device)
-            # Plot ground truth
-            self._plot_from_expressions(
-                expressions.detach().cpu().numpy(),
-                f"Measured (Sample {i})",
-                axs[i, 0],
-                show_legend,
-            )
-            self._plot_one_prediction(
-                initial_condition=expressions[:, 0].unsqueeze(0),
-                title=f"Model fit (Sample {i})",
-                env=env,
-                axs=axs[i, 1],
-                show_legend=show_legend,
-            )
-
-        plt.tight_layout()
-        return fig, axs
 
     def integrate_model(
         self,
@@ -403,9 +279,6 @@ class Trainer:
                 expressions_to_predict.genes == self.model.modelled_gene_labels
             ), "Gene labels do not match"
 
-            if self.do_time_scaling:
-                expressions_to_predict.scale_time_series()
-
             initial_state = ground_truth_expressions.as_tensor()[:, 0].unsqueeze(0)
             condition_tensor = condition.as_tensor().unsqueeze(0)
             initial_state = initial_state.to(self.model.device)
@@ -461,8 +334,6 @@ class Trainer:
             expressions_to_predict.genes == self.model.modelled_gene_labels
         ), "Gene labels do not match"
         self.model.eval()
-        if self.do_time_scaling:
-            expressions_to_predict.scale_time_series()
 
         all_predictions = []
         with torch.no_grad():
@@ -484,8 +355,7 @@ class Trainer:
             expressions_to_predict.genes == self.model.modelled_gene_labels
         ), "Gene labels do not match"
         self.model.eval()
-        if self.do_time_scaling:
-            expressions_to_predict.scale_time_series()
+
         my_dataloader = DataLoader(
             expressions_to_predict, batch_size=1, shuffle=False, pin_memory=True
         )
@@ -498,7 +368,7 @@ class Trainer:
         return all_losses
 
 
-def run_training_job(job: Trainer):
+def run_training_job(job: ModelRunner):
     """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
     logging.basicConfig(
         level=logging.INFO,

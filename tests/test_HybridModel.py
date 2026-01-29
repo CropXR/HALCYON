@@ -8,7 +8,7 @@ from halcyon.Losses import MSELossFlexible, MSELossPlusMachineLearningL2
 from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.Models.MechanisticModel import PyTorchODE
-from halcyon.Trainer import Trainer
+from halcyon.ModelRunner import ModelRunner
 from torch.testing import assert_close
 
 
@@ -27,7 +27,9 @@ def test_hybrid_does_perfect_fit_if_ml_weights_zero(
     sim_result, expected_batch, hybrid_model_with_zero_ml_influence: HybridModel
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
-    my_trainer = Trainer(hybrid_model_with_zero_ml_influence, sim_result, batch_size=2)
+    my_trainer = ModelRunner(
+        hybrid_model_with_zero_ml_influence, sim_result, batch_size=2
+    )
     experiment_data, expression_data = my_trainer.preprocess_batch(expected_batch)
     output = my_trainer._calculate_model_prediction_at_conditions(
         experiment_data, expression_data[:, :, 0]
@@ -44,7 +46,7 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
 ):
     hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
     hybrid_model_mm_no_node_9._ml._set_raw_per_gene_importance(-50)
-    my_trainer = Trainer(
+    my_trainer = ModelRunner(
         hybrid_model_mm_no_node_9,
         sim_result,
         batch_size=2,
@@ -64,7 +66,7 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
 def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, expected_batch):
     my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=1)
 
-    my_trainer = Trainer(
+    my_trainer = ModelRunner(
         hybrid_model_mm_no_node_9,
         sim_result,
         batch_size=2,

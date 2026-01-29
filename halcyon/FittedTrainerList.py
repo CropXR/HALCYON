@@ -12,13 +12,13 @@ from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithCond
 from natsort import natsorted
 
 from halcyon.TidyDfResults import TidyDfResults
-from halcyon.Trainer import Trainer
+from halcyon.ModelRunner import ModelRunner
 
 
 class FittedTrainerList:
     def __init__(
         self,
-        trainer_list: list[Trainer],
+        trainer_list: list[ModelRunner],
         model_name_func: Callable[[pd.Series], str] | None = None,
     ):
         """Object will be a list of training jobs that have been run and can be used to summarise results. Requires that saved model path is present"""
@@ -32,7 +32,7 @@ class FittedTrainerList:
         )
 
     @classmethod
-    def load_saved_jobs(cls, train_jobs: list[Trainer]) -> Self:
+    def load_saved_jobs(cls, train_jobs: list[ModelRunner]) -> Self:
         results = []
         for job in train_jobs:
             try:
@@ -41,9 +41,6 @@ class FittedTrainerList:
             except FileNotFoundError as e:
                 logging.error(f"Error loading model for job {job.save_path}: {e}")
         return cls(results)
-
-    def summary_dataframe(self) -> pd.DataFrame:
-        return pd.DataFrame([i.summary() for i in self.trainer_list])
 
     def get_all_genes(self) -> list[tuple[str]]:
         """Returns list of all genes in all trainers. Starts with genes that are intersection, and then the ones that are disjoint"""
@@ -120,38 +117,3 @@ class FittedTrainerList:
             kos_to_plot, dataset_getter
         )
         return tidy_df.plot_model_plots()
-
-    def _get_final_loss_heatmap_data(self, column_name: str = "nr_genes"):
-        df = self.summary_dataframe()
-        df["model_overall_name"] = df.apply(self.model_to_name_func, axis=1)
-        # Pivot so genes = columns, modules = rows
-        heatmap_data = df.pivot_table(
-            index="model_overall_name",
-            columns=column_name,
-            values="final_loss",
-        )
-        return heatmap_data
-
-    def final_loss_heatmap(self, column_name: str = "nr_genes", ax=None):
-        """Plot heatmap of showing the final loss for each fitted model
-
-        Args:
-            column_name (str, optional): Column to group simulations by. Defaults to "nr_genes".
-        """
-        heatmap_data = self._get_final_loss_heatmap_data(column_name)
-
-        if ax is None:
-            fig, ax = plt.subplots()
-        else:
-            fig = ax.figure
-        sns.heatmap(
-            heatmap_data,
-            annot=True,
-            ax=ax,
-            fmt=".8f",
-            cmap="viridis",
-            cbar_kws={"label": "Final Loss"},
-        )
-        ax.set_title("Final Loss Heatmap")
-
-        return fig, ax

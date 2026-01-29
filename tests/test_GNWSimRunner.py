@@ -4,9 +4,11 @@ import networkx as nx
 import json
 
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
-from halcyon.Simulators.GNWSimRunner import NoiseLevel, SimulationResult
+from halcyon.Simulators.NoiseLevel import NoiseLevel
 
 import hashlib
+
+from halcyon.Simulators.SimulationResult import SimulationResult
 
 
 def create_file_hash(path: Path):
