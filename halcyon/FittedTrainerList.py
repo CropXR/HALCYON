@@ -84,26 +84,6 @@ class FittedTrainerList:
             conditions_to_map, dataset_getter
         )
 
-    def predict_tidy_dataframe_for_all_models_specific_kos(
-        self,
-        kos_to_predict: list[tuple[str]],
-        dataset_getter: Callable,
-    ) -> TidyDfResults:
-        # Create tidy dataframe
-        out_records = []
-        for trainer in self.trainer_list:
-            # Get the correct GT dataset
-            dataset: ExpressionDataWithConditions = dataset_getter(trainer)
-            # TODO add the network info?
-            # Calculate the predictions per model.
-            logging.info(f"Predicting for: {trainer}")
-            new_predictions = trainer._tidy_df_of_predictions_on_dataset(
-                dataset, kos_to_predict
-            )
-            out_records.extend(new_predictions)
-
-        return TidyDfResults(pd.concat(out_records))
-
     def plot_all_model_fits_for_specified_kos(
         self,
         kos_to_plot: list[tuple[str]],

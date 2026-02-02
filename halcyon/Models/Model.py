@@ -26,6 +26,16 @@ class GeneExpressionModel(ABC, nn.Module):
         self.reset_conditions()
 
     @property
+    def name(self):
+        return self.__class__.__name__
+
+    def __repr__(self):
+        return (
+            f"{self.name} with hyperparams: "
+            f"{[f'{k}={v}' for k,v in self.get_hyperparams()]}"
+        )
+
+    @property
     def n_genes(self):
         return len(self.modelled_gene_labels)
 
@@ -159,9 +169,6 @@ class GeneExpressionModel(ABC, nn.Module):
             logging.error(f"Unexpected error checking GPU compatibility: {e}")
             logging.info("Falling back to CPU.")
             return torch.device("cpu")
-
-    def get_name(self):
-        return self.__class__.__name__
 
     @abstractmethod
     def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:

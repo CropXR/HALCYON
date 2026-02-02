@@ -35,10 +35,10 @@ class ExperimentCondition:
 
     def return_with_changed_gene_list(self, new_all_genes: list[str]) -> Self:
         """Get ExperimentCondition like current object, but with a different gene (order) list. Used when matching genes in experiment to order how the model expects the genes"""
-        if self.ko_gene is not None and not all(
-            [gene in new_all_genes for gene in self.ko_gene]
+        if self.ko_gene is not None and not any(
+            [ko_gene in new_all_genes for ko_gene in self.ko_gene]
         ):
-            raise KeyError("KO gene(s) not in new gene list.")
+            raise KeyError("None of the KO gene(s) in new gene list.")
 
         return ExperimentCondition(
             ko_gene=self.ko_gene,

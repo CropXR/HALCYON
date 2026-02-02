@@ -16,7 +16,6 @@ from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import GeneExpressionModel
 import torch.nn as nn
 import seaborn as sns
-from halcyon.TidyDfResults import TidyDfResults
 from halcyon.Simulators.SimulationResult import SimulationResult
 from tqdm import tqdm
 
@@ -26,13 +25,14 @@ class ModelRunner:
         self,
         model: GeneExpressionModel,
         nr_epochs: int,
+        save_dir: Path,
         batch_size: int = 32,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
         loss: nn.Module = MSELossFlexible(),
         file_name_prefix="trainer_",
     ):
-        """Class to handle running models on simulation resutls. Handles the integration between dataloader and model.
+        """Class to handle running models on simulation results. Handles the integration between dataloader and model.
 
         Args:
             model (Model): Model to be trained
@@ -56,7 +56,7 @@ class ModelRunner:
         self.model.to(self.model.device)
 
         file_name = self.get_save_file_name()
-        self.save_path = self.sim_result.data_path / file_name
+        self.save_path = save_dir / file_name
 
         # Loss history after training. Is empty initially (because no training has been performed yet).
         self.loss_history = []
@@ -64,8 +64,11 @@ class ModelRunner:
         # Models predict KOs if they are missing one or both KO genes
         self.also_predict_if_missing_ko_gene = True
 
+    def __repr__(self):
+        return f"Modelrunner (Model={self.model},\n optimizer={self.optimizer.__class__.__name__},\n optimizer_kwargs={self.optimizer_kwargs},\n nr_epochs={self.nr_epochs},\n batch_size={self.batch_size}\n)"
+
     def get_save_file_name(self) -> str:
-        file_name = f"{self.file_name_prefix}{self.model.__class__.__name__}"
+        file_name = f"{self.file_name_prefix}{self.model.name}"
         for hyperparam_name, hyperparam_value in self.model.get_hyperparams():
             if hyperparam_name == "device":
                 continue
@@ -76,129 +79,59 @@ class ModelRunner:
         file_name += self.file_name_suffix
         return file_name
 
-    def load_if_exists(self):
-        try:
-            self.load(self.save_path)
-        except FileNotFoundError as e:
-            logging.info(f"No existing model found to load at self.save_path. \n {e}")
-            return False
-
-    def get_time_points(self, dataset: ExpressionDataWithConditions) -> torch.Tensor:
-        """Get time points at which the expressions were measured."""
-        time_points = dataset._get_time_points()
-        time_points_tensor = torch.tensor(time_points, dtype=torch.float32)
-        return time_points_tensor
-
-    def _calculate_model_prediction_at_conditions(
-        self, experiment_data: torch.Tensor, initial_state: torch.Tensor
-    ):
-        self.optimizer.zero_grad()
-        self.model.set_conditions(experiment_data)
-        output = self.integrate_model(initial_states_tensor=initial_state)
-        return output
-
-    def _calculate_model_prediction_from_batch(
-        self, batch: torch.Tensor, return_true_expression: bool = False
-    ):
-        """Provide a batch from the dataloader as input and return model prediction
-
-        Args:
-            batch (torch.Tensor): Dataloader input data batch
-            return_true_expression (bool, optional): If true, also return the ground truth expression data. Can be used to calculate loss. Defaults to False.
-
-        """
-        experiment_data, expression_data = self.preprocess_batch(batch)
-        output = self._calculate_model_prediction_at_conditions(
-            experiment_data, expression_data[:, :, 0]
-        )
-        if return_true_expression:
-            return output, expression_data
-        return output
-
-    def _calculate_loss_from_batch(self, batch: torch.Tensor):
-        output, true_expresssion = self._calculate_model_prediction_from_batch(
-            batch, return_true_expression=True
-        )
-        return self.loss_fn(output, true_expresssion, self.model)
-
-    def preprocess_batch(self, batch):
-        experiment_data, expression_data = batch
-        experiment_data = experiment_data.to(self.model.device)
-        expression_data = expression_data.to(self.model.device)
-        return experiment_data, expression_data
-
     def train(self, dataset: ExpressionDataWithConditions):
         """Perform model training."""
-
-        dataloader = DataLoader(
-            dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True
+        dataset = dataset.match_genes_to_list(self.model.modelled_gene_labels)
+        dataloader = self._dataloader_factory(dataset)
+        time_points = dataset._get_time_points()
+        time_points_tensor = torch.tensor(
+            time_points, dtype=torch.float32, device=self.model.device
         )
-
-        loss_history = []
 
         for epoch in range(self.nr_epochs):
             epoch_loss = 0.0
             for batch in dataloader:
-                loss = self._calculate_loss_from_batch(batch)
+                experiment_data, ground_truth_expression = batch
+                experiment_data = experiment_data.to(self.model.device)
+                ground_truth_expression = ground_truth_expression.to(self.model.device)
+
+                self.model.set_conditions(experiment_data)
+
+                self.optimizer.zero_grad()
+                output = self.model.integrate(
+                    initial_state=ground_truth_expression[:, :, 0],
+                    t_eval=time_points_tensor,
+                )
+                loss = self.loss_fn(output, ground_truth_expression, self.model)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
 
             mean_epoch_loss = epoch_loss / len(dataloader)
-            loss_history.append(mean_epoch_loss)
+            self.loss_history.append(mean_epoch_loss)
             logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
 
-        self.loss_history = loss_history
+    @torch.no_grad()
+    def predict_and_return_input_data(
+        self, dataset_to_predict: ExpressionDataWithConditions
+    ) -> tuple[list[torch.Tensor], list[float]]:
+        # TODO: write this properly by looking at what overlaps with the training loop ;)
+        dataloader = self._dataloader_factory(dataset_to_predict)
+        all_predictions = []
+        input_batches = []
+        self.model.eval()
+        for batch in dataloader:
+            predictions = self._calculate_model_prediction_from_batch(batch)
+            input_batches.append(batch.detach().cpu())
+            all_predictions.append(predictions.detach().cpu().item())
+        self.model.train()
+        return input_batches, all_predictions
 
     def run_for_parallelisation_and_save(self):
         self.train()
         self.save(self.save_path)
 
-        logging.info(
-            f"Finished fitting for genes: {self.sim_result.nr_genes}, modules: {self.sim_result.nr_modules}, sparsity: {self.sim_result.sparsity}, final loss: {self.final_loss}"
-        )
-
-    def plot_loss_history(self, ax=None):
-        """After training the model, plot the loss history"""
-        assert (
-            len(self.loss_history) > 0
-        ), "No loss history available. Train the model first."
-        if ax is None:
-            fig, ax = plt.subplots()
-        else:
-            fig = ax.figure
-        sns.lineplot(self.loss_history, ax=ax)
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Loss")
-        ax.set_ylim((0, 1.5 * max(self.loss_history)))
-        return fig, ax
-
-    def integrate_model(
-        self,
-        initial_states_tensor: torch.Tensor,
-        time_points_tensor: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        """Integrate the model over time
-
-        If no initital states or time points are provided, integrate the model over time starting with same initial conditions as in the
-        expression data and evaluating at the same time points as in the expressions data. Otherwise calculate data for user-specified initial conditions and time points.
-
-        Args:
-            time_points_tensor (torch.Tensor | None, optional): If specified, evaluate ODE integration at exactly these time points. Defaults to None.
-
-        Returns:
-            torch.Tensor: Tensor with genes as rows and time points as columns.
-        """
-        if time_points_tensor is None:
-            time_points_tensor = self.get_time_points()
-
-        initial_states_tensor = initial_states_tensor.to(self.model.device)
-        time_points_tensor = time_points_tensor.to(self.model.device)
-
-        output = self.model.integrate(
-            initial_state=initial_states_tensor, t_eval=time_points_tensor
-        )
-        return output
+        logging.info(f"Finished training and saving model to {self.save_path}")
 
     def save(self, checkpoint_path: Path):
         checkpoint = {
@@ -239,133 +172,110 @@ class ModelRunner:
 
             self.model.load_state_dict(new_dict)
 
+    def load_if_exists(self):
+        try:
+            self.load(self.save_path)
+        except FileNotFoundError as e:
+            logging.info(f"No existing model found to load at self.save_path. \n {e}")
+            return False
+
+    def _dataloader_factory(self, dataset: ExpressionDataWithConditions) -> DataLoader:
+        assert (
+            dataset.genes == self.model.modelled_gene_labels
+        ), "Gene labels do not match"
+        return DataLoader(
+            dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True
+        )
+
     def _tidy_df_of_predictions_on_dataset(
         self,
-        expressions_to_predict: ExpressionDataWithConditions,
-        kos_to_predict: list[tuple[str]],
+        dataset: ExpressionDataWithConditions,
     ):
+        # TODO move this entire bit ot the TidyDfResults class?
         all_predictions = []
         self.model.eval()
-        for ko in tqdm(kos_to_predict):
+        # Check if this makes sense
+        for ko in tqdm(dataset._ko_dict.keys()):
             try:
                 condition, ground_truth_expressions = (
-                    expressions_to_predict._get_condition_and_expression_under_ko_gene(
+                    dataset._get_condition_and_expression_under_ko_gene(
                         ko, handle_missing_ko_genes=self.also_predict_if_missing_ko_gene
                     )
                 )
             except KeyError:
-                if self.also_predict_if_missing_ko_gene:
-                    condition = list(expressions_to_predict._ko_dict.keys())[0]
-                    # Just use first condition to infer which initial conditions to provide
-                    ground_truth_expressions = expressions_to_predict._ko_dict[
-                        condition
-                    ]
+                continue
+        #         if self.also_predict_if_missing_ko_gene:
+        #             condition = list(dataset._ko_dict.keys())[0]
+        #             # Just use first condition to infer which initial conditions to provide
+        #             ground_truth_expressions = dataset._ko_dict[
+        #                 condition
+        #             ]
 
-                    # Check which genes are still in dataset. Proceed with these for predictions. (e.g. only knockout one instead of both genes)
-                    kos_in_dataset = tuple(
-                        gene for gene in condition.ko_gene if gene in ko
-                    )
-                    condition = ExperimentCondition(
-                        ko_gene=kos_in_dataset,
-                        all_genes=condition.all_genes,
-                        environment=condition.environment,
-                        all_environments=condition.all_environments,
-                    )
+        #             # Check which genes are still in dataset. Proceed with these for predictions. (e.g. only knockout one instead of both genes)
+        #             kos_in_dataset = tuple(
+        #                 gene for gene in condition.ko_gene if gene in ko
+        #             )
+        #             condition = ExperimentCondition(
+        #                 ko_gene=kos_in_dataset,
+        #                 all_genes=condition.all_genes,
+        #                 environment=condition.environment,
+        #                 all_environments=condition.all_environments,
+        #             )
 
-                else:
-                    continue
+        #         else:
+        #             continue
 
-            assert (
-                expressions_to_predict.genes == self.model.modelled_gene_labels
-            ), "Gene labels do not match"
+        #     assert (
+        #         dataset.genes == self.model.modelled_gene_labels
+        #     ), "Gene labels do not match"
 
-            initial_state = ground_truth_expressions.as_tensor()[:, 0].unsqueeze(0)
-            condition_tensor = condition.as_tensor().unsqueeze(0)
-            initial_state = initial_state.to(self.model.device)
-            condition_tensor = condition_tensor.to(self.model.device)
+        #     initial_state = ground_truth_expressions.as_tensor()[:, 0].unsqueeze(0)
+        #     condition_tensor = condition.as_tensor().unsqueeze(0)
+        #     initial_state = initial_state.to(self.model.device)
+        #     condition_tensor = condition_tensor.to(self.model.device)
 
-            with torch.no_grad():
-                prediction = self._calculate_model_prediction_at_conditions(
-                    condition_tensor, initial_state
-                )
-                prediction = prediction.squeeze(0).detach().cpu().numpy()
+        #     with torch.no_grad():
+        #         prediction = self._calculate_model_prediction_at_conditions(
+        #             condition_tensor, initial_state
+        #         )
+        #         prediction = prediction.squeeze(0).detach().cpu().numpy()
 
-            df_predicted = pd.DataFrame(
-                prediction,
-                columns=self.dataset._get_time_points(),
-                index=self.dataset.genes,
-            )
-            df_predicted = df_predicted.melt(
-                ignore_index=False,
-                var_name=TidyDfResults.TIME_COL,
-                value_name=TidyDfResults.EXPRESSION_COL,
-            ).reset_index(names=TidyDfResults.GENE_COL)
+        #     df_predicted = pd.DataFrame(
+        #         prediction,
+        #         columns=self.dataset._get_time_points(),
+        #         index=self.dataset.genes,
+        #     )
+        #     df_predicted = df_predicted.melt(
+        #         ignore_index=False,
+        #         var_name=TidyDfResults.TIME_COL,
+        #         value_name=TidyDfResults.EXPRESSION_COL,
+        #     ).reset_index(names=TidyDfResults.GENE_COL)
 
-            model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
-            model_title = model_title.removeprefix(self.file_name_prefix)
-            df_predicted[TidyDfResults.MODEL_COL] = model_title
+        #     model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
+        #     model_title = model_title.removeprefix(self.file_name_prefix)
+        #     df_predicted[TidyDfResults.MODEL_COL] = model_title
 
-            if ko == condition.ko_gene:
-                # Add the ground truth measurements, too.
-                # Only if the ground truth for the KO was saved in this case.
-                ground_truth_df = ground_truth_expressions.df.melt(
-                    ignore_index=False,
-                    var_name=TidyDfResults.TIME_COL,
-                    value_name=TidyDfResults.EXPRESSION_COL,
-                ).reset_index(names=TidyDfResults.GENE_COL)
-                ground_truth_df[TidyDfResults.MODEL_COL] = (
-                    TidyDfResults.GROUND_TRUTH_COL
-                )
-                full_df = pd.concat([ground_truth_df, df_predicted])
-            elif self.also_predict_if_missing_ko_gene:
-                full_df = df_predicted
-            else:
-                raise ValueError("This should not happen.")
+        #     if ko == condition.ko_gene:
+        #         # Add the ground truth measurements, too.
+        #         # Only if the ground truth for the KO was saved in this case.
+        #         ground_truth_df = ground_truth_expressions.df.melt(
+        #             ignore_index=False,
+        #             var_name=TidyDfResults.TIME_COL,
+        #             value_name=TidyDfResults.EXPRESSION_COL,
+        #         ).reset_index(names=TidyDfResults.GENE_COL)
+        #         ground_truth_df[TidyDfResults.MODEL_COL] = (
+        #             TidyDfResults.GROUND_TRUTH_COL
+        #         )
+        #         full_df = pd.concat([ground_truth_df, df_predicted])
+        #     elif self.also_predict_if_missing_ko_gene:
+        #         full_df = df_predicted
+        #     else:
+        #         raise ValueError("This should not happen.")
 
-            full_df[TidyDfResults.CONDITION_COL] = f"KO: {', '.join(ko)}"
-            all_predictions.append(full_df)
-        self.model.train()
-        return all_predictions
-
-    def predict_dataframe_from_expression_data(
-        self, expressions_to_predict: ExpressionDataWithConditions
-    ):
-        assert (
-            expressions_to_predict.genes == self.model.modelled_gene_labels
-        ), "Gene labels do not match"
-        self.model.eval()
-
-        all_predictions = []
-        with torch.no_grad():
-            for batch in expressions_to_predict:
-                predictions = self._calculate_model_prediction_from_batch(batch)
-                all_predictions.append(predictions.detach().cpu().item())
-        self.model.train()
-        return all_predictions
-
-    def predict_and_calculate_loss_from_expression_data(
-        self, expressions_to_predict: ExpressionDataWithConditions
-    ):
-        """Provide Expressiondata (e.g. with double knockouts) and calculate loss on them.
-
-        Args:
-            expressions_to_predict (ExpressionDataWithConditions): Dataset on which losses should be calculated
-        """
-        assert (
-            expressions_to_predict.genes == self.model.modelled_gene_labels
-        ), "Gene labels do not match"
-        self.model.eval()
-
-        my_dataloader = DataLoader(
-            expressions_to_predict, batch_size=1, shuffle=False, pin_memory=True
-        )
-        all_losses = []
-        with torch.no_grad():
-            for batch in my_dataloader:
-                loss = self._calculate_loss_from_batch(batch)
-                all_losses.append(loss.detach().cpu().item())
-        self.model.train()
-        return all_losses
+        #     full_df[TidyDfResults.CONDITION_COL] = f"KO: {', '.join(ko)}"
+        #     all_predictions.append(full_df)
+        # self.model.train()
+        # return all_predictions
 
 
 def run_training_job(job: ModelRunner):

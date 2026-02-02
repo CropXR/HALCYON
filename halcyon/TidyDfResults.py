@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 import seaborn as sns
@@ -6,6 +7,10 @@ from typing import Callable
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 import scipy.cluster.hierarchy as sch
+from typing_extensions import Self
+
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.ModelRunner import ModelRunner
 
 
 class TidyDfResults:
@@ -33,6 +38,34 @@ class TidyDfResults:
             self.CONDITION_COL,
         }
         self.df = df
+
+    @classmethod
+    def from_model_runners_and_datasets(
+        cls,
+        model_runner_list: list[ModelRunner],
+        dataset_list: list[ExpressionDataWithConditions],
+    ) -> Self:
+        # Create tidy dataframe
+        out_records = []
+        for trainer in model_runner_list:
+            for dataset in dataset_list:
+                # Calculate the predictions per model.
+                logging.info(f"Predicting for: {trainer}")
+
+                input_batches, all_predictions = trainer.predict_and_return_input_data(
+                    dataset
+                )
+                print()
+
+                # TODO add the network info?
+
+                # trainer._tidy_df_of_predictions_on_dataset(
+                #     dataset
+                # )
+                # some logic here to handle the tidy DF creation
+                # out_records.extend(new_predictions)
+
+        return cls(pd.concat(out_records))
 
     def _get_df_with_ground_truth_in_column(self) -> pd.DataFrame:
         """Return a dataframe where there is a column present called "ground_truth" which contains the ground truth expression values."""

@@ -113,8 +113,8 @@ class ExpressionDataWithConditions(Dataset):
         )
         return experiment_condition.as_tensor(), expression_data.as_tensor()
 
-    def match_genes_to_list(self, genes: list[str]):
-        """Reorder the genes in the expression data to match the given list of genes.
+    def match_genes_to_list(self, genes: list[str]) -> Self:
+        """Reorder the genes in the expression data to match the given list of genes. Return new object with matched genes.
 
         Args:
             genes (list): list of strings of genes that should be in the expression data, and the order in which the models expect them to be.
@@ -131,7 +131,7 @@ class ExpressionDataWithConditions(Dataset):
             new_dict[new_experiment_condition] = expression_data.match_genes_to_list(
                 genes
             )
-        self._ko_dict = new_dict
+        return self.__class__(new_dict)
 
     @classmethod
     def from_genenetweaver_ko_timeseries_output(cls, input_path: Path) -> Self:
