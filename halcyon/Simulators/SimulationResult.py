@@ -77,7 +77,11 @@ class SimulationResult:
         )
 
     def create_datasets(self):
-        """Preprocess datasets to be ready for training."""
+        """Preprocess datasets to be ready for training.
+
+        Returns the single and double KO datasets, as well as the scaling factor that was used to normalise the data over time
+            (this can be used to adjust the mechanistic model, which assumes the original time scale)
+        """
         single_ko_dataset = self.get_ko_timeseries_expressiondata()
         double_ko_dataset = self.get_double_ko_expressiondata()
 

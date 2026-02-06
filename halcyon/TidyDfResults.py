@@ -3,10 +3,12 @@ import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 import seaborn as sns
 import pandas as pd
-from typing import Callable
+from typing import Callable, List, Tuple
+from collections.abc import Generator
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 import scipy.cluster.hierarchy as sch
+import torch
 from typing_extensions import Self
 
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
@@ -24,6 +26,7 @@ class TidyDfResults:
     GENE_IS_IN_MM_COL = "gene_is_in_mm"
     EXPRESSION_COL = "expression"
     GROUND_TRUTH_COL = "ground_truth"
+    DATASET_COL = "dataset"
     MSE_COL = "MSE"
     R2_COL = "R2"
     KO_IN_MM_COL = "ko_in_mm"
@@ -36,6 +39,7 @@ class TidyDfResults:
             self.EXPRESSION_COL,
             self.MODEL_COL,
             self.CONDITION_COL,
+            self.DATASET_COL,
         }
         self.df = df
 
@@ -45,27 +49,82 @@ class TidyDfResults:
         model_runner_list: list[ModelRunner],
         dataset_list: list[ExpressionDataWithConditions],
     ) -> Self:
-        # Create tidy dataframe
-        out_records = []
+        """From a list of (trained) model runners and a list of datasets, create a tidy dataframe that contains the predictions of each model for each gene under each condition at each time point.
+
+        Args:
+            model_runner_list (list[ModelRunner]): List of model runners which should be run
+            dataset_list (list[ExpressionDataWithConditions]): List of expressiondata on which it should be predicted
+
+        Returns:
+            Self: The constructed TidyDfResults object.
+        """
+        all_dfs = []
+
         for trainer in model_runner_list:
+            model_name = trainer.get_save_file_name().removeprefix(
+                trainer.file_name_prefix
+            )
+            logging.info(f"Predicting using: {trainer}")
+
             for dataset in dataset_list:
-                # Calculate the predictions per model.
-                logging.info(f"Predicting for: {trainer}")
+                logging.info(f"Predicting on {dataset}")
+                prediction_outputs = trainer.predict(dataset)
 
-                input_batches, all_predictions = trainer.predict_and_return_input_data(
-                    dataset
+                all_dfs.extend(
+                    cls._prediction_outputs_to_long_df(
+                        prediction_outputs,
+                        model_name,
+                        dataset,
+                        trainer.model.modelled_gene_labels,
+                    )
                 )
-                print()
 
-                # TODO add the network info?
+        return cls(pd.concat(all_dfs))
 
-                # trainer._tidy_df_of_predictions_on_dataset(
-                #     dataset
-                # )
-                # some logic here to handle the tidy DF creation
-                # out_records.extend(new_predictions)
+    @classmethod
+    def _prediction_outputs_to_long_df(
+        cls,
+        prediction_outputs: Tuple[List[str], torch.Tensor, torch.Tensor],
+        model_name: str,
+        dataset: ExpressionDataWithConditions,
+        modelled_gene_labels: List[str],
+    ) -> Generator[pd.DataFrame]:
+        """Generator that converts the output of a prediction (list of conditions, tensor of ground truth expression data, tensor of predicted expression data) into a long format dataframe that can be easily plotted. The dataframe will contain columns for gene, time, expression, model, condition and dataset.
 
-        return cls(pd.concat(out_records))
+        Args:
+            prediction_outputs (Tuple[List[str], torch.Tensor, torch.Tensor]): Output of the predict. First item is list of conditions, second item is tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data, third item is tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
+            model_name (str): Name of model to use in tidy dataframe
+            dataset (ExpressionDataWithConditions): Dataset to use to store name in dataframe and to get time points from
+            modelled_gene_labels (List[str]): Genes that the model models
+
+        Yields:
+            pd.DataFrame: The long format dataframe.
+        """
+        for condition, gt_matrix, pred_matrix in zip(*prediction_outputs):
+            dataframes = []
+            for matrix, model_label in zip(
+                [pred_matrix, gt_matrix],
+                [model_name, cls.GROUND_TRUTH_COL],
+            ):
+                long_form_df = pd.DataFrame(
+                    matrix,
+                    columns=dataset._get_time_points(),
+                    index=pd.Index(modelled_gene_labels, name=cls.GENE_COL),
+                )
+                melted_df = long_form_df.melt(
+                    ignore_index=False,
+                    var_name=cls.TIME_COL,
+                    value_name=cls.EXPRESSION_COL,
+                ).set_index(cls.TIME_COL, append=True)
+                melted_df[cls.MODEL_COL] = model_label
+                dataframes.append(melted_df)
+
+            out_df = pd.concat(dataframes, axis=0).reset_index()
+
+            out_df[cls.CONDITION_COL] = condition
+            out_df[cls.DATASET_COL] = repr(dataset)
+
+            yield out_df
 
     def _get_df_with_ground_truth_in_column(self) -> pd.DataFrame:
         """Return a dataframe where there is a column present called "ground_truth" which contains the ground truth expression values."""

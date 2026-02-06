@@ -81,28 +81,17 @@ class ModelRunner:
 
     def train(self, dataset: ExpressionDataWithConditions):
         """Perform model training."""
-        dataset = dataset.match_genes_to_list(self.model.modelled_gene_labels)
         dataloader = self._dataloader_factory(dataset)
-        time_points = dataset._get_time_points()
-        time_points_tensor = torch.tensor(
-            time_points, dtype=torch.float32, device=self.model.device
-        )
+        time_points_tensor = self._get_time_points_as_tensor(dataset)
 
         for epoch in range(self.nr_epochs):
             epoch_loss = 0.0
             for batch in dataloader:
-                experiment_data, ground_truth_expression = batch
-                experiment_data = experiment_data.to(self.model.device)
-                ground_truth_expression = ground_truth_expression.to(self.model.device)
-
-                self.model.set_conditions(experiment_data)
-
                 self.optimizer.zero_grad()
-                output = self.model.integrate(
-                    initial_state=ground_truth_expression[:, :, 0],
-                    t_eval=time_points_tensor,
+                ground_truth_expression, prediction = (
+                    self._predict_expression_from_batch(time_points_tensor, batch)
                 )
-                loss = self.loss_fn(output, ground_truth_expression, self.model)
+                loss = self.loss_fn(prediction, ground_truth_expression, self.model)
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
@@ -112,20 +101,62 @@ class ModelRunner:
             logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
 
     @torch.no_grad()
-    def predict_and_return_input_data(
-        self, dataset_to_predict: ExpressionDataWithConditions
-    ) -> tuple[list[torch.Tensor], list[float]]:
-        # TODO: write this properly by looking at what overlaps with the training loop ;)
-        dataloader = self._dataloader_factory(dataset_to_predict)
-        all_predictions = []
-        input_batches = []
+    def predict(self, dataset: ExpressionDataWithConditions):
+        """Use model to predict the knockouts in the provided dataset
+
+        Args:
+            dataset (ExpressionDataWithConditions): Dataset on which to predict.
+
+        Returns:
+            Tuple of three tensors: experiment_data (Experiment x (Gene + Nr_conditions)), ground_truth_expressions (Experiment x Gene x Time),
+              and model predictions also with dimensions (Experiment x Gene x Time)
+        """
         self.model.eval()
-        for batch in dataloader:
-            predictions = self._calculate_model_prediction_from_batch(batch)
-            input_batches.append(batch.detach().cpu())
-            all_predictions.append(predictions.detach().cpu().item())
+        dataloader = self._dataloader_factory(dataset)
+        time_points_tensor = self._get_time_points_as_tensor(dataset)
+
+        experiment_as_string_list = []
+        batches_gt_expression_data = []
+        all_predictions = []
+        for batch in tqdm(dataloader):
+            ground_truth_expression, prediction = self._predict_expression_from_batch(
+                time_points_tensor, batch
+            )
+            experiment_as_string_list.extend(batch[2])
+            batches_gt_expression_data.append(ground_truth_expression.cpu())
+            all_predictions.append(prediction.detach().cpu())
         self.model.train()
-        return input_batches, all_predictions
+
+        # Concat batches together into one big tensor
+        all_gt_expression_data = torch.cat(batches_gt_expression_data, dim=0)
+        all_predictions = torch.cat(all_predictions, dim=0)
+        return experiment_as_string_list, all_gt_expression_data, all_predictions
+
+    def _predict_expression_from_batch(
+        self, time_points_tensor: torch.Tensor, batch: tuple[torch.Tensor, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Given a batch from the dataloader, use the model to predict the expression
+
+        Args:
+            time_points_tensor (torch.Tensor): points at which to evaluate the ODE integration
+            batch (tuple[torch.Tensor, torch.Tensor]): The batch from the dataloader which contains the experiment data
+              (to set e.g. knockout) and ground_truth_expression (which are needed for the intial condition)
+
+        Returns:
+            Tuple of two tensors: ground_truth_expressions (used for loss calculation) and the model prediction
+        """
+        experiment_data, ground_truth_expression, _ = batch
+        experiment_data = experiment_data.to(self.model.device)
+        ground_truth_expression = ground_truth_expression.to(self.model.device)
+
+        self.model.set_conditions(experiment_data)
+
+        prediction = self.model.integrate(
+            initial_state=ground_truth_expression[:, :, 0],
+            t_eval=time_points_tensor,
+        )
+
+        return ground_truth_expression, prediction
 
     def run_for_parallelisation_and_save(self):
         self.train()
@@ -175,11 +206,24 @@ class ModelRunner:
     def load_if_exists(self):
         try:
             self.load(self.save_path)
+            return True
         except FileNotFoundError as e:
-            logging.info(f"No existing model found to load at self.save_path. \n {e}")
+            logging.warning(e)
             return False
 
+    def _get_time_points_as_tensor(
+        self, dataset: ExpressionDataWithConditions
+    ) -> torch.Tensor:
+        """Get timepoints of the dataset to know at which point to evaluate the ODE integration"""
+        time_points = dataset._get_time_points()
+        time_points_tensor = torch.tensor(
+            time_points, dtype=torch.float32, device=self.model.device
+        )
+        return time_points_tensor
+
     def _dataloader_factory(self, dataset: ExpressionDataWithConditions) -> DataLoader:
+        """Matches dataset with genes in model and returns dataloader to be used for training or inference"""
+        dataset = dataset.match_genes_to_list(self.model.modelled_gene_labels)
         assert (
             dataset.genes == self.model.modelled_gene_labels
         ), "Gene labels do not match"

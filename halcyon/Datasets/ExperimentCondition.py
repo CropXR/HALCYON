@@ -19,6 +19,9 @@ class ExperimentCondition:
     environment: str | None
     all_environments: tuple[str, ...]
 
+    def as_string(self) -> str:
+        return f"KO: {', '.join(self.ko_gene)}. Env: {self.environment}"
+
     def as_tensor(self) -> torch.Tensor:
         """Return the experimental condition encoded as tensor.
 

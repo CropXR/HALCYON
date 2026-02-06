@@ -47,6 +47,10 @@ class GeneExpressionModel(ABC, nn.Module):
         """Allows polymorphism so even classes that do not have a mech model subclass do not throw error"""
         return
 
+    def get_genes_and_conditions_as_list(self) -> List[str]:
+        """Get the list of gene labels and condition names concatenated."""
+        return self.modelled_gene_labels + self.condition_names
+
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """Get the derivative at a given time point."""
