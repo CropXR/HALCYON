@@ -22,6 +22,7 @@ dependencies:
   - brotli=1.1.0=hb9d3cd8_2
   - brotli-bin=1.1.0=hb9d3cd8_2
   - brotli-python=1.1.0=py310hf71b8c6_2
+  - boto3
   - bzip2=1.0.8=h4bc722e_7
   - ca-certificates=2025.1.31=hbcca054_0
   - cached-property=1.5.2=hd8ed1ab_1
@@ -197,6 +198,7 @@ dependencies:
   - pytest-cov=6.0.0=pyhd8ed1ab_1
   - python=3.10.16=he725a3c_1_cpython
   - python-dateutil=2.9.0.post0=pyhff2d567_1
+  - python-dotenv
   - python-fastjsonschema=2.21.1=pyhd8ed1ab_0
   - python-json-logger=2.0.7=pyhd8ed1ab_0
   - python-libsbml=5.20.5=py310h1a6248f_0

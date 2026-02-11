@@ -12,7 +12,6 @@ import torch
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
-from halcyon.FittedTrainerList import FittedTrainerList
 from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 
@@ -20,6 +19,13 @@ from halcyon.Simulators.GNWSimRunner import GNWSimRunner
 from halcyon.Simulators.NoiseLevel import NoiseLevel
 from halcyon.Simulators.SimulationResult import SimulationResult
 from halcyon.ModelRunner import ModelRunner
+
+from dotenv import load_dotenv
+
+
+@pytest.fixture(scope="session", autouse=True)
+def get_env_variables():
+    load_dotenv()
 
 
 @pytest.fixture(scope="session", autouse=True)

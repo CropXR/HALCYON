@@ -1,9 +1,10 @@
+import pickle
 import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Simulators.NoiseLevel import NoiseLevel
 
-
+from typing_extensions import Self
 from dataclasses import dataclass, fields
 from pathlib import Path
 
@@ -32,6 +33,24 @@ class SimulationResult:
     network: RegulatoryNetwork
     noise_level: NoiseLevel
     normalise_time_series: bool = True
+
+    def save_to_pkl(self, save_path: Path):
+        """Save file to pickle. Can be used to log to MLFlow as an artifact."""
+        with save_path.open("wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load_from_pkl(cls, load_path: Path) -> Self:
+        """Load file from pickle.
+
+        Can be used to load from MLFlow.
+        Assumes that all the generated datafiles are in the same directory
+        as this pickle file
+        """
+        with load_path.open("rb") as f:
+            data = pickle.load(f)
+        data.data_path = load_path.parent
+        return data
 
     def _build_filename(self, filename_end: str) -> Path:
         return (
