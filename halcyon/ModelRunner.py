@@ -1,23 +1,27 @@
 import logging
+from typing import Callable
+import tempfile
 from pathlib import Path
+
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
+import mlflow
 import numpy as np
 import pandas as pd
+import seaborn as sns
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-
-from typing import Callable
 from halcyon.Datasets.ExpressionData import ExpressionData
 from halcyon.Losses import MSELossFlexible
 from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import GeneExpressionModel
-import torch.nn as nn
-import seaborn as sns
 from halcyon.Simulators.SimulationResult import SimulationResult
-from tqdm import tqdm
+from halcyon.TidyDfResults import TidyDfResults
 
 
 class ModelRunner:
@@ -55,27 +59,52 @@ class ModelRunner:
 
         self.model.to(self.model.device)
 
-        file_name = self.get_save_file_name()
-        self.save_path = save_dir / file_name
+        self.save_dir = save_dir
+        self.save_path = save_dir / self.file_name
 
         # Loss history after training. Is empty initially (because no training has been performed yet).
         self.loss_history = []
 
-        # Models predict KOs if they are missing one or both KO genes
-        self.also_predict_if_missing_ko_gene = True
-
     def __repr__(self):
-        return f"Modelrunner (Model={self.model},\n optimizer={self.optimizer.__class__.__name__},\n optimizer_kwargs={self.optimizer_kwargs},\n nr_epochs={self.nr_epochs},\n batch_size={self.batch_size}\n)"
+        return (
+            f"Modelrunner (Model={self.model},\n optimizer={self.optimizer.__class__.__name__},\n "
+            f"optimizer_kwargs={self.optimizer_kwargs},\n nr_epochs={self.nr_epochs},\n batch_size={self.batch_size}\n)"
+        )
 
-    def get_save_file_name(self) -> str:
-        file_name = f"{self.file_name_prefix}{self.model.name}"
+    def get_hyperparams_to_log(self) -> dict:
+        """Get both hyperparameters of the model and the optimisation to log to e.g. mlflow
+
+        Returns:
+            dict: with key as hyperparameter name and value as hyperparameter value
+        """
+        out_dict = {}
         for hyperparam_name, hyperparam_value in self.model.get_hyperparams():
             if hyperparam_name == "device":
                 continue
-            file_name += f"_{hyperparam_name}_{hyperparam_value}"
+            if torch.is_tensor(hyperparam_value):
+                hyperparam_value = hyperparam_value.cpu().item()
+            out_dict[hyperparam_name] = hyperparam_value
+
         if self.optimizer_kwargs:
             for kwarg_name, value in self.optimizer_kwargs.items():
-                file_name += f"_{kwarg_name}_{value}"
+                out_dict[kwarg_name] = value
+
+        # Add the ModelRunner-level hyperparams
+        out_dict.update(
+            {
+                "nr_epochs": self.nr_epochs,
+                "batch_size": self.batch_size,
+                "loss_fn": self.loss_fn.__class__.__name__,
+                "model_class": self.model.name,
+            }
+        )
+        return out_dict
+
+    @property
+    def file_name(self) -> str:
+        file_name = f"{self.file_name_prefix}{self.model.name}"
+        for hyperparam_name, hyperparam_value in self.get_hyperparams_to_log().items():
+            file_name += f"_{hyperparam_name}_{hyperparam_value}"
         file_name += self.file_name_suffix
         return file_name
 
@@ -158,11 +187,78 @@ class ModelRunner:
 
         return ground_truth_expression, prediction
 
-    def run_for_parallelisation_and_save(self):
-        self.train()
-        self.save(self.save_path)
+    def train_and_predict_for_mlflow(
+        self,
+        dataset_dict: dict[str, ExpressionDataWithConditions],
+        train_data_key_in_dict: str,
+        simulation_parent_id: str = None,
+        do_mlflow_model_logging: bool = False,
+    ):
+        """Carry out training and predicting and log everything to MLFlow
 
-        logging.info(f"Finished training and saving model to {self.save_path}")
+        Args:
+            dataset_dict (dict[str, ExpressionDataWithConditions]): Dictionary with dataset name as key and dataset as value.
+                The model will be trained on the dataset specified by train_data_key_in_dict and evaluated on all datasets in the dictionary.
+            train_data_key_in_dict (str): Key that specifies on which dataset in the dataset_dict to train the model.
+            simulation_parent_id (str, optional): Simulation parent run ID of the run from which the data was
+                generated. Can be used in MLFlow for data lineage. Defaults to None.
+            do_mlflow_model_logging (bool, optional): If set to True, the model will be logged to MLFlow using the
+              pytorch.log_model function. OTherwise will just save the .pt file as artifact.
+              Defaults to False.
+        """
+        with mlflow.start_run(
+            parent_run_id=simulation_parent_id, run_name=self.model.name
+        ):
+            mlflow.set_tag("run_type", "model_training_and_prediction")
+            mlflow.log_params(self.get_hyperparams_to_log())
+            self.train(dataset_dict[train_data_key_in_dict])
+            self._log_train_losses_to_mlflow()
+
+            # Also save the model as pt just to be sure?
+            self.save(self.save_path)
+            mlflow.log_artifact(self.save_path)
+
+            # Evaluate model on both datasets and log raw predictions
+            for dataset_name, dataset in dataset_dict.items():
+                experiment_as_string_list, all_gt_expression_data, all_predictions = (
+                    self.predict(dataset)
+                )
+                final_loss = self.loss_fn(
+                    all_predictions, all_gt_expression_data, self.model
+                )
+                mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
+
+                all_dfs = []
+                all_dfs.extend(
+                    TidyDfResults._prediction_outputs_to_long_df(
+                        (
+                            experiment_as_string_list,
+                            all_gt_expression_data,
+                            all_predictions,
+                        ),
+                        self.model.name,
+                        dataset,
+                        modelled_gene_labels=self.model.modelled_gene_labels,
+                    )
+                )
+                tidy_df = pd.concat(all_dfs)
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    print("Temp dir:", tmpdir)
+                    predicted_file_path = (
+                        Path(tmpdir) / f"prediction_{dataset_name}_data.parquet"
+                    )
+                    tidy_df.to_parquet(predicted_file_path, index=False)
+
+                    mlflow.log_artifact(predicted_file_path, artifact_path="evaluation")
+
+            if do_mlflow_model_logging:
+                mlflow.pytorch.log_model(self.model, name=self.model.name)
+
+    def _log_train_losses_to_mlflow(self):
+        """After training, this function can be used to log the loss history to MLFlow"""
+        for epoch, loss in enumerate(self.loss_history):
+            mlflow.log_metric("train_loss", loss, step=epoch)
 
     def save(self, checkpoint_path: Path):
         checkpoint = {
@@ -231,98 +327,14 @@ class ModelRunner:
             dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True
         )
 
-    def _tidy_df_of_predictions_on_dataset(
-        self,
-        dataset: ExpressionDataWithConditions,
-    ):
-        # TODO move this entire bit ot the TidyDfResults class?
-        all_predictions = []
-        self.model.eval()
-        # Check if this makes sense
-        for ko in tqdm(dataset._ko_dict.keys()):
-            try:
-                condition, ground_truth_expressions = (
-                    dataset._get_condition_and_expression_under_ko_gene(
-                        ko, handle_missing_ko_genes=self.also_predict_if_missing_ko_gene
-                    )
-                )
-            except KeyError:
-                continue
-        #         if self.also_predict_if_missing_ko_gene:
-        #             condition = list(dataset._ko_dict.keys())[0]
-        #             # Just use first condition to infer which initial conditions to provide
-        #             ground_truth_expressions = dataset._ko_dict[
-        #                 condition
-        #             ]
 
-        #             # Check which genes are still in dataset. Proceed with these for predictions. (e.g. only knockout one instead of both genes)
-        #             kos_in_dataset = tuple(
-        #                 gene for gene in condition.ko_gene if gene in ko
-        #             )
-        #             condition = ExperimentCondition(
-        #                 ko_gene=kos_in_dataset,
-        #                 all_genes=condition.all_genes,
-        #                 environment=condition.environment,
-        #                 all_environments=condition.all_environments,
-        #             )
-
-        #         else:
-        #             continue
-
-        #     assert (
-        #         dataset.genes == self.model.modelled_gene_labels
-        #     ), "Gene labels do not match"
-
-        #     initial_state = ground_truth_expressions.as_tensor()[:, 0].unsqueeze(0)
-        #     condition_tensor = condition.as_tensor().unsqueeze(0)
-        #     initial_state = initial_state.to(self.model.device)
-        #     condition_tensor = condition_tensor.to(self.model.device)
-
-        #     with torch.no_grad():
-        #         prediction = self._calculate_model_prediction_at_conditions(
-        #             condition_tensor, initial_state
-        #         )
-        #         prediction = prediction.squeeze(0).detach().cpu().numpy()
-
-        #     df_predicted = pd.DataFrame(
-        #         prediction,
-        #         columns=self.dataset._get_time_points(),
-        #         index=self.dataset.genes,
-        #     )
-        #     df_predicted = df_predicted.melt(
-        #         ignore_index=False,
-        #         var_name=TidyDfResults.TIME_COL,
-        #         value_name=TidyDfResults.EXPRESSION_COL,
-        #     ).reset_index(names=TidyDfResults.GENE_COL)
-
-        #     model_title = self.get_save_file_name().removesuffix(self.file_name_suffix)
-        #     model_title = model_title.removeprefix(self.file_name_prefix)
-        #     df_predicted[TidyDfResults.MODEL_COL] = model_title
-
-        #     if ko == condition.ko_gene:
-        #         # Add the ground truth measurements, too.
-        #         # Only if the ground truth for the KO was saved in this case.
-        #         ground_truth_df = ground_truth_expressions.df.melt(
-        #             ignore_index=False,
-        #             var_name=TidyDfResults.TIME_COL,
-        #             value_name=TidyDfResults.EXPRESSION_COL,
-        #         ).reset_index(names=TidyDfResults.GENE_COL)
-        #         ground_truth_df[TidyDfResults.MODEL_COL] = (
-        #             TidyDfResults.GROUND_TRUTH_COL
-        #         )
-        #         full_df = pd.concat([ground_truth_df, df_predicted])
-        #     elif self.also_predict_if_missing_ko_gene:
-        #         full_df = df_predicted
-        #     else:
-        #         raise ValueError("This should not happen.")
-
-        #     full_df[TidyDfResults.CONDITION_COL] = f"KO: {', '.join(ko)}"
-        #     all_predictions.append(full_df)
-        # self.model.train()
-        # return all_predictions
-
-
-def run_training_job(job: ModelRunner):
+def run_training_job(
+    job: ModelRunner,
+    dataset_dict: dict[str, ExpressionDataWithConditions],
+    train_data_key_in_dict: str,
+    simulation_parent_id: str = None,
+    do_mlflow_model_logging: bool = False,
+):
     """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
     logging.basicConfig(
         level=logging.INFO,
@@ -330,7 +342,12 @@ def run_training_job(job: ModelRunner):
         force=True,
     )
     try:
-        output = job.run_for_parallelisation_and_save()
+        output = job.train_and_predict_for_mlflow(
+            dataset_dict,
+            train_data_key_in_dict,
+            simulation_parent_id,
+            do_mlflow_model_logging,
+        )
     except AssertionError as e:
         logging.error(f"Error occurred while running job: {e}")
         output = {"error": str(e)}
