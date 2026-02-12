@@ -1,7 +1,8 @@
 import logging
-from typing import Callable
+from typing import Callable, List, Tuple
 import tempfile
 from pathlib import Path
+from collections.abc import Generator
 
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
@@ -25,6 +26,8 @@ from halcyon.TidyDfResults import TidyDfResults
 
 
 class ModelRunner:
+    mlflow_prediction_folder_name = "evaluation"
+
     def __init__(
         self,
         model: GeneExpressionModel,
@@ -191,7 +194,7 @@ class ModelRunner:
         self,
         dataset_dict: dict[str, ExpressionDataWithConditions],
         train_data_key_in_dict: str,
-        simulation_parent_id: str = None,
+        simulation_parent_id: str,
         do_mlflow_model_logging: bool = False,
     ):
         """Carry out training and predicting and log everything to MLFlow
@@ -201,7 +204,7 @@ class ModelRunner:
                 The model will be trained on the dataset specified by train_data_key_in_dict and evaluated on all datasets in the dictionary.
             train_data_key_in_dict (str): Key that specifies on which dataset in the dataset_dict to train the model.
             simulation_parent_id (str, optional): Simulation parent run ID of the run from which the data was
-                generated. Can be used in MLFlow for data lineage. Defaults to None.
+                generated. Used in MLFlow for data lineage.
             do_mlflow_model_logging (bool, optional): If set to True, the model will be logged to MLFlow using the
               pytorch.log_model function. OTherwise will just save the .pt file as artifact.
               Defaults to False.
@@ -214,7 +217,7 @@ class ModelRunner:
             self.train(dataset_dict[train_data_key_in_dict])
             self._log_train_losses_to_mlflow()
 
-            # Also save the model as pt just to be sure?
+            # Also save the model as .pt just to be sure of the model logging
             self.save(self.save_path)
             mlflow.log_artifact(self.save_path)
 
@@ -228,32 +231,78 @@ class ModelRunner:
                 )
                 mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
 
-                all_dfs = []
-                all_dfs.extend(
-                    TidyDfResults._prediction_outputs_to_long_df(
-                        (
-                            experiment_as_string_list,
-                            all_gt_expression_data,
-                            all_predictions,
-                        ),
-                        self.model.name,
-                        dataset,
-                        modelled_gene_labels=self.model.modelled_gene_labels,
-                    )
+                prediction_df = self._prediction_outputs_to_df(
+                    (
+                        experiment_as_string_list,
+                        all_gt_expression_data,
+                        all_predictions,
+                    ),
+                    dataset.get_time_points(),
+                    modelled_gene_labels=self.model.modelled_gene_labels,
                 )
-                tidy_df = pd.concat(all_dfs)
 
                 with tempfile.TemporaryDirectory() as tmpdir:
-                    print("Temp dir:", tmpdir)
+                    logging.debug("Temp dir:", tmpdir)
                     predicted_file_path = (
                         Path(tmpdir) / f"prediction_{dataset_name}_data.parquet"
                     )
-                    tidy_df.to_parquet(predicted_file_path, index=False)
+                    prediction_df.to_parquet(predicted_file_path, index=False)
 
-                    mlflow.log_artifact(predicted_file_path, artifact_path="evaluation")
+                    mlflow.log_artifact(
+                        predicted_file_path,
+                        artifact_path=self.mlflow_prediction_folder_name,
+                    )
 
             if do_mlflow_model_logging:
                 mlflow.pytorch.log_model(self.model, name=self.model.name)
+
+    def _prediction_outputs_to_df(
+        self,
+        prediction_outputs: Tuple[List[str], torch.Tensor, torch.Tensor],
+        time_points: np.ndarray,
+        modelled_gene_labels: List[str],
+    ) -> pd.DataFrame:
+        """Converts the output of a prediction (list of conditions, tensor of ground truth expression data,
+          tensor of predicted expression data) into a long format dataframe that can be easily plotted.
+
+        Args:
+            prediction_outputs (Tuple[List[str], torch.Tensor, torch.Tensor]): Output of the predict.
+                First item is list of conditions,
+                second item is tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data,
+                third item is tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
+            dataset (ExpressionDataWithConditions): Dataset to use to store name in dataframe and to get time points from
+            modelled_gene_labels (List[str]): Genes that the model models
+
+        Yields:
+            pd.DataFrame: The long format dataframe.
+        """
+        df_list = []
+
+        for condition, gt_matrix, pred_matrix in zip(*prediction_outputs):
+            melted_expression_df = []
+            for matrix, col_label in zip(
+                [pred_matrix, gt_matrix],
+                [TidyDfResults.EXPRESSION_COL, TidyDfResults.GROUND_TRUTH_COL],
+            ):
+                long_form_df = pd.DataFrame(
+                    matrix,
+                    columns=time_points,
+                    index=pd.Index(modelled_gene_labels, name=TidyDfResults.GENE_COL),
+                )
+                melted_df = long_form_df.melt(
+                    ignore_index=False,
+                    var_name=TidyDfResults.TIME_COL,
+                    value_name=col_label,
+                ).set_index(TidyDfResults.TIME_COL, append=True)
+                melted_expression_df.append(melted_df)
+
+            one_condition_df = pd.concat(melted_expression_df, axis=1).reset_index()
+
+            one_condition_df[TidyDfResults.CONDITION_COL] = condition
+            df_list.append(one_condition_df)
+
+        df = pd.concat(df_list)
+        return df
 
     def _log_train_losses_to_mlflow(self):
         """After training, this function can be used to log the loss history to MLFlow"""

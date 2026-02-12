@@ -1,22 +1,24 @@
 import logging
+from pathlib import Path
+import mlflow
 import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 import seaborn as sns
 import pandas as pd
 from typing import Callable, List, Tuple
-from collections.abc import Generator
+
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 import scipy.cluster.hierarchy as sch
-import torch
 from typing_extensions import Self
 
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from halcyon.ModelRunner import ModelRunner
 
 
 class TidyDfResults:
-    """Class to easily make plots from tidy dataframe (and sometimes convert to other formats). Dataframe keeps track of predictions of different models for different genes under different conditions at different times."""
+    """Class to easily make plots from tidy dataframe (and sometimes convert to other formats).
+    Dataframe keeps track of predictions of different models for different genes under different conditions at different times.
+    """
 
     # Store column names here
     MODEL_COL = "model"
@@ -24,129 +26,41 @@ class TidyDfResults:
     TIME_COL = "time"
     CONDITION_COL = "condition"
     GENE_IS_IN_MM_COL = "gene_is_in_mm"
-    EXPRESSION_COL = "expression"
+    EXPRESSION_COL = "predicted_expression"
     GROUND_TRUTH_COL = "ground_truth"
-    DATASET_COL = "dataset"
     MSE_COL = "MSE"
     R2_COL = "R2"
-    KO_IN_MM_COL = "ko_in_mm"
+    RUN_ID_COL = "run_id"
 
     def __init__(self, df: pd.DataFrame):
         # Check if the columns are correct
         assert set(df.columns) == {
+            self.RUN_ID_COL,
             self.GENE_COL,
             self.TIME_COL,
             self.EXPRESSION_COL,
-            self.MODEL_COL,
+            self.GROUND_TRUTH_COL,
             self.CONDITION_COL,
-            self.DATASET_COL,
         }
         self.df = df
 
     @classmethod
-    def from_model_runners_and_datasets(
-        cls,
-        model_runner_list: list[ModelRunner],
-        dataset_list: list[ExpressionDataWithConditions],
-    ) -> Self:
-        """From a list of (trained) model runners and a list of datasets, create a tidy dataframe that contains the predictions of each model for each gene under each condition at each time point.
-
-        Args:
-            model_runner_list (list[ModelRunner]): List of model runners which should be run
-            dataset_list (list[ExpressionDataWithConditions]): List of expressiondata on which it should be predicted
-
-        Returns:
-            Self: The constructed TidyDfResults object.
-        """
-        all_dfs = []
-
-        for trainer in model_runner_list:
-            model_name = trainer.get_save_file_name().removeprefix(
-                trainer.file_name_prefix
+    def from_mlflow_runs(cls, runs: List[mlflow.entities.Run]) -> Self:
+        """Create TidyDfResults from a list of mlflow runs"""
+        dfs = []
+        for run in runs:
+            run_id = run.info.run_id
+            logging.info(f"Downloading artifacts for run {run_id}")
+            artifacts = mlflow.artifacts.download_artifacts(
+                run_id=run_id, artifact_path="evaluation"
             )
-            logging.info(f"Predicting using: {trainer}")
+            for artifact in Path(artifacts).iterdir():
+                if artifact.is_file() and artifact.suffix == ".parquet":
+                    df = pd.read_parquet(artifact)
+                    df[cls.RUN_ID_COL] = run_id
+                    dfs.append(df)
 
-            for dataset in dataset_list:
-                logging.info(f"Predicting on {dataset}")
-                prediction_outputs = trainer.predict(dataset)
-
-                all_dfs.extend(
-                    cls._prediction_outputs_to_long_df(
-                        prediction_outputs,
-                        model_name,
-                        dataset,
-                        trainer.model.modelled_gene_labels,
-                    )
-                )
-
-        return cls(pd.concat(all_dfs))
-
-    @classmethod
-    def _prediction_outputs_to_long_df(
-        cls,
-        prediction_outputs: Tuple[List[str], torch.Tensor, torch.Tensor],
-        model_name: str,
-        dataset: ExpressionDataWithConditions,
-        modelled_gene_labels: List[str],
-    ) -> Generator[pd.DataFrame]:
-        """Generator that converts the output of a prediction (list of conditions, tensor of ground truth expression data, tensor of predicted expression data) into a long format dataframe that can be easily plotted. The dataframe will contain columns for gene, time, expression, model, condition and dataset.
-
-        Args:
-            prediction_outputs (Tuple[List[str], torch.Tensor, torch.Tensor]): Output of the predict. First item is list of conditions, second item is tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data, third item is tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
-            model_name (str): Name of model to use in tidy dataframe
-            dataset (ExpressionDataWithConditions): Dataset to use to store name in dataframe and to get time points from
-            modelled_gene_labels (List[str]): Genes that the model models
-
-        Yields:
-            pd.DataFrame: The long format dataframe.
-        """
-        for condition, gt_matrix, pred_matrix in zip(*prediction_outputs):
-            dataframes = []
-            for matrix, model_label in zip(
-                [pred_matrix, gt_matrix],
-                [model_name, cls.GROUND_TRUTH_COL],
-            ):
-                long_form_df = pd.DataFrame(
-                    matrix,
-                    columns=dataset._get_time_points(),
-                    index=pd.Index(modelled_gene_labels, name=cls.GENE_COL),
-                )
-                melted_df = long_form_df.melt(
-                    ignore_index=False,
-                    var_name=cls.TIME_COL,
-                    value_name=cls.EXPRESSION_COL,
-                ).set_index(cls.TIME_COL, append=True)
-                melted_df[cls.MODEL_COL] = model_label
-                dataframes.append(melted_df)
-
-            out_df = pd.concat(dataframes, axis=0).reset_index()
-
-            out_df[cls.CONDITION_COL] = condition
-            out_df[cls.DATASET_COL] = repr(dataset)
-
-            yield out_df
-
-    def _get_df_with_ground_truth_in_column(self) -> pd.DataFrame:
-        """Return a dataframe where there is a column present called "ground_truth" which contains the ground truth expression values."""
-        gt = self.df[self.df[self.MODEL_COL] == self.GROUND_TRUTH_COL][
-            [
-                self.GENE_COL,
-                self.TIME_COL,
-                self.CONDITION_COL,
-                self.EXPRESSION_COL,
-            ]
-        ].rename(columns={self.EXPRESSION_COL: self.GROUND_TRUTH_COL})
-
-        merged = self.df[self.df[self.MODEL_COL] != self.GROUND_TRUTH_COL].merge(
-            gt,
-            on=[
-                self.GENE_COL,
-                self.TIME_COL,
-                self.CONDITION_COL,
-            ],
-            how="left",
-        )
-        return merged
+        return cls(pd.concat(dfs, ignore_index=True))
 
     def _groupby_and_apply_func(
         self, func_to_apply: Callable, col_title: str, groupby_list: list[str]
@@ -167,12 +81,11 @@ class TidyDfResults:
 
     def _get_df_with_gene_is_in_mm_column(self) -> pd.DataFrame:
         """Return DF that contains a column 'is_in_mm' that indicates if the gene is in the MM or not."""
-        merged = self._get_df_with_ground_truth_in_column()
 
         gene_is_in_mm = self._flag_groups_with_all_models(
-            merged, col_to_group=self.GENE_COL
+            self.df, col_to_group=self.GENE_COL
         )
-        merged[self.GENE_IS_IN_MM_COL] = gene_is_in_mm
+        self.df[self.GENE_IS_IN_MM_COL] = gene_is_in_mm
 
         return merged
 
@@ -185,109 +98,12 @@ class TidyDfResults:
 
         return gene_is_in_mm
 
-    def plot_r2(self, split_by_condition_in_mm=True):
-        """Make a plot that shows the R2 for each model. Split by if the genes are in the MM or not."""
-        # Do not show per-gene r2 because these can be massively different
-        groupby_list = [self.MODEL_COL, self.GENE_IS_IN_MM_COL]
-
-        if split_by_condition_in_mm:
-            groupby_list.append(self.CONDITION_COL)
-        r2_split = self._groupby_and_apply_func(
-            r2_score, self.R2_COL, groupby_list=groupby_list
-        )
-        if split_by_condition_in_mm:
-            condition_in_mm = self._flag_groups_with_all_models(
-                r2_split, col_to_group=self.CONDITION_COL
-            )
-            r2_split[self.KO_IN_MM_COL] = condition_in_mm
-
-        g = sns.catplot(
-            kind="bar",
-            data=r2_split,
-            col=self.GENE_IS_IN_MM_COL,
-            col_order=[True, False],
-            row=self.KO_IN_MM_COL if split_by_condition_in_mm else None,
-            row_order=[True, False] if split_by_condition_in_mm else None,
-            y=self.R2_COL,
-            x=self.MODEL_COL,
-            hue=self.MODEL_COL,
-            aspect=1,
-            height=5,
-            sharey=True,
-            margin_titles=True,
-        )
-        self._rotate_x_tick_labels(g)
-        return g
-
-    def plot_mse_per_gene(
-        self, split_by_condition_in_mm=True, y_log_scale=True
-    ) -> sns.FacetGrid:
-        """Make a plot that shows the MSE for each model. Split by if the genes are in the MM or not."""
-        groupby_list = [
-            self.MODEL_COL,
-            self.GENE_COL,
-            self.GENE_IS_IN_MM_COL,
-            self.CONDITION_COL,
-        ]
-
-        mse_split = self._groupby_and_apply_func(
-            mean_squared_error, self.MSE_COL, groupby_list=groupby_list
-        )
-
-        if split_by_condition_in_mm:
-            condition_in_mm = self._flag_groups_with_all_models(
-                mse_split, col_to_group=self.CONDITION_COL
-            )
-            mse_split[self.KO_IN_MM_COL] = condition_in_mm
-
-        g = sns.catplot(
-            kind="boxen",
-            data=mse_split,
-            # col=self.GENE_IS_IN_MM_COL,
-            # col_order=[True, False],
-            col=self.KO_IN_MM_COL if split_by_condition_in_mm else None,
-            col_order=[True, False] if split_by_condition_in_mm else None,
-            y=self.MSE_COL,
-            hue=self.MODEL_COL,
-            x=self.GENE_IS_IN_MM_COL,
-            aspect=1,
-            height=5,
-            # margin_titles=True if split_by_condition_in_mm else None,
-            # sharey="row" if split_by_condition_in_mm else True,
-            log_scale=y_log_scale,
-        )
-        self._rotate_x_tick_labels(g)
-        return g
-
     def _rotate_x_tick_labels(self, g, rotation=45):
         for ax in g.axes.flatten():
             for label in ax.get_xticklabels():
                 label.set_rotation(rotation)
                 label.set_horizontalalignment("right")
         g.figure.tight_layout()
-
-    def kde_plot(self, subsample_first=False):
-        """Show KDE of points in ground truth vs predicted plot. Set subsample=True to speed up calculation of KDE by subsampling DF first."""
-        df = self._get_df_with_gene_is_in_mm_column()
-        condition_in_mm = self._flag_groups_with_all_models(
-            df, col_to_group=self.CONDITION_COL
-        )
-        df[self.KO_IN_MM_COL] = condition_in_mm
-        if subsample_first:
-            df = df.groupby(
-                [self.KO_IN_MM_COL, self.GENE_IS_IN_MM_COL, self.MODEL_COL]
-            ).sample(n=10000, replace=True, random_state=42)
-        return sns.displot(
-            data=df,
-            kind="kde",
-            x=self.GROUND_TRUTH_COL,
-            y=self.EXPRESSION_COL,
-            col=self.GENE_IS_IN_MM_COL,
-            row=self.KO_IN_MM_COL,
-            hue=self.MODEL_COL,
-            levels=3,
-            thresh=0.01,
-        )
 
     def plot_scatterplot(self):
         """Plot scatterplot of ground truth vs predicted expression. Split by if the gene is in the MM or not."""
