@@ -29,8 +29,10 @@ class ExperimentCondition:
         """
         ko_tensor = torch.zeros(len(self.all_genes))
         if self.ko_gene is not None:
-            gene_indices = [self.all_genes.index(gene) for gene in self.ko_gene]
-            ko_tensor[gene_indices] = 1
+            for gene in self.ko_gene:
+                if gene in self.all_genes:
+                    ko_index = self.all_genes.index(gene)
+                    ko_tensor[ko_index] = 1
         env_tensor = torch.zeros(len(self.all_environments))
         if self.environment is not None:
             env_tensor[self.all_environments.index(self.environment)] = 1
