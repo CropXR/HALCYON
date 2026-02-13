@@ -62,6 +62,19 @@ class TidyDfResults:
 
         return cls(pd.concat(dfs, ignore_index=True))
 
+    def split_into_single_and_double_ko(self) -> Tuple[Self, Self]:
+        """Split this dataframe into one with single knockouts and double knockouts.
+
+        Can be used if you want to plot these predictions separately
+
+        Returns:
+            Tuple[Self, Self]: First element is TidyDfResults with single KOs, second element is TidyDfResults with double KOs
+        """
+        nr_of_ko_genes = self.df[self.CONDITION_COL].str.count("Node_")
+        single_ko = self.df[nr_of_ko_genes == 1]
+        double_ko = self.df[nr_of_ko_genes == 2]
+        return self.__class__(single_ko), self.__class__(double_ko)
+
     def _groupby_and_apply_func(
         self, func_to_apply: Callable, col_title: str, groupby_list: list[str]
     ):
@@ -95,7 +108,6 @@ class TidyDfResults:
         gene_is_in_mm = merged.groupby(col_to_group)[self.MODEL_COL].transform(
             lambda x: x.nunique() == total_nr_models
         )
-
         return gene_is_in_mm
 
     def _rotate_x_tick_labels(self, g, rotation=45):
@@ -191,10 +203,42 @@ class TidyDfResults:
 
         return g
 
-    def plot_model_plots(self):
+    def _run_id_to_model_name(self, run_id: str) -> str:
+        """Convert mlflow run_id to a more human readable model name by looking up the parameters of the run."""
+        logging.info(f"Getting model name for run_id {run_id}")
+        run = mlflow.get_run(run_id)
+        out_string_list = []
+        for key, value in run.data.params.items():
+            out_string_list.append(f"{key}_{value}")
+        out_string = "__".join(out_string_list)
+        return out_string
+
+    def _get_df_with_model_names(self) -> pd.DataFrame:
+        """For a dataframe which only contains mlflow run ids, return one where these are converted to strings representing the underlying model."""
+        run_id_to_model_dict = {}
+        for run_id in self.df[self.RUN_ID_COL].unique():
+            model_name = self._run_id_to_model_name(run_id)
+            run_id_to_model_dict[run_id] = model_name
+        df_with_model_name = self.df.assign(
+            **{self.MODEL_COL: self.df[self.RUN_ID_COL].map(run_id_to_model_dict)}
+        )
+        return df_with_model_name
+
+    def plot_model_plots(self, df_selection_function: Callable):
         """Plot lineplots of expression over time for each model, split by conditions."""
+        df_with_model_name = self._get_df_with_model_names()
+        if df_selection_function is not None:
+            df_with_model_name = df_with_model_name[
+                df_selection_function(df_with_model_name)
+            ]
+        # Make the ground truth here a different model col
+        print()
+        df_with_gt_as_model = self._df_with_ground_truth_as_kind_of_model(
+            df_with_model_name
+        )
+
         g = sns.relplot(
-            data=self.df,
+            data=df_with_gt_as_model,
             col=self.MODEL_COL,
             row=self.CONDITION_COL,
             hue=self.GENE_COL,
@@ -203,6 +247,26 @@ class TidyDfResults:
             kind="line",
         )
         return g
+
+    @classmethod
+    def _df_with_ground_truth_as_kind_of_model(
+        cls, in_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """For some plotting, pretend that the ground truth expression was a form of model.
+
+        This function creates a new dataframe where the ground truth is added as a
+        'ground truth' model predictions. This way, it can be plotted together with the predictions.
+        """
+        df_with_ground_truth_as_model = in_df.copy()
+
+        df_with_ground_truth_as_model[cls.EXPRESSION_COL] = (
+            df_with_ground_truth_as_model[cls.GROUND_TRUTH_COL]
+        )
+        df_with_ground_truth_as_model[cls.MODEL_COL] = cls.GROUND_TRUTH_COL
+        df_expanded = pd.concat(
+            [in_df, df_with_ground_truth_as_model], ignore_index=True
+        )
+        return df_expanded
 
     def to_csv(self, filepath):
         """Save to csv file."""
