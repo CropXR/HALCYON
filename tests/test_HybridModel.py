@@ -1,7 +1,10 @@
 from copy import deepcopy
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import tempfile
+
 import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Losses import MSELossFlexible, MSELossPlusMachineLearningL2
@@ -24,56 +27,62 @@ def test_merge_modelled_genes():
 
 
 def test_hybrid_does_perfect_fit_if_ml_weights_zero(
-    sim_result, expected_batch, hybrid_model_with_zero_ml_influence: HybridModel
+    expression_data_from_gnw, hybrid_model_with_zero_ml_influence: HybridModel
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
+    temp_dir = tempfile.gettempdir()
+
     my_trainer = ModelRunner(
-        hybrid_model_with_zero_ml_influence, sim_result, batch_size=2
+        hybrid_model_with_zero_ml_influence, nr_epochs=1, save_dir=Path(temp_dir)
     )
-    experiment_data, expression_data = my_trainer.preprocess_batch(expected_batch)
-    output = my_trainer._calculate_model_prediction_at_conditions(
-        experiment_data, expression_data[:, :, 0]
+
+    _, all_gt_expression_data, all_predictions = my_trainer.predict(
+        expression_data_from_gnw
     )
-    assert_close(expression_data, output, atol=1e-3, rtol=1e-3)
-    loss = my_trainer._calculate_loss_from_batch(expected_batch)
-    assert_close(loss, torch.tensor(0.0, device=my_trainer.model.device))
+    assert_close(all_gt_expression_data, all_predictions, atol=1e-3, rtol=1e-3)
+    loss = my_trainer.loss_fn(all_predictions, all_gt_expression_data)
+    assert_close(loss, torch.tensor(0.0), check_device=False, atol=1e-3, rtol=1e-3)
 
 
 def test_most_genes_perfect_fit_if_only_remove_gene_9(
-    sim_result,
     hybrid_model_mm_no_node_9: HybridModel,
-    expected_batch,
+    expr_data_from_sim: ExpressionDataWithConditions,
 ):
     hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
     hybrid_model_mm_no_node_9._ml._set_raw_per_gene_importance(-50)
+    temp_dir = tempfile.gettempdir()
+
     my_trainer = ModelRunner(
-        hybrid_model_mm_no_node_9,
-        sim_result,
-        batch_size=2,
+        hybrid_model_mm_no_node_9, nr_epochs=1, save_dir=Path(temp_dir)
     )
-    experiment_data, expression_data = my_trainer.preprocess_batch(expected_batch)
-    output = my_trainer._calculate_model_prediction_at_conditions(
-        experiment_data, expression_data[:, :, 0]
-    )
+
+    _, all_gt_expression_data, all_predictions = my_trainer.predict(expr_data_from_sim)
     # First 9 genes will match perfectly
-    assert_close(expression_data[:, :9, :], output[:, :9, :], atol=1e-3, rtol=1e-3)
-    loss = my_trainer._calculate_loss_from_batch(expected_batch)
     assert_close(
-        loss, torch.tensor(0.0463, device=my_trainer.model.device), atol=1e-3, rtol=1e-3
+        all_gt_expression_data[:, :9, :],
+        all_predictions[:, :9, :],
+        atol=1e-3,
+        rtol=1e-3,
     )
+    loss = my_trainer.loss_fn(all_predictions, all_gt_expression_data)
+    assert_close(loss, torch.tensor(0.016), atol=1e-3, rtol=1e-3, check_device=False)
 
 
-def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, expected_batch):
+def test_l2_loss(
+    hybrid_model_mm_no_node_9: HybridModel,
+    expr_data_from_sim: ExpressionDataWithConditions,
+):
     my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=1)
 
+    temp_dir = tempfile.gettempdir()
+
     my_trainer = ModelRunner(
-        hybrid_model_mm_no_node_9,
-        sim_result,
-        batch_size=2,
-        loss=my_l2_loss,
+        hybrid_model_mm_no_node_9, nr_epochs=1, save_dir=Path(temp_dir), loss=my_l2_loss
     )
 
-    loss = my_trainer._calculate_loss_from_batch(expected_batch)
+    _, all_gt_expression_data, all_predictions = my_trainer.predict(expr_data_from_sim)
+
+    loss = my_trainer.loss_fn(all_predictions, all_gt_expression_data, my_trainer.model)
 
     ml_params = [
         p
@@ -91,25 +100,30 @@ def test_l2_loss(sim_result, hybrid_model_mm_no_node_9, expected_batch):
         torch.tensor(inferred_mse + 1 * loss_l2, device=my_trainer.model.device),
         atol=1e-4,
         rtol=1e-4,
+        check_device=False,
     )
     # Changing lambda should change overall loss as such
 
     my_trainer.loss_fn = MSELossPlusMachineLearningL2(lambda_param=0.5)
-    loss = my_trainer._calculate_loss_from_batch(expected_batch)
+    loss = my_trainer.loss_fn(all_predictions, all_gt_expression_data, my_trainer.model)
+
     assert_close(
         loss,
         torch.tensor(inferred_mse + 0.5 * loss_l2, device=my_trainer.model.device),
         atol=1e-4,
         rtol=1e-4,
+        check_device=False,
     )
 
     my_trainer.loss_fn = MSELossFlexible()
-    loss = my_trainer._calculate_loss_from_batch(expected_batch)
+    loss = my_trainer.loss_fn(all_predictions, all_gt_expression_data, my_trainer.model)
+
     assert_close(
         loss,
         torch.tensor(inferred_mse, device=my_trainer.model.device),
         atol=1e-4,
         rtol=1e-4,
+        check_device=False,
     )
 
 

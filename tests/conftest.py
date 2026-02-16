@@ -67,19 +67,14 @@ def sim_result() -> SimulationResult:
 
 
 @pytest.fixture
-def expr_data_from_sim(sim_result):
-    # expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
-
-    # )
-
-    # #     sim_result.data_path
-    # #     / f"{sim_result.network_name}_nonoise_knockout_timeseries0.tsv"
-    # # )
-    return sim_result.get_ko_timeseries_expressiondata()
+def expr_data_from_sim(sim_result: SimulationResult) -> ExpressionDataWithConditions:
+    return sim_result.get_single_ko_timeseries_expressiondata()
 
 
 @pytest.fixture
-def mech_model_from_sim_result(sim_result, expr_data_from_sim):
+def mech_model_from_sim_result(
+    sim_result: SimulationResult, expr_data_from_sim: ExpressionDataWithConditions
+) -> PyTorchODE:
     model = PyTorchODE.from_sbml(
         sim_result.data_path / "integration_test_network.xml",
         condition_names=expr_data_from_sim.all_environments,
@@ -89,7 +84,9 @@ def mech_model_from_sim_result(sim_result, expr_data_from_sim):
 
 
 @pytest.fixture
-def ml_model_from_sim_result(expr_data_from_sim) -> PhoenixAddAndProdLayers:
+def ml_model_from_sim_result(
+    expr_data_from_sim: ExpressionDataWithConditions,
+) -> PhoenixAddAndProdLayers:
     model = PhoenixAddAndProdLayers(
         expr_data_from_sim.genes, expr_data_from_sim.all_environments, hidden_size=2
     )
@@ -97,14 +94,18 @@ def ml_model_from_sim_result(expr_data_from_sim) -> PhoenixAddAndProdLayers:
 
 
 @pytest.fixture
-def hybrid_model(mech_model_from_sim_result, ml_model_from_sim_result):
+def hybrid_model(
+    mech_model_from_sim_result: PyTorchODE,
+    ml_model_from_sim_result: PhoenixAddAndProdLayers,
+) -> HybridModel:
     return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
 
 
 @pytest.fixture
 def hybrid_model_with_zero_ml_influence(
-    mech_model_from_sim_result, ml_model_from_sim_result: PhoenixAddAndProdLayers
-):
+    mech_model_from_sim_result: PyTorchODE,
+    ml_model_from_sim_result: PhoenixAddAndProdLayers,
+) -> HybridModel:
     ml_model_from_sim_result = deepcopy(ml_model_from_sim_result)
     ml_model_from_sim_result._set_raw_per_gene_importance(-50)
     return HybridModel(
@@ -114,7 +115,10 @@ def hybrid_model_with_zero_ml_influence(
 
 
 @pytest.fixture
-def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_result):
+def hybrid_model_mm_no_node_9(
+    mech_model_from_sim_result: PyTorchODE,
+    ml_model_from_sim_result: PhoenixAddAndProdLayers,
+) -> HybridModel:
     mech_model_from_sim_result = deepcopy(mech_model_from_sim_result)
     mech_model_from_sim_result.select_genes([f"Node_{i}" for i in range(9)])
     return HybridModel(
@@ -125,7 +129,9 @@ def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_resu
 
 
 @pytest.fixture
-def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[ModelRunner]:
+def trainers_for_all_models(
+    sim_result: SimulationResult, hybrid_model_mm_no_node_9: HybridModel
+) -> list[ModelRunner]:
     trainers: list[ModelRunner] = []
     for model_class, model_args in zip(
         [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
@@ -135,7 +141,7 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Model
             {"hidden_size": 2},
         ],
     ):
-        expr_data = sim_result.get_ko_timeseries_expressiondata()
+        expr_data = sim_result.get_single_ko_timeseries_expressiondata()
 
         model = model_class(
             modelled_gene_labels=expr_data.genes,
@@ -161,17 +167,6 @@ def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Model
     )
 
     return trainers
-
-
-@pytest.fixture
-def result_list_from_jobs(trainers_for_all_models) -> FittedTrainerList:
-    trainers = deepcopy(trainers_for_all_models)
-    for trainer in trainers:
-        trainer.save_path = (
-            trainer.save_path.parent.parent / "expected_output" / trainer.save_path.name
-        )
-    result_list = FittedTrainerList.load_saved_jobs(trainers)
-    return result_list
 
 
 @pytest.fixture
