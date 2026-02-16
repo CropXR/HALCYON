@@ -85,8 +85,8 @@ class SimulationResult:
         assert out_path.exists()
         return out_path
 
-    def get_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
-        """Get knockout timeseries without noise data."""
+    def get_single_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
+        """Get single knockout timeseries"""
         out_path = self._build_filename("knockout_timeseries0.tsv")
 
         assert out_path.exists()
@@ -101,7 +101,7 @@ class SimulationResult:
         Returns the single and double KO datasets, as well as the scaling factor that was used to normalise the data over time
             (this can be used to adjust the mechanistic model, which assumes the original time scale)
         """
-        single_ko_dataset = self.get_ko_timeseries_expressiondata()
+        single_ko_dataset = self.get_single_ko_timeseries_expressiondata()
         double_ko_dataset = self.get_double_ko_expressiondata()
 
         scaling_factor = self._time_scale_all_datasets_and_get_scaling_factor(
