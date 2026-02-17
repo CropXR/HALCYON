@@ -15,7 +15,7 @@ import networkx as nx
 import sympytorch
 import logging
 
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.Model import GeneExpressionModel
 
 

@@ -1,7 +1,7 @@
 import pickle
 import torch
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Simulators.NoiseLevel import NoiseLevel
 
 from typing_extensions import Self

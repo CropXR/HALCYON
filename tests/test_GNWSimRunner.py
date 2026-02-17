@@ -3,7 +3,7 @@ from pathlib import Path
 import networkx as nx
 import json
 
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Simulators.NoiseLevel import NoiseLevel
 
 import hashlib
