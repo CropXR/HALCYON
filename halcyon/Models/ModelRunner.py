@@ -18,11 +18,11 @@ from tqdm import tqdm
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.ExpressionData import ExpressionData
-from halcyon.Losses import MSELossFlexible
+from halcyon.Models.Losses import MSELossFlexible
 from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import GeneExpressionModel
 from halcyon.Simulators.SimulationResult import SimulationResult
-from halcyon.TidyDfResults import TidyDfResults
+from halcyon.Results.TidyDfResults import TidyDfResults
 
 
 class ModelRunner:

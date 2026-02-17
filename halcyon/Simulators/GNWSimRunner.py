@@ -6,7 +6,7 @@ import subprocess
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
 from halcyon.Simulators.NoiseLevel import NoiseLevel

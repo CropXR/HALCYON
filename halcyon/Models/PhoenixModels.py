@@ -4,7 +4,7 @@ from halcyon.Models.ActivationFunctions import (
     PhoenixSumActivation,
 )
 from halcyon.Models.Model import GeneExpressionModel
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
 import torch

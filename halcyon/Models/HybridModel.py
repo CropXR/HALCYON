@@ -3,7 +3,7 @@ import torch
 
 from halcyon.Models.MechanisticModel import MechanisticModel
 from halcyon.Models.Model import GeneExpressionModel
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
 class HybridModel(GeneExpressionModel):

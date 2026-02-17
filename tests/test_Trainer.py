@@ -3,7 +3,7 @@ import pytest
 from pytest import approx
 import torch
 import tempfile
-from halcyon.ModelRunner import ModelRunner
+from halcyon.Models.ModelRunner import ModelRunner
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from pathlib import Path
 
