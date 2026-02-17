@@ -32,7 +32,6 @@ class ModelRunner:
         self,
         model: GeneExpressionModel,
         nr_epochs: int,
-        save_dir: Path,
         batch_size: int = 32,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
@@ -61,9 +60,6 @@ class ModelRunner:
         self.optimizer = optimizer_fn(model.parameters(), **self.optimizer_kwargs)
 
         self.model.to(self.model.device)
-
-        self.save_dir = save_dir
-        self.save_path = save_dir / self.file_name
 
         # Loss history after training. Is empty initially (because no training has been performed yet).
         self.loss_history = []
@@ -217,10 +213,6 @@ class ModelRunner:
             self.train(dataset_dict[train_data_key_in_dict])
             self._log_train_losses_to_mlflow()
 
-            # Also save the model as .pt just to be sure of the model logging
-            self.save(self.save_path)
-            mlflow.log_artifact(self.save_path)
-
             # Evaluate model on both datasets and log raw predictions
             for dataset_name, dataset in dataset_dict.items():
                 experiment_as_string_list, all_gt_expression_data, all_predictions = (
@@ -243,8 +235,15 @@ class ModelRunner:
 
                 with tempfile.TemporaryDirectory() as tmpdir:
                     logging.debug("Temp dir:", tmpdir)
+                    tmpdir_path = Path(tmpdir)
+
+                    # Also save the model as .pt just to be sure of the model logging
+                    model_save_path = tmpdir_path / self.file_name
+                    self.save(model_save_path)
+                    mlflow.log_artifact(model_save_path)
+
                     predicted_file_path = (
-                        Path(tmpdir) / f"prediction_{dataset_name}_data.parquet"
+                        tmpdir_path / f"prediction_{dataset_name}_data.parquet"
                     )
                     prediction_df.to_parquet(predicted_file_path, index=False)
 
@@ -319,9 +318,9 @@ class ModelRunner:
 
     def load(self, checkpoint_path: Path):
         if not checkpoint_path.exists():
-            raise FileNotFoundError(f"No existing model found at {self.save_path}.")
+            raise FileNotFoundError(f"No existing model found at {checkpoint_path}.")
 
-        logging.info(f"Loading from {self.save_path}")
+        logging.info(f"Loading from {checkpoint_path}")
 
         checkpoint = torch.load(
             checkpoint_path, map_location=self.model.device, weights_only=False
@@ -347,14 +346,6 @@ class ModelRunner:
                     new_dict[key] = value
 
             self.model.load_state_dict(new_dict)
-
-    def load_if_exists(self):
-        try:
-            self.load(self.save_path)
-            return True
-        except FileNotFoundError as e:
-            logging.warning(e)
-            return False
 
     def _get_time_points_as_tensor(
         self, dataset: ExpressionDataWithConditions
