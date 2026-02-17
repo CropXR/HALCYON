@@ -129,15 +129,16 @@ class ModelRunner:
             logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
 
     @torch.no_grad()
-    def predict(self, dataset: ExpressionDataWithConditions):
+    def predict(
+        self, dataset: ExpressionDataWithConditions
+    ) -> Tuple[List[str], torch.Tensor, torch.Tensor]:
         """Use model to predict the knockouts in the provided dataset
 
         Args:
             dataset (ExpressionDataWithConditions): Dataset on which to predict.
 
         Returns:
-            Tuple of three tensors: experiment_data (Experiment x (Gene + Nr_conditions)), ground_truth_expressions (Experiment x Gene x Time),
-              and model predictions also with dimensions (Experiment x Gene x Time)
+            Tuple of three items: list of conditions (as strings), tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data, tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
         """
         self.model.eval()
         dataloader = self._dataloader_factory(dataset)
@@ -223,16 +224,6 @@ class ModelRunner:
                 )
                 mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
 
-                prediction_df = self._prediction_outputs_to_df(
-                    (
-                        experiment_as_string_list,
-                        all_gt_expression_data,
-                        all_predictions,
-                    ),
-                    dataset.get_time_points(),
-                    modelled_gene_labels=self.model.modelled_gene_labels,
-                )
-
                 with tempfile.TemporaryDirectory() as tmpdir:
                     logging.debug("Temp dir:", tmpdir)
                     tmpdir_path = Path(tmpdir)
@@ -242,10 +233,14 @@ class ModelRunner:
                     self.save(model_save_path)
                     mlflow.log_artifact(model_save_path)
 
-                    predicted_file_path = (
-                        tmpdir_path / f"prediction_{dataset_name}_data.parquet"
+                    predicted_file_path = self._save_predictions_to_file(
+                        dataset_name,
+                        dataset,
+                        experiment_as_string_list,
+                        all_gt_expression_data,
+                        all_predictions,
+                        tmpdir_path,
                     )
-                    prediction_df.to_parquet(predicted_file_path, index=False)
 
                     mlflow.log_artifact(
                         predicted_file_path,
@@ -254,6 +249,30 @@ class ModelRunner:
 
             if do_mlflow_model_logging:
                 mlflow.pytorch.log_model(self.model, name=self.model.name)
+
+    def _save_predictions_to_file(
+        self,
+        dataset_name: str,
+        dataset: ExpressionDataWithConditions,
+        experiment_as_string_list: List[str],
+        all_gt_expression_data: torch.Tensor,
+        all_predictions: torch.Tensor,
+        tmpdir_path: Path,
+    ):
+        """Save the raw prediction tensors etc to a parquet file to log as artifact in MLFlow"""
+        predicted_file_path = tmpdir_path / f"prediction_{dataset_name}_data.parquet"
+
+        prediction_df = self._prediction_outputs_to_df(
+            (
+                experiment_as_string_list,
+                all_gt_expression_data,
+                all_predictions,
+            ),
+            dataset.get_time_points(),
+            modelled_gene_labels=self.model.modelled_gene_labels,
+        )
+        prediction_df.to_parquet(predicted_file_path, index=False)
+        return predicted_file_path
 
     def _prediction_outputs_to_df(
         self,
