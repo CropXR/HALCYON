@@ -72,6 +72,15 @@ def expr_data_from_sim(sim_result: SimulationResult) -> ExpressionDataWithCondit
 
 
 @pytest.fixture
+def normalised_expr_data_from_sim(
+    sim_result: SimulationResult,
+) -> ExpressionDataWithConditions:
+    expr_data = deepcopy(sim_result.get_single_ko_timeseries_expressiondata())
+    sim_result._time_scale_all_datasets_and_get_scaling_factor([expr_data])
+    return expr_data
+
+
+@pytest.fixture
 def mech_model_from_sim_result(
     sim_result: SimulationResult, expr_data_from_sim: ExpressionDataWithConditions
 ) -> PyTorchODE:
@@ -133,15 +142,18 @@ def trainers_for_all_models(
     sim_result: SimulationResult, hybrid_model_mm_no_node_9: HybridModel
 ) -> list[ModelRunner]:
     trainers: list[ModelRunner] = []
+    expr_data = sim_result.get_single_ko_timeseries_expressiondata()
+
+    time_scaler = sim_result._time_scale_all_datasets_and_get_scaling_factor(
+        [expr_data]
+    )
     for model_class, model_args in zip(
         [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
         [
-            {"self_activations": True},
             {"hidden_size": 2},
             {"hidden_size": 2},
         ],
     ):
-        expr_data = sim_result.get_single_ko_timeseries_expressiondata()
 
         model = model_class(
             modelled_gene_labels=expr_data.genes,
@@ -150,18 +162,17 @@ def trainers_for_all_models(
         )
         trainer = ModelRunner(
             model,
-            sim_result,
-            nr_training_steps=2,
+            nr_epochs=2,
             optimizer_kwargs={"lr": 0.1},
         )
         trainers.append(trainer)
-
+    hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
+    hybrid_model_mm_no_node_9._mm.set_timescaler(time_scaler)
     # Add hybrid model
     trainers.append(
         ModelRunner(
             hybrid_model_mm_no_node_9,
-            sim_result,
-            nr_training_steps=5,
+            nr_epochs=3,
             optimizer_kwargs={"lr": 0.1},
         )
     )

@@ -30,10 +30,9 @@ def test_hybrid_does_perfect_fit_if_ml_weights_zero(
     expression_data_from_gnw, hybrid_model_with_zero_ml_influence: HybridModel
 ):
     # Set all per_gene_multipliers to 0 and check if MM model matches data perfectly
-    temp_dir = tempfile.gettempdir()
-
     my_trainer = ModelRunner(
-        hybrid_model_with_zero_ml_influence, nr_epochs=1, save_dir=Path(temp_dir)
+        hybrid_model_with_zero_ml_influence,
+        nr_epochs=1,
     )
 
     _, all_gt_expression_data, all_predictions = my_trainer.predict(
@@ -50,10 +49,9 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
 ):
     hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
     hybrid_model_mm_no_node_9._ml._set_raw_per_gene_importance(-50)
-    temp_dir = tempfile.gettempdir()
-
     my_trainer = ModelRunner(
-        hybrid_model_mm_no_node_9, nr_epochs=1, save_dir=Path(temp_dir)
+        hybrid_model_mm_no_node_9,
+        nr_epochs=1,
     )
 
     _, all_gt_expression_data, all_predictions = my_trainer.predict(expr_data_from_sim)
@@ -74,11 +72,7 @@ def test_l2_loss(
 ):
     my_l2_loss = MSELossPlusMachineLearningL2(lambda_param=1)
 
-    temp_dir = tempfile.gettempdir()
-
-    my_trainer = ModelRunner(
-        hybrid_model_mm_no_node_9, nr_epochs=1, save_dir=Path(temp_dir), loss=my_l2_loss
-    )
+    my_trainer = ModelRunner(hybrid_model_mm_no_node_9, nr_epochs=1, loss=my_l2_loss)
 
     _, all_gt_expression_data, all_predictions = my_trainer.predict(expr_data_from_sim)
 
@@ -128,7 +122,6 @@ def test_l2_loss(
 
 
 def test_hybrid_model_gene_split(hybrid_model_mm_no_node_9):
-
     assert_close(
         hybrid_model_mm_no_node_9._mm_indices,
         torch.tensor([0, 1, 2, 3, 4, 5, 6, 7, 8]),
