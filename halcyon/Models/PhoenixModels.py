@@ -1,16 +1,15 @@
 from abc import ABC, abstractmethod
-from halcyon.Models.ActivationFunctions import (
-    PhoenixProdActivation,
-    PhoenixSumActivation,
-)
-from halcyon.Models.Model import GeneExpressionModel
-from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
-
+import logging
 
 import torch
 from torch import nn
 
-import logging
+from halcyon.Models.ActivationFunctions import (
+    PhoenixProdActivation,
+    PhoenixSumActivation,
+)
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
 class PhoenixABC(GeneExpressionModel, ABC):

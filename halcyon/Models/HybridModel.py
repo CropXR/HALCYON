@@ -2,7 +2,7 @@ import logging
 import torch
 
 from halcyon.Models.MechanisticModel import MechanisticModel
-from halcyon.Models.Model import GeneExpressionModel
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 

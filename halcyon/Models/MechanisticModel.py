@@ -16,7 +16,7 @@ import sympytorch
 import logging
 
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
-from halcyon.Models.Model import GeneExpressionModel
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 
 
 class MechanisticModel(GeneExpressionModel):

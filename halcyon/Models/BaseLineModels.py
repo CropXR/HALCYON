@@ -1,6 +1,6 @@
 import torch
 
-from halcyon.Models.Model import GeneExpressionModel
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 
 
 class AlwaysDerivativeZero(GeneExpressionModel):
