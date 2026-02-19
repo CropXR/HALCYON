@@ -2,14 +2,10 @@ import logging
 from typing import Callable, List, Tuple
 import tempfile
 from pathlib import Path
-from collections.abc import Generator
 
-from matplotlib import pyplot as plt
-from matplotlib.axes import Axes
 import mlflow
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -22,7 +18,7 @@ from halcyon.Models.Losses import MSELossFlexible
 from halcyon.Models.HybridModel import HybridModel
 from halcyon.Models.Model import GeneExpressionModel
 from halcyon.Simulators.SimulationResult import SimulationResult
-from halcyon.Results.TidyDfResults import TidyDfResults
+from halcyon.results.DfColumnNames import DfColumnNames
 
 
 class ModelRunner:
@@ -300,23 +296,23 @@ class ModelRunner:
             melted_expression_df = []
             for matrix, col_label in zip(
                 [pred_matrix, gt_matrix],
-                [TidyDfResults.EXPRESSION_COL, TidyDfResults.GROUND_TRUTH_COL],
+                [DfColumnNames.EXPRESSION_COL, DfColumnNames.GROUND_TRUTH_COL],
             ):
                 long_form_df = pd.DataFrame(
                     matrix,
                     columns=time_points,
-                    index=pd.Index(modelled_gene_labels, name=TidyDfResults.GENE_COL),
+                    index=pd.Index(modelled_gene_labels, name=DfColumnNames.GENE_COL),
                 )
                 melted_df = long_form_df.melt(
                     ignore_index=False,
-                    var_name=TidyDfResults.TIME_COL,
+                    var_name=DfColumnNames.TIME_COL,
                     value_name=col_label,
-                ).set_index(TidyDfResults.TIME_COL, append=True)
+                ).set_index(DfColumnNames.TIME_COL, append=True)
                 melted_expression_df.append(melted_df)
 
             one_condition_df = pd.concat(melted_expression_df, axis=1).reset_index()
 
-            one_condition_df[TidyDfResults.CONDITION_COL] = condition
+            one_condition_df[DfColumnNames.CONDITION_COL] = condition
             df_list.append(one_condition_df)
 
         df = pd.concat(df_list)
