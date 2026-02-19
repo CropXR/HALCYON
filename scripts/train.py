@@ -16,12 +16,11 @@ import numpy as np
 from dotenv import load_dotenv
 import typer
 
-from halcyon.Simulators.SimulationResult import SimulationResult
-from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers
+from halcyon.ModelRunner import ModelRunner, run_training_job
+from halcyon.Simulators import SimulationResult
+from halcyon.Models import PhoenixAddAndProdLayers, PyTorchODE, HybridModel
+
 from halcyon.Models.BaseLineModels import AlwaysDerivativeZero
-from halcyon.Models.MechanisticModel import PyTorchODE
-from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.ModelRunner import ModelRunner, run_training_job
 from halcyon.Models.Losses import MSELossPlusMachineLearningL2
 
 

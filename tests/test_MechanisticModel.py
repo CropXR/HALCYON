@@ -5,7 +5,7 @@ import sympy as sp
 import sympytorch
 import torch
 
-from halcyon.Models.MechanisticModel import PyTorchODE
+from halcyon.Models import PyTorchODE
 from torch.testing import assert_close
 
 

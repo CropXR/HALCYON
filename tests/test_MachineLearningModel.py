@@ -1,5 +1,5 @@
 import torch
-from halcyon.Models.PhoenixModels import PhoenixOnlyAddLayers
+from halcyon.Models import PhoenixOnlyAddLayers
 import pytest
 from torch.testing import assert_close
 

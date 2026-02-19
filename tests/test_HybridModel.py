@@ -6,12 +6,10 @@ import pytest
 import tempfile
 
 import torch
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Datasets import ExpressionDataWithConditions
+from halcyon.Models import HybridModel
 from halcyon.Models.Losses import MSELossFlexible, MSELossPlusMachineLearningL2
-from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
-from halcyon.Models.MechanisticModel import PyTorchODE
-from halcyon.Models.ModelRunner import ModelRunner
+from halcyon.ModelRunner import ModelRunner
 from torch.testing import assert_close
 
 

@@ -3,8 +3,8 @@ import pytest
 from pytest import approx
 import torch
 import tempfile
-from halcyon.Models.ModelRunner import ModelRunner
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.ModelRunner import ModelRunner
+from halcyon.Datasets import ExpressionDataWithConditions
 from pathlib import Path
 
 from torch.testing import assert_close

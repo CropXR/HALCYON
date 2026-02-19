@@ -3,12 +3,10 @@ from pathlib import Path
 import networkx as nx
 import json
 
-from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
-from halcyon.Simulators.NoiseLevel import NoiseLevel
+from halcyon.Datasets import RegulatoryNetwork
+from halcyon.Simulators import NoiseLevel, SimulationResult
 
 import hashlib
-
-from halcyon.Simulators.SimulationResult import SimulationResult
 
 
 def create_file_hash(path: Path):
