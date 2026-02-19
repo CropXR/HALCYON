@@ -1,14 +1,9 @@
 import logging
 from pathlib import Path
-import re
 import shutil
 import subprocess
-import networkx as nx
-import matplotlib.pyplot as plt
 
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
-
-
 from halcyon.Simulators.NoiseLevel import NoiseLevel
 from halcyon.Simulators.SimulationResult import SimulationResult
 

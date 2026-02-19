@@ -1,12 +1,13 @@
 import pickle
+from dataclasses import dataclass, fields
+from pathlib import Path
+
 import torch
+from typing_extensions import Self
+
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Simulators.NoiseLevel import NoiseLevel
-
-from typing_extensions import Self
-from dataclasses import dataclass, fields
-from pathlib import Path
 
 
 @dataclass
