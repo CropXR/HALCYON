@@ -243,27 +243,14 @@ class ModelRunner:
 
             # Evaluate model on both datasets and log raw predictions
             for dataset_name, dataset in dataset_dict.items():
-                experiment_as_string_list, all_gt_expression_data, all_predictions = (
-                    self.predict(dataset)
-                )
-                final_loss = self.loss_fn(
-                    all_predictions, all_gt_expression_data, self.model
-                )
-                mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
-
                 with tempfile.TemporaryDirectory() as tmpdir:
                     logging.debug("Temp dir:", tmpdir)
                     tmpdir_path = Path(tmpdir)
 
-                    predicted_file_path = self._save_predictions_to_file(
-                        dataset_name,
-                        dataset,
-                        experiment_as_string_list,
-                        all_gt_expression_data,
-                        all_predictions,
-                        tmpdir_path,
+                    final_loss, predicted_file_path = self._predict_for_mlflow_logging(
+                        dataset_name, dataset, tmpdir_path
                     )
-
+                    mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
                     mlflow.log_artifact(
                         predicted_file_path,
                         artifact_path=self.mlflow_prediction_folder_name,
@@ -271,6 +258,32 @@ class ModelRunner:
 
             if do_mlflow_model_logging:
                 mlflow.pytorch.log_model(self.model, name=self.model.name)
+
+    def _predict_for_mlflow_logging(
+        self,
+        dataset_name: str,
+        dataset: ExpressionDataWithConditions,
+        tmpdir_path: Path,
+    ):
+        """Creates the files and metrics of model predictions that are logged to MLFlow.
+
+        Returns:
+            Tuple of final_loss and file_path to model predictions saved as .parquet"""
+        experiment_as_string_list, all_gt_expression_data, all_predictions = (
+            self.predict(dataset)
+        )
+        final_loss = self.loss_fn(all_predictions, all_gt_expression_data, self.model)
+
+        predicted_file_path = self._save_predictions_to_file(
+            dataset_name,
+            dataset,
+            experiment_as_string_list,
+            all_gt_expression_data,
+            all_predictions,
+            tmpdir_path,
+        )
+
+        return final_loss, predicted_file_path
 
     def _save_predictions_to_file(
         self,
