@@ -12,11 +12,6 @@ def run_training_job(
     do_mlflow_model_logging: bool = False,
 ):
     """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(processName)s] %(message)s",
-        force=True,
-    )
     try:
         output = job.train_and_predict_for_mlflow(
             dataset_dict,
