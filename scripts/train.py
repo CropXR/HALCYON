@@ -96,13 +96,7 @@ def main(
     }
 
     device = cycle(devices)
-    # # Define hyperparams
-    # device = cycle(['cuda:0', 'cuda:1'])
-    # batch_size = 32
-    # nr_processes = 4
-    # nr_epochs = 50
-    # hidden_size_list = [10, 20, 100]
-    # do_only_pos_list = [True]
+
     optimizer_kwargs = {"lr": optimizer_lr}
 
     # Create train jobs
