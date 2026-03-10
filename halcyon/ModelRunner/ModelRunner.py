@@ -98,11 +98,21 @@ class ModelRunner:
         file_name = f"{self.file_name_prefix}{self.model.name}"
         for hyperparam_name, hyperparam_value in self.get_hyperparams_to_log().items():
             file_name += f"_{hyperparam_name}_{hyperparam_value}"
-        file_name += self.file_name_suffix
         return file_name
 
-    def train(self, dataset: ExpressionDataWithConditions):
-        """Perform model training."""
+    def train(
+        self,
+        dataset: ExpressionDataWithConditions,
+        save_every_n_epochs: int | None = None,
+    ):
+        """Perform model training.
+
+        Args:
+            dataset (ExpressionDataWithConditions): Dataset to train on
+            save_every_n_epochs (int | None, optional): If provided, save model every
+              n_epochs and log it to MLFLow, ensures you can still retrieve your
+              model if training crashes prematurely. Defaults to None.
+        """
         dataloader = self._dataloader_factory(dataset)
         time_points_tensor = self._get_time_points_as_tensor(dataset)
 
@@ -119,8 +129,25 @@ class ModelRunner:
                 epoch_loss += loss.item()
 
             mean_epoch_loss = epoch_loss / len(dataloader)
-            self.loss_history.append(mean_epoch_loss)
             logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+
+            self.loss_history.append(mean_epoch_loss)
+            if mlflow.active_run():
+                mlflow.log_metric("train_loss", mean_epoch_loss, step=epoch)
+            if save_every_n_epochs and (epoch + 1) % save_every_n_epochs == 0:
+                self._log_model_to_mlflow(epoch)
+        else:
+            # Save model when training finishes
+            # If statement checks if model not already saved because final epoch was divisible by save_every_n_epochs anyways
+            if not (save_every_n_epochs and self.nr_epochs % save_every_n_epochs == 0):
+                self._log_model_to_mlflow(epoch)
+
+    def _log_model_to_mlflow(self, epoch: int):
+        if mlflow.active_run():
+            with tempfile.TemporaryDirectory() as tmpdir:
+                checkpoint_path = Path(tmpdir) / f"{self.file_name}_epoch{epoch + 1}.pt"
+                self.save(checkpoint_path)
+                mlflow.log_artifact(checkpoint_path, artifact_path="model")
 
     @torch.no_grad()
     def predict(
@@ -187,6 +214,7 @@ class ModelRunner:
         train_data_key_in_dict: str,
         simulation_parent_id: str,
         do_mlflow_model_logging: bool = False,
+        save_every_n_epochs: int | None = 10,
     ):
         """Carry out training and predicting and log everything to MLFlow
 
@@ -199,14 +227,19 @@ class ModelRunner:
             do_mlflow_model_logging (bool, optional): If set to True, the model will be logged to MLFlow using the
               pytorch.log_model function. OTherwise will just save the .pt file as artifact.
               Defaults to False.
+            save_every_n_epochs (int | None, optional): If provided, save model to
+              MLFLow every n_epochs so it can still be retrieved if training crashes prematurely.
         """
         with mlflow.start_run(
             parent_run_id=simulation_parent_id, run_name=self.model.name
         ):
             mlflow.set_tag("run_type", "model_training_and_prediction")
             mlflow.log_params(self.get_hyperparams_to_log())
-            self.train(dataset_dict[train_data_key_in_dict])
-            self._log_train_losses_to_mlflow()
+
+            self.train(
+                dataset_dict[train_data_key_in_dict],
+                save_every_n_epochs=save_every_n_epochs,
+            )
 
             # Evaluate model on both datasets and log raw predictions
             for dataset_name, dataset in dataset_dict.items():
@@ -221,11 +254,6 @@ class ModelRunner:
                 with tempfile.TemporaryDirectory() as tmpdir:
                     logging.debug("Temp dir:", tmpdir)
                     tmpdir_path = Path(tmpdir)
-
-                    # Also save the model as .pt just to be sure of the model logging
-                    model_save_path = tmpdir_path / self.file_name
-                    self.save(model_save_path)
-                    mlflow.log_artifact(model_save_path)
 
                     predicted_file_path = self._save_predictions_to_file(
                         dataset_name,
