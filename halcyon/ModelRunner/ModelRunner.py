@@ -222,7 +222,7 @@ class ModelRunner:
             dataset_dict (dict[str, ExpressionDataWithConditions]): Dictionary with dataset name as key and dataset as value.
                 The model will be trained on the dataset specified by train_data_key_in_dict and evaluated on all datasets in the dictionary.
             train_data_key_in_dict (str): Key that specifies on which dataset in the dataset_dict to train the model.
-            simulation_parent_id (str, optional): Simulation parent run ID of the run from which the data was
+            simulation_parent_id (str): Simulation parent run ID of the run from which the data was
                 generated. Used in MLFlow for data lineage.
             do_mlflow_model_logging (bool, optional): If set to True, the model will be logged to MLFlow using the
               pytorch.log_model function. OTherwise will just save the .pt file as artifact.
@@ -236,28 +236,53 @@ class ModelRunner:
             mlflow.set_tag("run_type", "model_training_and_prediction")
             mlflow.log_params(self.get_hyperparams_to_log())
 
-            self.train(
-                dataset_dict[train_data_key_in_dict],
-                save_every_n_epochs=save_every_n_epochs,
-            )
+            log_path = self._setup_logging_to_file()
+            try:
+                self.train(
+                    dataset_dict[train_data_key_in_dict],
+                    save_every_n_epochs=save_every_n_epochs,
+                )
 
-            # Evaluate model on both datasets and log raw predictions
-            for dataset_name, dataset in dataset_dict.items():
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    logging.debug("Temp dir:", tmpdir)
-                    tmpdir_path = Path(tmpdir)
+                # Evaluate model on both datasets and log raw predictions
+                for dataset_name, dataset in dataset_dict.items():
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        logging.debug(f"Temp dir: {tmpdir}")
+                        tmpdir_path = Path(tmpdir)
 
-                    final_loss, predicted_file_path = self._predict_for_mlflow_logging(
-                        dataset_name, dataset, tmpdir_path
-                    )
-                    mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
-                    mlflow.log_artifact(
-                        predicted_file_path,
-                        artifact_path=self.mlflow_prediction_folder_name,
-                    )
+                        final_loss, predicted_file_path = (
+                            self._predict_for_mlflow_logging(
+                                dataset_name, dataset, tmpdir_path
+                            )
+                        )
+                        mlflow.log_metric(
+                            f"{dataset_name}_final_loss", final_loss.item()
+                        )
+                        mlflow.log_artifact(
+                            predicted_file_path,
+                            artifact_path=self.mlflow_prediction_folder_name,
+                        )
 
-            if do_mlflow_model_logging:
-                mlflow.pytorch.log_model(self.model, name=self.model.name)
+                if do_mlflow_model_logging:
+                    mlflow.pytorch.log_model(self.model, name=self.model.name)
+            finally:
+                mlflow.log_artifact(log_path)
+
+    def _setup_logging_to_file(self) -> Path:
+        """Make run log to file so errors can be easily found back"""
+        log_path = Path(f"logs/{mlflow.active_run().info.run_id}.log")
+        log_path.parent.mkdir(exist_ok=True)
+
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(processName)s] %(message)s",
+            handlers=[
+                logging.FileHandler(log_path),
+                logging.StreamHandler(),
+            ],
+            force=True,
+        )
+
+        return log_path
 
     def _predict_for_mlflow_logging(
         self,
