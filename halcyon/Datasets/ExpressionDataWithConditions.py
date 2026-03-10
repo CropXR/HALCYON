@@ -1,5 +1,6 @@
-from halcyon.Datasets.ExperimentCondition import ExperimentCondition
-from halcyon.Datasets.ExpressionData import ExpressionData
+import random
+from io import StringIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -7,8 +8,8 @@ import torch
 from torch.utils.data import Dataset
 from typing_extensions import Self
 
-from io import StringIO
-from pathlib import Path
+from halcyon.Datasets.ExperimentCondition import ExperimentCondition
+from halcyon.Datasets.ExpressionData import ExpressionData
 
 
 class ExpressionDataWithConditions(Dataset):
@@ -79,6 +80,22 @@ class ExpressionDataWithConditions(Dataset):
         for expression_data in self._ko_dict.values():
             expression_data.scale_time_series()
 
+    def split_train_test(self, test_fraction: float) -> tuple[Self, Self]:
+        """Split into train and validation sets by randomly splitting knockouts.
+
+        Args:
+            test_fraction (float): Fraction of conditions to use for validation (e.g. 0.2 for 20%).
+
+        Returns:
+            tuple[Self, Self]: (train, validation) datasets.
+        """
+        kos_to_pick_from = list(self._ko_dict.keys())
+        nr_of_kos_in_test = int(test_fraction * len(self._ko_dict))
+        val_keys = set(random.sample(kos_to_pick_from, k=nr_of_kos_in_test))
+        train_dict = {k: v for k, v in self._ko_dict.items() if k not in val_keys}
+        val_dict = {k: v for k, v in self._ko_dict.items() if k in val_keys}
+        return self.__class__(train_dict), self.__class__(val_dict)
+
     def _get_time_points(self) -> np.ndarray:
         """Return the time points of the samples"""
         self._check_if_all_timepoints_same()
@@ -94,23 +111,6 @@ class ExpressionDataWithConditions(Dataset):
         experiment_condition = list(self._ko_dict.keys())[idx]
         expression_data = self._ko_dict[experiment_condition]
         return experiment_condition, expression_data
-
-    def _get_condition_and_expression_under_ko_gene(
-        self, ko_gene: tuple[str]
-    ) -> tuple[ExperimentCondition, ExpressionData]:
-        """Get objects of experimental condition and expression data at an index."""
-        # ugly but works:
-        possible_keys = []
-        for condition in self._ko_dict.keys():
-            if condition.ko_gene == ko_gene:
-                possible_keys.append(condition)
-        if not len(possible_keys) == 1:
-            raise KeyError(
-                f"Found {len(possible_keys)} matching conditions found for KO {ko_gene}"
-            )
-        condition_to_use = possible_keys[0]
-        expression_to_use = self._ko_dict[condition_to_use]
-        return condition_to_use, expression_to_use
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, str]:
         """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data, third item the condition as a string."""

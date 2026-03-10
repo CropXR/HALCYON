@@ -4,8 +4,10 @@ import torch
 from torch.testing import assert_close
 from numpy.testing import assert_allclose
 
+from halcyon.Datasets import ExpressionDataWithConditions
 
-def test_extract_info(expression_data_from_gnw):
+
+def test_extract_info(expression_data_from_gnw: ExpressionDataWithConditions):
     # First sample, expression data, all genes, timepoint 0
 
     env_tensor, expression, ko_string = expression_data_from_gnw[0]
@@ -84,7 +86,7 @@ def test_extract_info(expression_data_from_gnw):
         )
 
 
-def test_match_genes_to_list(expression_data_from_gnw):
+def test_match_genes_to_list(expression_data_from_gnw: ExpressionDataWithConditions):
     expression_data_with_matching_genes = expression_data_from_gnw.match_genes_to_list(
         [
             "Node_1",
@@ -139,7 +141,18 @@ def test_match_genes_to_list(expression_data_from_gnw):
     )
 
 
-def test_scale_time_series(expression_data_from_gnw):
+def test_split_into_train_and_validation(
+    expression_data_from_gnw: ExpressionDataWithConditions,
+):
+    train, validation = expression_data_from_gnw.split_train_test(test_fraction=0.2)
+    assert len(train.genes) == 10
+    assert len(validation.genes) == 10
+    assert len(train) == 8
+    assert len(validation) == 2
+    assert set(train.conditions).isdisjoint(set(validation.conditions))
+
+
+def test_scale_time_series(expression_data_from_gnw: ExpressionDataWithConditions):
     assert np.allclose(
         expression_data_from_gnw.get_time_points(),
         np.array(
