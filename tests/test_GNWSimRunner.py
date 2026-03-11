@@ -49,6 +49,7 @@ def test_gnw_reproducible(sim_result):
         network=RegulatoryNetwork(expected_network),
         keep_self_interactions=True,
         noise_level=sim_result.noise_level,
+        noiseless_for_testing=True,
     )
     assert asdict(sim_result) == asdict(expected_sim_result)
 
@@ -58,7 +59,7 @@ def test_plot_gnw_run(sim_result: SimulationResult):
     sim_result.network.plot()
 
 
-def test_sim_result_build_file_path_with_different_noise(sim_result):
+def test_sim_result_get_no_noise_file(sim_result):
     file_name = "knockout_timeseries0.tsv"
     filename_no_noise = sim_result._build_filename(file_name)
     assert (
@@ -66,16 +67,22 @@ def test_sim_result_build_file_path_with_different_noise(sim_result):
         and filename_no_noise.exists()
     )
 
-    sim_result.noise_level = NoiseLevel.NOEXPNOISE
-    filename_no_exp_noise = sim_result._build_filename(file_name)
-    assert (
-        filename_no_exp_noise.name.endswith(f"_noexpnoise_{file_name}")
-        and filename_no_exp_noise.exists()
-    )
 
-    sim_result.noise_level = NoiseLevel.ALLNOISE
-    filename_with_noise = sim_result._build_filename(file_name)
-    assert (
-        filename_with_noise.name.endswith(f"_{file_name}")
-        and filename_with_noise.exists()
-    )
+def test_different_noise_levels_different_expressions(
+    sim_result, sim_result_lower_noise
+):
+    assert sim_result.network_name == sim_result_lower_noise.network_name
+
+    files_to_check = [
+        f"{sim_result.network_name}_dualknockout_timeseries0.tsv",
+        f"{sim_result.network_name}_knockout_timeseries0.tsv",
+    ]
+
+    normal_noise_dir = sim_result.data_path
+    lower_noise_dir = sim_result_lower_noise.data_path
+    for file_to_check in files_to_check:
+        hash_1 = create_file_hash(normal_noise_dir / file_to_check)
+        hash_2 = create_file_hash(lower_noise_dir / file_to_check)
+        assert (
+            hash_1 != hash_2
+        ), f"File with different noise levels should not be identical"

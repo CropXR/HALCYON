@@ -34,6 +34,8 @@ class SimulationResult:
     network: RegulatoryNetwork
     noise_level: NoiseLevel
     normalise_time_series: bool = True
+    # Only used for testing
+    noiseless_for_testing: bool = False
 
     def save_to_pkl(self, save_path: Path):
         """Save file to pickle. Can be used to log to MLFlow as an artifact."""
@@ -54,10 +56,11 @@ class SimulationResult:
         return data
 
     def _build_filename(self, filename_end: str) -> Path:
-        return (
-            self.data_path
-            / f"{self.network_name}{self.noise_level.value}{filename_end}"
-        )
+        if self.noiseless_for_testing:
+            filepath_insertion = "_nonoise_"
+        else:
+            filepath_insertion = "_"
+        return self.data_path / f"{self.network_name}{filepath_insertion}{filename_end}"
 
     def items(self):
         """Iterate over field names and their values (as if this were a dict)"""

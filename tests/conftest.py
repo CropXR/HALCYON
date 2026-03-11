@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 
-from halcyon.Simulators import GNWSimRunner, NoiseLevel, SimulationResult
+from halcyon.Simulators.run_genenetweaver import run_gnw, NoiseLevel, SimulationResult
 from halcyon.Datasets import ExpressionDataWithConditions
 from halcyon.Models import (
     PhoenixAddAndProdLayers,
@@ -50,18 +50,32 @@ def expression_data_from_gnw():
 
 @pytest.fixture
 def sim_result() -> SimulationResult:
-    gnw_sim = GNWSimRunner(
-        settings_path=Path("setting_files/gnw_testing_runs_settings.txt")
-    )
     generated_data_path = Path("tests/generated_test_data")
-
-    sim_result = gnw_sim.run_simulation(
+    sim_result = run_gnw(
+        settings_dir=Path("setting_files"),
         n_genes=10,
         sparsity=0.1,
         num_modules=2,
         network_name="integration_test_network",
         output_path=generated_data_path,
-        noise_level=NoiseLevel.NONOISE,
+        noiseless_for_testing=True,
+        noise_level=NoiseLevel.MEDIUM,
+    )
+    return sim_result
+
+
+@pytest.fixture
+def sim_result_lower_noise() -> SimulationResult:
+    generated_data_path = Path("tests/generated_test_data_lower_noise")
+    sim_result = run_gnw(
+        settings_dir=Path("setting_files"),
+        n_genes=10,
+        sparsity=0.1,
+        num_modules=2,
+        network_name="integration_test_network",
+        output_path=generated_data_path,
+        noiseless_for_testing=True,
+        noise_level=NoiseLevel.LOW,
     )
     return sim_result
 

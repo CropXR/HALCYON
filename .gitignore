@@ -6,6 +6,7 @@
 __pycache__/
 data/
 tests/generated_test_data/*
+tests/generated_test_data_lower_noise/*
 notebooks/.ipynb_checkpoints/
 *.egg-info/
 *.pyc
