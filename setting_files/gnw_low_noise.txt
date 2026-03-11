@@ -138,13 +138,12 @@ noiseCoefficientSDE = 0.05
 # EXPERIMENTAL NOISE
 	
 # Set true (1) to add normal noise to the data after simulation
-addNormalNoise = 0
+addNormalNoise = 1
 # Set true to add lognormal noise to the data
 addLognormalNoise = 0
 # Set true to use a realistic model of microarray noise, similar to a mix of normal and lognormal
-addMicroarrayNoise = 1
-# These value are half the normal noise
-# The standard deviation of the normal noise
+addMicroarrayNoise = 0
+# The standard deviation of the normal noise (Half the default value here)
 normalStdev = 0.001
 # The standard deviation of the lognormal noise
 lognormalStdev = 0.003
