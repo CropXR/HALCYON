@@ -1,4 +1,5 @@
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.ModelRunner.EarlyStopper import EarlyStopper
 from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 from halcyon.Models.Losses import MSELossFlexible
 from halcyon.results.DfColumnNames import DfColumnNames
@@ -53,6 +54,8 @@ class ModelRunner:
         self.optimizer_kwargs = dict() if optimizer_kwargs is None else optimizer_kwargs
         self.optimizer = optimizer_fn(model.parameters(), **self.optimizer_kwargs)
 
+        self.early_stopper = EarlyStopper()
+
         self.model.to(self.model.device)
 
         # Loss history after training. Is empty initially (because no training has been performed yet).
@@ -82,6 +85,10 @@ class ModelRunner:
             for kwarg_name, value in self.optimizer_kwargs.items():
                 out_dict[kwarg_name] = value
 
+        if self.early_stopper:
+            for kwarg_name, value in self.early_stopper.hyperparams_to_log().items():
+                out_dict[kwarg_name] = value
+
         # Add the ModelRunner-level hyperparams
         out_dict.update(
             {
@@ -102,23 +109,28 @@ class ModelRunner:
 
     def train(
         self,
-        dataset: ExpressionDataWithConditions,
+        train_dataset: ExpressionDataWithConditions,
+        val_dataset: ExpressionDataWithConditions | None = None,
+        test_dataset: ExpressionDataWithConditions | None = None,
         save_every_n_epochs: int | None = None,
     ):
         """Perform model training.
 
         Args:
-            dataset (ExpressionDataWithConditions): Dataset to train on
+            train_dataset (ExpressionDataWithConditions): Dataset to train on
+            val_dataset (ExpressionDataWithConditions): Dataset to report val_loss on
+            test_dataset (ExpressionDataWithConditions): Dataset to report test_loss on
             save_every_n_epochs (int | None, optional): If provided, save model every
               n_epochs and log it to MLFLow, ensures you can still retrieve your
-              model if training crashes prematurely. Defaults to None.
+              model if training crashes prematurely. Defaults to None, i.e. no saving.
         """
-        dataloader = self._dataloader_factory(dataset)
-        time_points_tensor = self._get_time_points_as_tensor(dataset)
+        train_dataloader = self._dataloader_factory(train_dataset)
+        time_points_tensor = self._get_time_points_as_tensor(train_dataset)
 
         for epoch in range(self.nr_epochs):
+            self.model.train()
             epoch_loss = 0.0
-            for batch in dataloader:
+            for batch in train_dataloader:
                 self.optimizer.zero_grad()
                 ground_truth_expression, prediction = (
                     self._predict_expression_from_batch(time_points_tensor, batch)
@@ -128,19 +140,62 @@ class ModelRunner:
                 self.optimizer.step()
                 epoch_loss += loss.item()
 
-            mean_epoch_loss = epoch_loss / len(dataloader)
-            logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+            mean_epoch_loss = epoch_loss / len(train_dataloader)
+            logging.info(f"Epoch {epoch}, train_loss\t{mean_epoch_loss}")
 
             self.loss_history.append(mean_epoch_loss)
             if mlflow.active_run():
                 mlflow.log_metric("train_loss", mean_epoch_loss, step=epoch)
+
             if save_every_n_epochs and (epoch + 1) % save_every_n_epochs == 0:
                 self._log_model_to_mlflow(epoch)
+
+            # --- val/test ---
+            if val_dataset is not None:
+                val_loss = self._log_loss_on_unseen_data(val_dataset, "val_loss", epoch)
+
+            if test_dataset is not None:
+                self._log_loss_on_unseen_data(test_dataset, "test_loss", epoch)
+
+            if (
+                self.early_stopper
+                and val_dataset is not None
+                and self.early_stopper.should_stop(val_loss)
+            ):
+                logging.info(f"Early stopping at epoch {epoch}")
+                self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
+                break
         else:
             # Save model when training finishes
-            # If statement checks if model not already saved because final epoch was divisible by save_every_n_epochs anyways
-            if not (save_every_n_epochs and self.nr_epochs % save_every_n_epochs == 0):
-                self._log_model_to_mlflow(epoch)
+            self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
+
+    def _log_model_if_not_saved_already(self, save_every_n_epochs: int, epoch: int):
+        """Log final model state, unless it was already saved at this epoch via save_every_n_epochs."""
+        if not (save_every_n_epochs and self.nr_epochs % save_every_n_epochs == 0):
+            self._log_model_to_mlflow(epoch)
+
+    @torch.no_grad()
+    def _log_loss_on_unseen_data(
+        self, dataset: ExpressionDataWithConditions, loss_name: str, epoch: int
+    ) -> torch.Tensor:
+        """Calculate loss on unseen data (e.g. validation or test data) and log to mlflow if available
+
+        Args:
+            dataset (ExpressionDataWithConditions): Dataset on which to calculate loss
+            loss_name (str): Name of loss that should be reported to MLFlow
+            epoch (int): Current epoch
+
+        Returns:
+            Loss as toch.tensor
+        """
+        _, gt_expression, predicted_expression = self.predict(
+            dataset, disable_progress_bar=True
+        )
+        loss = self.loss_fn(predicted_expression, gt_expression, self.model)
+        logging.info(f"Epoch {epoch}, {loss_name}\t{loss}")
+        if mlflow.active_run():
+            mlflow.log_metric(loss_name, loss, step=epoch)
+        return loss
 
     def _log_model_to_mlflow(self, epoch: int):
         if mlflow.active_run():
@@ -151,7 +206,7 @@ class ModelRunner:
 
     @torch.no_grad()
     def predict(
-        self, dataset: ExpressionDataWithConditions
+        self, dataset: ExpressionDataWithConditions, disable_progress_bar: bool = False
     ) -> Tuple[List[str], torch.Tensor, torch.Tensor]:
         """Use model to predict the knockouts in the provided dataset
 
@@ -159,7 +214,8 @@ class ModelRunner:
             dataset (ExpressionDataWithConditions): Dataset on which to predict.
 
         Returns:
-            Tuple of three items: list of conditions (as strings), tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data, tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
+            Tuple of three items: list of conditions (as strings), tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data,
+            tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
         """
         self.model.eval()
         dataloader = self._dataloader_factory(dataset)
@@ -168,7 +224,7 @@ class ModelRunner:
         experiment_as_string_list = []
         batches_gt_expression_data = []
         all_predictions = []
-        for batch in tqdm(dataloader):
+        for batch in tqdm(dataloader, disable=disable_progress_bar):
             ground_truth_expression, prediction = self._predict_expression_from_batch(
                 time_points_tensor, batch
             )
@@ -211,10 +267,12 @@ class ModelRunner:
     def train_and_predict_for_mlflow(
         self,
         dataset_dict: dict[str, ExpressionDataWithConditions],
-        train_data_key_in_dict: str,
         simulation_parent_id: str,
+        train_data_key_in_dict: str,
+        val_data_key_in_dict: str | None = None,
+        test_data_key_in_dict: str | None = None,
         do_mlflow_model_logging: bool = False,
-        save_every_n_epochs: int | None = 10,
+        save_every_n_epochs: int | None = 5,
     ):
         """Carry out training and predicting and log everything to MLFlow
 
@@ -239,11 +297,13 @@ class ModelRunner:
             log_path = self._setup_logging_to_file()
             try:
                 self.train(
-                    dataset_dict[train_data_key_in_dict],
+                    train_dataset=dataset_dict[train_data_key_in_dict],
+                    val_dataset=dataset_dict.get(val_data_key_in_dict),
+                    test_dataset=dataset_dict.get(test_data_key_in_dict),
                     save_every_n_epochs=save_every_n_epochs,
                 )
 
-                # Evaluate model on both datasets and log raw predictions
+                # Finally: evaluate model on all datasets and log raw predictions
                 for dataset_name, dataset in dataset_dict.items():
                     with tempfile.TemporaryDirectory() as tmpdir:
                         logging.debug(f"Temp dir: {tmpdir}")
@@ -381,11 +441,6 @@ class ModelRunner:
 
         df = pd.concat(df_list)
         return df
-
-    def _log_train_losses_to_mlflow(self):
-        """After training, this function can be used to log the loss history to MLFlow"""
-        for epoch, loss in enumerate(self.loss_history):
-            mlflow.log_metric("train_loss", loss, step=epoch)
 
     def save(self, checkpoint_path: Path):
         checkpoint = {
