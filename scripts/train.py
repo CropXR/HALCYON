@@ -24,11 +24,6 @@ from halcyon.Models.BaseLineModels import AlwaysDerivativeZero
 from halcyon.Models.Losses import MSELossPlusMachineLearningL2
 
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s", force=True
-)
-
-
 def main(
     sim_run_id: Annotated[
         str, typer.Option(help="The MLFlow simulation run ID to train on.")
