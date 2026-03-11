@@ -143,6 +143,7 @@ addNormalNoise = 0
 addLognormalNoise = 0
 # Set true to use a realistic model of microarray noise, similar to a mix of normal and lognormal
 addMicroarrayNoise = 1
+# These values are adjusted in the other files, but these were the default settings
 # The standard deviation of the normal noise
 normalStdev = 0.025
 # The standard deviation of the lognormal noise
