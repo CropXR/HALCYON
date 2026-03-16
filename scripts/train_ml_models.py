@@ -18,10 +18,7 @@ import typer
 
 from halcyon.ModelRunner import ModelRunner, run_training_job
 from halcyon.Simulators import SimulationResult
-from halcyon.Models import PhoenixAddAndProdLayers, PyTorchODE, HybridModel
-
-from halcyon.Models.BaseLineModels import AlwaysDerivativeZero
-from halcyon.Models.Losses import MSELossPlusMachineLearningL2
+from halcyon.Models import PhoenixAddAndProdLayers
 
 
 def main(
@@ -82,51 +79,27 @@ def main(
     sim_output = SimulationResult.load_from_pkl(
         Path(ml_flow_download_path) / "simulation_result.pkl"
     )
+    # From sim output to datasets
     single_ko_dataset, double_ko_dataset, time_scaling_factor = (
         sim_output.create_datasets()
     )
+    train_ko_dataset, validation_ko_dataset = single_ko_dataset.split_train_test(
+        test_fraction=0.25
+    )
+
+    train_dataset_name = "train_single_ko"
+    val_dataset_name = "val_single_ko"
+    test_dataset_name = "double_ko"
     dataset_dict = {
-        "single_ko": single_ko_dataset,
-        "double_ko": double_ko_dataset,
+        train_dataset_name: train_ko_dataset,
+        val_dataset_name: validation_ko_dataset,
+        test_dataset_name: double_ko_dataset,
     }
 
-    device = cycle(devices)
-
-    optimizer_kwargs = {"lr": optimizer_lr}
-
     # Create train jobs
+    device = cycle(devices)
+    optimizer_kwargs = {"lr": optimizer_lr}
     train_jobs: list[ModelRunner] = []
-
-    # TODO how to identify which genes to select for the mechanistic model?
-    node_that_should_be_in_model = "Node_18"
-    for i, module in enumerate(sim_output.network._clustering):
-        if node_that_should_be_in_model in module:
-            print("Module:", i)
-            print("Size:", len(module))
-            genes_to_select = list(sim_output.network._clustering[i])
-            break
-
-    mm = PyTorchODE.from_sbml(
-        sim_output.data_path / "my_network.xml",
-        condition_names=[],
-        from_gnw=True,
-        device=next(device),
-    )
-    # Select only genes from specific module and set timescaler
-    mm.select_genes(
-        genes_to_select,
-        goldstandard_signed_file_for_expression_substitution=sim_output.data_path
-        / f"{sim_output.network_name}_goldstandard_signed.tsv",
-    )
-    mm.set_timescaler(time_scaling_factor)
-    # Creating MM trainer even though it cannot be trained
-    mm_trainer = ModelRunner(
-        mm,
-        nr_epochs=0,
-        batch_size=batch_size,
-    )
-
-    train_jobs.append(mm_trainer)
 
     # Data-driven models
     for hidden_size in hidden_size_list:
@@ -139,32 +112,13 @@ def main(
                 device=next(device),
             )
 
-            # Create hybrid model with MM and with add and prod
-            hybrid_model = HybridModel(
-                deepcopy(mm), deepcopy(ml_model), device=next(device)
+            model_runner = ModelRunner(
+                model=ml_model,
+                batch_size=batch_size,
+                nr_epochs=nr_epochs,
+                optimizer_kwargs=optimizer_kwargs,
             )
-            for model in [ml_model, hybrid_model]:
-                # my_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
-                model_runner = ModelRunner(
-                    model=model,
-                    batch_size=batch_size,
-                    nr_epochs=nr_epochs,
-                    optimizer_kwargs=optimizer_kwargs,
-                )
-                train_jobs.append(model_runner)
-
-    # Always predict zero model
-    baseline_model = AlwaysDerivativeZero(
-        modelled_gene_labels=single_ko_dataset.genes,
-        condition_names=single_ko_dataset.all_environments,
-    )
-
-    baseline_trainer = ModelRunner(
-        baseline_model,
-        batch_size=batch_size,
-        nr_epochs=0,
-    )
-    train_jobs.append(baseline_trainer)
+            train_jobs.append(model_runner)
 
     for job in train_jobs:
         logging.info(f"{job=}")
@@ -177,7 +131,9 @@ def main(
             partial(
                 run_training_job,
                 dataset_dict=dataset_dict,
-                train_data_key_in_dict="single_ko",
+                train_data_key_in_dict=train_dataset_name,
+                val_data_key_in_dict=val_dataset_name,
+                test_data_key_in_dict=test_dataset_name,
                 simulation_parent_id=sim_run_id,
                 do_mlflow_model_logging=False,
             ),
