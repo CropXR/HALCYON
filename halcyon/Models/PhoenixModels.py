@@ -107,10 +107,14 @@ class PhoenixOnlyAddLayers(PhoenixABC):
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
         decay = self._get_decay(state)
-        synthesis = self.neural_net(nn_input) * self.ko_masks
+        raw_synthesis = self.neural_net(nn_input)
         if self.synthesis_only_positive:
-            synthesis = torch.nn.functional.softplus(synthesis)
-        output = (synthesis - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
+            synthesis = torch.nn.functional.softplus(raw_synthesis)
+        else:
+            synthesis = raw_synthesis
+
+        synthesis_after_ko = synthesis * self.ko_masks
+        output = (synthesis_after_ko - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
 
@@ -157,10 +161,15 @@ class PhoenixAddAndProdLayers(PhoenixABC):
         prod_out = torch.exp(self.prod_nn(first_layer_input))
         combined_nn_input = torch.cat((sum_out, prod_out), dim=1)
 
-        synthesis = self.combine_layer_nn(combined_nn_input) * self.ko_masks
-        decay = self._get_decay(state)
+        raw_synthesis = self.combine_layer_nn(combined_nn_input)
         if self.synthesis_only_positive:
-            synthesis = torch.nn.functional.softplus(synthesis)
-        output = (synthesis - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
+            synthesis = torch.nn.functional.softplus(raw_synthesis)
+        else:
+            synthesis = raw_synthesis
+
+        synthesis_after_ko = synthesis * self.ko_masks
+
+        decay = self._get_decay(state)
+        output = (synthesis_after_ko - decay) * torch.nn.functional.softplus(self.per_gene_multipliers)  # type: ignore
         logging.debug(f"Output\t {output}")
         return output
