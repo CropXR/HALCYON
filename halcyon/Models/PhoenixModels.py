@@ -12,7 +12,7 @@ from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
-class PhoenixABC(GeneExpressionModel, ABC):
+class NeuralODEWithDecay(GeneExpressionModel, ABC):
     def __init__(
         self,
         modelled_gene_labels: list[str],
@@ -21,33 +21,23 @@ class PhoenixABC(GeneExpressionModel, ABC):
         synthesis_only_positive: bool = False,
         **kwargs,
     ):
-        """Class that is inherited, so shouldn't be called on its own."""
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.hidden_size = hidden_size
         self.decay_params = nn.Parameter(torch.rand(self.n_genes))
-        self.per_gene_multipliers = nn.Parameter(torch.ones(self.n_genes))
         self.register_buffer(
             "synthesis_only_positive", torch.tensor(synthesis_only_positive)
         )
+
+    def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
+        raise NotImplementedError
+
+    def _get_decay(self, state):
+        return nn.functional.relu(self.decay_params * state)
 
     def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
         for layer in model:
             if isinstance(layer, nn.Linear):
                 nn.init.sparse_(layer.weight, sparsity=sparsity, std=0.05)
-
-    def _get_decay(self, state):
-        return nn.functional.relu(self.decay_params * state)
-
-    def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
-        raise NotImplementedError
-
-    def _set_raw_per_gene_importance(self, value=-50):
-        with torch.no_grad():
-            self.per_gene_multipliers.fill_(value)
-
-    @abstractmethod
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        pass
 
     def get_hyperparams(self):
         out_list = []
@@ -58,6 +48,30 @@ class PhoenixABC(GeneExpressionModel, ABC):
             out_list.append((name, value))
 
         return out_list
+
+
+class PhoenixABC(NeuralODEWithDecay, ABC):
+    def __init__(
+        self,
+        modelled_gene_labels: list[str],
+        condition_names: tuple[str, ...],
+        hidden_size: int,
+        synthesis_only_positive: bool = False,
+        **kwargs,
+    ):
+        """Phoenix ABC. Here this is like the NeuralODEWithDecay but also provides a per-gene multiplier (like in the PHOENIX paper)"""
+        super().__init__(
+            modelled_gene_labels,
+            condition_names,
+            hidden_size,
+            synthesis_only_positive,
+            **kwargs,
+        )
+        self.per_gene_multipliers = nn.Parameter(torch.ones(self.n_genes))
+
+    def _set_raw_per_gene_importance(self, value=-50):
+        with torch.no_grad():
+            self.per_gene_multipliers.fill_(value)
 
 
 class PhoenixOnlyAddLayers(PhoenixABC):

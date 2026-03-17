@@ -1,14 +1,22 @@
 import torch
-from halcyon.Models import PhoenixOnlyAddLayers
+from halcyon.Models import PhoenixOnlyAddLayers, MLP
 import pytest
 from torch.testing import assert_close
 
 
-@pytest.fixture
-def neural_ode():
+@pytest.fixture(params=["phoenix", "mlp"])
+def ode_model(request):
     gene_labels = ["a", "b", "c"]
-    my_neural_ode = PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
-    return my_neural_ode
+    if request.param == "phoenix":
+        return PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
+    elif request.param == "mlp":
+        return MLP(
+            gene_labels,
+            ("test_cond",),
+            hidden_size=2,
+            nr_layers=2,
+            synthesis_only_positive=True,
+        )
 
 
 @pytest.fixture
@@ -22,15 +30,15 @@ def init_values():
     ).unsqueeze(0)
 
 
-def test_create_neuralODE(neural_ode, init_values):
-    neural_ode.set_conditions(torch.tensor([[0.0] * 4]))
+def test_integrate_phoenix(ode_model, init_values):
+    ode_model.set_conditions(torch.tensor([[0.0] * 4]))
     t = torch.tensor([0.0, 0.5, 1.0, 1.5])
-    output = neural_ode.integrate(init_values, t)
+    output = ode_model.integrate(init_values, t)
     assert output.shape == (1, 3, 4)
 
 
-def test_ko_neural_ode(neural_ode, init_values):
+def test_ko_phoenix(ode_model, init_values):
     # Knockout gene
-    neural_ode.set_conditions(torch.tensor([[0.0, 1.0, 0.0, 0.0]]))
-    forward_pass_with_ko = neural_ode.forward(torch.tensor([0]), init_values)
+    ode_model.set_conditions(torch.tensor([[0.0, 1.0, 0.0, 0.0]]))
+    forward_pass_with_ko = ode_model.forward(torch.tensor([0]), init_values)
     assert forward_pass_with_ko[0, 1] < 0
