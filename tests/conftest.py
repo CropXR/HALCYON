@@ -133,7 +133,6 @@ def hybrid_model_mm_no_node_9(
     return HybridModel(
         deepcopy(mech_model_from_sim_result),
         deepcopy(ml_model_from_sim_result),
-        # device="cpu",
     )
 
 
