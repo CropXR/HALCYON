@@ -56,11 +56,6 @@ class GeneExpressionModel(ABC, nn.Module):
         """Get the derivative at a given time point."""
         pass
 
-    @abstractmethod
-    def set_conditions(self, conditions: torch.Tensor) -> None:
-        """Set the environmental conditions."""
-        pass
-
     def integrate(
         self,
         initial_state: torch.Tensor,
