@@ -115,7 +115,6 @@ def main(
             model_runner = ModelRunner(
                 model=ml_model,
                 batch_size=batch_size,
-                nr_epochs=nr_epochs,
                 optimizer_kwargs=optimizer_kwargs,
             )
             train_jobs.append(model_runner)
@@ -135,6 +134,7 @@ def main(
                 val_data_key_in_dict=val_dataset_name,
                 test_data_key_in_dict=test_dataset_name,
                 simulation_parent_id=sim_run_id,
+                nr_epochs=nr_epochs,
                 do_mlflow_model_logging=False,
             ),
             train_jobs,
