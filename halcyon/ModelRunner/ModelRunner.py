@@ -160,16 +160,22 @@ class ModelRunner:
                 and self.early_stopper.should_stop(val_loss)
             ):
                 logging.info(f"Early stopping at epoch {epoch}")
-                self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
+                self._log_model_if_not_saved_already(
+                    save_every_n_epochs, epoch, total_nr_epochs=nr_epochs
+                )
                 break
         else:
             # Save model when training finishes
-            self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
+            self._log_model_if_not_saved_already(
+                save_every_n_epochs, epoch, total_nr_epochs=nr_epochs
+            )
 
-    def _log_model_if_not_saved_already(self, save_every_n_epochs: int, epoch: int):
+    def _log_model_if_not_saved_already(
+        self, save_every_n_epochs: int, current_epoch: int, total_nr_epochs: int
+    ):
         """Log final model state, unless it was already saved at this epoch via save_every_n_epochs."""
-        if not (save_every_n_epochs and self.nr_epochs % save_every_n_epochs == 0):
-            self._log_model_to_mlflow(epoch)
+        if not (save_every_n_epochs and total_nr_epochs % save_every_n_epochs == 0):
+            self._log_model_to_mlflow(current_epoch)
 
     @torch.no_grad()
     def _log_loss_on_unseen_data(
