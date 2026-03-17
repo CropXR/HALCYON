@@ -8,6 +8,7 @@ def run_training_job(
     job: ModelRunner,
     dataset_dict: dict[str, ExpressionDataWithConditions],
     train_data_key_in_dict: str,
+    nr_epochs: int,
     val_data_key_in_dict: str | None = None,
     test_data_key_in_dict: str | None = None,
     simulation_parent_id: str = None,
@@ -21,6 +22,7 @@ def run_training_job(
             train_data_key_in_dict=train_data_key_in_dict,
             val_data_key_in_dict=val_data_key_in_dict,
             test_data_key_in_dict=test_data_key_in_dict,
+            nr_epochs=nr_epochs,
             do_mlflow_model_logging=do_mlflow_model_logging,
         )
     except AssertionError as e:
