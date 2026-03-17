@@ -31,7 +31,6 @@ class ModelRunner:
     def __init__(
         self,
         model: GeneExpressionModel,
-        nr_epochs: int,
         batch_size: int = 32,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
@@ -151,6 +150,7 @@ class ModelRunner:
             )
             experiment_as_string_list.extend(batch[2])
             batches_gt_expression_data.append(ground_truth_expression.cpu())
+            all_predictions.append(prediction.detach().cpu())
         # set model back to training mode
         self.model.train()
 
