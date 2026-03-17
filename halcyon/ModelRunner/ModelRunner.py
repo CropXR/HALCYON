@@ -26,7 +26,6 @@ class ModelRunner:
     def __init__(
         self,
         model: GeneExpressionModel,
-        nr_epochs: int,
         batch_size: int = 32,
         optimizer_fn: Callable = torch.optim.Adam,
         optimizer_kwargs=None,
@@ -37,14 +36,12 @@ class ModelRunner:
 
         Args:
             model (Model): Model to be trained
-            nr_epochs (int): How many epochs to run the training
             batch_size (int, optional): Batch size to use during training. Defaults to 32.
             optimizer_fn (Callable, optional): Optimizer function. Defaults to torch.optim.Adam.
             optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
             loss (Callable, optional): Loss functions. Defaults to mse loss.
         """
         self.model = model
-        self.nr_epochs = nr_epochs
         self.batch_size = batch_size
         self.loss_fn = loss
 
@@ -64,7 +61,7 @@ class ModelRunner:
     def __repr__(self):
         return (
             f"Modelrunner (Model={self.model},\n optimizer={self.optimizer.__class__.__name__},\n "
-            f"optimizer_kwargs={self.optimizer_kwargs},\n nr_epochs={self.nr_epochs},\n batch_size={self.batch_size}\n)"
+            f"optimizer_kwargs={self.optimizer_kwargs},\n batch_size={self.batch_size}\n)"
         )
 
     def get_hyperparams_to_log(self) -> dict:
@@ -92,7 +89,6 @@ class ModelRunner:
         # Add the ModelRunner-level hyperparams
         out_dict.update(
             {
-                "nr_epochs": self.nr_epochs,
                 "batch_size": self.batch_size,
                 "loss_fn": self.loss_fn.__class__.__name__,
                 "model_class": self.model.name,
@@ -110,6 +106,7 @@ class ModelRunner:
     def train(
         self,
         train_dataset: ExpressionDataWithConditions,
+        nr_epochs: int,
         val_dataset: ExpressionDataWithConditions | None = None,
         test_dataset: ExpressionDataWithConditions | None = None,
         save_every_n_epochs: int | None = None,
@@ -127,7 +124,7 @@ class ModelRunner:
         train_dataloader = self._dataloader_factory(train_dataset)
         time_points_tensor = self._get_time_points_as_tensor(train_dataset)
 
-        for epoch in range(self.nr_epochs):
+        for epoch in range(nr_epochs):
             self.model.train()
             epoch_loss = 0.0
             for batch in train_dataloader:
@@ -217,6 +214,7 @@ class ModelRunner:
             Tuple of three items: list of conditions (as strings), tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data,
             tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
         """
+        # set model evaluation mode to ensure consistent behavior during prediction, e.g. with Dropout Layers or Batch Normalization Layers
         self.model.eval()
         dataloader = self._dataloader_factory(dataset)
         time_points_tensor = self._get_time_points_as_tensor(dataset)
@@ -231,6 +229,7 @@ class ModelRunner:
             experiment_as_string_list.extend(batch[2])
             batches_gt_expression_data.append(ground_truth_expression.cpu())
             all_predictions.append(prediction.detach().cpu())
+        # set model back to training mode
         self.model.train()
 
         # Concat batches together into one big tensor
@@ -269,6 +268,7 @@ class ModelRunner:
         dataset_dict: dict[str, ExpressionDataWithConditions],
         simulation_parent_id: str,
         train_data_key_in_dict: str,
+        nr_epochs: int,
         val_data_key_in_dict: str | None = None,
         test_data_key_in_dict: str | None = None,
         do_mlflow_model_logging: bool = False,
@@ -293,11 +293,13 @@ class ModelRunner:
         ):
             mlflow.set_tag("run_type", "model_training_and_prediction")
             mlflow.log_params(self.get_hyperparams_to_log())
+            mlflow.log_param("nr_epochs", nr_epochs)
 
             log_path = self._setup_logging_to_file()
             try:
                 self.train(
                     train_dataset=dataset_dict[train_data_key_in_dict],
+                    nr_epochs=nr_epochs,
                     val_dataset=dataset_dict.get(val_data_key_in_dict),
                     test_dataset=dataset_dict.get(test_data_key_in_dict),
                     save_every_n_epochs=save_every_n_epochs,

@@ -70,6 +70,11 @@ class PhoenixABC(NeuralODEWithDecay, ABC):
         self.per_gene_multipliers = nn.Parameter(torch.ones(self.n_genes))
 
     def _set_raw_per_gene_importance(self, value=-50):
+        """Provide per gene importance score
+
+        Args:
+            value (float, optional): Raw (i.e. before applying softplus) importance score to use for each gene. Defaults to -50.
+        """
         with torch.no_grad():
             self.per_gene_multipliers.fill_(value)
 

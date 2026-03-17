@@ -19,7 +19,7 @@ def test_integration_train_and_load(
     for trainer in trainers_for_all_models:
         untrained_trainer = deepcopy(trainer)
 
-        trainer.train(normalised_expr_data_from_sim)
+        trainer.train(normalised_expr_data_from_sim, nr_epochs=3)
 
         is_decreasing = trainer.loss_history[0] > trainer.loss_history[-1]
         assert is_decreasing, f"Loss is not decreasing for {trainer}"
