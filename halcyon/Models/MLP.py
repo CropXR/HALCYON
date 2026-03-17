@@ -42,10 +42,16 @@ class MLP(NeuralODEWithDecay):
         if state.isinf().any() or state.isnan().any():
             raise ValueError("NaN or inf in state of neuralODE")
         nn_input = torch.cat((state, self.env_flags), dim=1)  # type: ignore
-        decay = self._get_decay(state)
-        synthesis = self.neural_net(nn_input) * self.ko_masks
+
+        raw_synthesis = self.neural_net(nn_input)
         if self.synthesis_only_positive:
-            synthesis = torch.nn.functional.softplus(synthesis)
-        output = synthesis - decay
+            synthesis = torch.nn.functional.softplus(raw_synthesis)
+        else:
+            synthesis = raw_synthesis
+        synthesis_after_ko = synthesis * self.ko_masks
+
+        decay = self._get_decay(state)
+
+        output = synthesis_after_ko - decay
         logging.debug(f"Output\t {output}")
         return output

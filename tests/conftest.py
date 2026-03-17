@@ -12,6 +12,8 @@ import torch
 from halcyon.Simulators.run_genenetweaver import run_gnw, NoiseLevel, SimulationResult
 from halcyon.Datasets import ExpressionDataWithConditions
 from halcyon.Models import (
+    MLP,
+    CellBox,
     PhoenixAddAndProdLayers,
     PhoenixOnlyAddLayers,
     HybridModel,
@@ -160,14 +162,15 @@ def trainers_for_all_models(
     time_scaler = sim_result._time_scale_all_datasets_and_get_scaling_factor(
         [expr_data]
     )
-    for model_class, model_args in zip(
-        [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
-        [
-            {"hidden_size": 2},
-            {"hidden_size": 2},
-        ],
-    ):
 
+    model_configs = [
+        (PhoenixOnlyAddLayers, {"hidden_size": 2}),
+        (PhoenixAddAndProdLayers, {"hidden_size": 2}),
+        (MLP, {"hidden_size": 2, "nr_layers": 2}),
+        (CellBox, {"self_activations": False}),
+    ]
+
+    for model_class, model_args in model_configs:
         model = model_class(
             modelled_gene_labels=expr_data.genes,
             condition_names=expr_data.all_environments,
