@@ -32,7 +32,7 @@ class GeneExpressionModel(ABC, nn.Module):
     def __repr__(self):
         return (
             f"{self.name} with hyperparams: "
-            f"{[f'{k}={v}' for k,v in self.get_hyperparams()]}"
+            f"{[f'{key}={val}' for key,val in self.get_hyperparams()]}"
         )
 
     @property

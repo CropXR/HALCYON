@@ -147,7 +147,6 @@ def hybrid_model_mm_no_node_9(
     return HybridModel(
         deepcopy(mech_model_from_sim_result),
         deepcopy(ml_model_from_sim_result),
-        # device="cpu",
     )
 
 
@@ -176,7 +175,6 @@ def trainers_for_all_models(
         )
         trainer = ModelRunner(
             model,
-            nr_epochs=2,
             optimizer_kwargs={"lr": 0.1},
         )
         trainers.append(trainer)
@@ -186,7 +184,6 @@ def trainers_for_all_models(
     trainers.append(
         ModelRunner(
             hybrid_model_mm_no_node_9,
-            nr_epochs=3,
             optimizer_kwargs={"lr": 0.1},
         )
     )
