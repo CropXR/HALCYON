@@ -2,23 +2,7 @@ import torch
 from halcyon.Models import PhoenixOnlyAddLayers, MLP, CellBox
 import pytest
 from torch.testing import assert_close
-
-
-@pytest.fixture(params=["phoenix", "mlp", "cellbox"])
-def ode_model(request):
-    gene_labels = ["a", "b", "c"]
-    if request.param == "phoenix":
-        return PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
-    elif request.param == "mlp":
-        return MLP(
-            gene_labels,
-            ("test_cond",),
-            hidden_size=2,
-            nr_layers=2,
-            synthesis_only_positive=True,
-        )
-    elif request.param == "cellbox":
-        return CellBox(gene_labels, ("test_cond",))
+from halcyon.Models.Losses import MSELossPlusL1, MSELossFlexible
 
 
 @pytest.fixture

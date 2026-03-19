@@ -194,6 +194,23 @@ def trainers_for_all_models(
     return trainers
 
 
+@pytest.fixture(params=["phoenix", "mlp", "cellbox"])
+def ode_model(request):
+    gene_labels = ["a", "b", "c"]
+    if request.param == "phoenix":
+        return PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
+    elif request.param == "mlp":
+        return MLP(
+            gene_labels,
+            ("test_cond",),
+            hidden_size=2,
+            nr_layers=2,
+            synthesis_only_positive=True,
+        )
+    elif request.param == "cellbox":
+        return CellBox(gene_labels, ("test_cond",))
+
+
 @pytest.fixture
 def expected_batch():
     experiment_data = torch.tensor(

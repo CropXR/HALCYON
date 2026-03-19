@@ -61,7 +61,7 @@ class ModelRunner:
     def __repr__(self):
         return (
             f"Modelrunner (Model={self.model},\n optimizer={self.optimizer.__class__.__name__},\n "
-            f"optimizer_kwargs={self.optimizer_kwargs},\n batch_size={self.batch_size}\n)"
+            f"optimizer_kwargs={self.optimizer_kwargs},\n batch_size={self.batch_size},\n loss_fn={self.loss_fn}\n)"
         )
 
     def get_hyperparams_to_log(self) -> dict:
