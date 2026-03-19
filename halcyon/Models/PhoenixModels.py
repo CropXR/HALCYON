@@ -39,7 +39,7 @@ class NeuralODEWithDecay(GeneExpressionModel, ABC):
             if isinstance(layer, nn.Linear):
                 nn.init.sparse_(layer.weight, sparsity=sparsity, std=0.05)
 
-    def get_hyperparams(self):
+    def get_hyperparams(self) -> list:
         out_list = []
         for name, value in zip(
             ["device", "hidden_size", "synthesis_only_positive"],
@@ -86,11 +86,11 @@ class PhoenixABC(NeuralODEWithDecay, ABC):
         with torch.no_grad():
             self.per_gene_multipliers.fill_(value)
 
-    def get_hyperparams(self):
+    def get_hyperparams(self) -> list:
         # Add the Phoenix-specific hyperparams
         parent_hyper_params = super().get_hyperparams()
-        parent_hyper_params["disable_per_gene_multipliers"] = (
-            self.disable_per_gene_multipliers
+        parent_hyper_params.append(
+            ("disable_per_gene_multipliers", self.disable_per_gene_multipliers)
         )
         return parent_hyper_params
 
