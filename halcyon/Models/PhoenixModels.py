@@ -57,6 +57,7 @@ class PhoenixABC(NeuralODEWithDecay, ABC):
         condition_names: tuple[str, ...],
         hidden_size: int,
         synthesis_only_positive: bool = False,
+        disable_per_gene_multipliers: bool = False,
         **kwargs,
     ):
         """Phoenix ABC. Here this is like the NeuralODEWithDecay but also provides a per-gene multiplier (like in the PHOENIX paper)"""
@@ -67,7 +68,14 @@ class PhoenixABC(NeuralODEWithDecay, ABC):
             synthesis_only_positive,
             **kwargs,
         )
-        self.per_gene_multipliers = nn.Parameter(torch.ones(self.n_genes))
+        per_gene_multipliers = torch.ones(self.n_genes)
+
+        self.disable_per_gene_multipliers = disable_per_gene_multipliers
+        if self.disable_per_gene_multipliers:
+            # Unlearnable parameters
+            self.register_buffer("per_gene_multipliers", per_gene_multipliers)
+        else:
+            self.per_gene_multipliers = nn.Parameter(per_gene_multipliers)
 
     def _set_raw_per_gene_importance(self, value=-50):
         """Provide per gene importance score
@@ -77,6 +85,14 @@ class PhoenixABC(NeuralODEWithDecay, ABC):
         """
         with torch.no_grad():
             self.per_gene_multipliers.fill_(value)
+
+    def get_hyperparams(self):
+        # Add the Phoenix-specific hyperparams
+        parent_hyper_params = super().get_hyperparams()
+        parent_hyper_params["disable_per_gene_multipliers"] = (
+            self.disable_per_gene_multipliers
+        )
+        return parent_hyper_params
 
 
 class PhoenixOnlyAddLayers(PhoenixABC):
