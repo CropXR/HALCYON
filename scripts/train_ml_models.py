@@ -41,8 +41,8 @@ def main():
 
     sim_run_ids = [
         "d660c1d337c34d98a349605d9b4d5b47",
-        "19ba6fc0e8094a66a68f2f67cdca2162",
-        "e56b1774f68349209f3b7e672158fa01",
+        # "19ba6fc0e8094a66a68f2f67cdca2162",
+        # "e56b1774f68349209f3b7e672158fa01",
     ]
 
     for sim_run_id in sim_run_ids:
