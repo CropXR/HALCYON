@@ -142,9 +142,6 @@ def train_models_on_simulation_run(sim_run_id: str):
                 )
                 train_jobs.append(model_runner)
 
-    for job in train_jobs:
-        logging.info(f"{job=}")
-
     # Do the training
     nr_epochs = 1000
     nr_processes = 8

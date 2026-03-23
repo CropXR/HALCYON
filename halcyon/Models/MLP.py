@@ -30,7 +30,8 @@ class MLP(NeuralODEWithDecay):
             nn.Linear(self.n_genes + self.n_conditions, hidden_size),
             nn.Softplus(),
         ]
-        for _ in range(nr_layers - 1):
+        self.nr_layers = nr_layers
+        for _ in range(self.nr_layers - 1):
             layers.extend([nn.Linear(hidden_size, hidden_size), nn.Softplus()])
         layers.append(nn.Linear(hidden_size, self.n_genes))
 
@@ -55,3 +56,8 @@ class MLP(NeuralODEWithDecay):
         output = synthesis_after_ko - decay
         logging.debug(f"Output\t {output}")
         return output
+
+    def get_hyperparams(self) -> list:
+        orig_hyperparams = super().get_hyperparams()
+        orig_hyperparams.append(("nr_layers", self.nr_layers))
+        return orig_hyperparams
