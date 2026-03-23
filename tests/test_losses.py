@@ -28,7 +28,7 @@ def test_l1_loss(true_values, wrong_values, ode_model, mse_loss):
 
     l1_lambda_1 = MSELossPlusL1(lambda_param=1)
     l1_loss_with_lambda_1 = l1_lambda_1(true_values, wrong_values, ode_model)
-    assert l1_loss_with_lambda_0 > l1_loss_with_lambda_1
+    assert l1_loss_with_lambda_0 < l1_loss_with_lambda_1
     l1_loss_with_lambda_1.backward()
 
 
