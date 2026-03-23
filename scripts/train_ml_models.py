@@ -46,120 +46,123 @@ def main():
     ]
 
     for sim_run_id in sim_run_ids:
-        run = mlflow.get_run(sim_run_id)
-        params = run.data.params
-        logging.info(f"Loaded run with params: {params}")
+        train_models_on_simulation_run(sim_run_id)
 
-        # Load data
-        ml_flow_download_path = mlflow.artifacts.download_artifacts(
-            run_id=sim_run_id, artifact_path="dataset"
-        )
-        sim_output = SimulationResult.load_from_pkl(
-            Path(ml_flow_download_path) / "simulation_result.pkl"
-        )
-        # From sim output to datasets
-        single_ko_dataset, double_ko_dataset, time_scaling_factor = (
-            sim_output.create_datasets()
-        )
-        train_ko_dataset, validation_ko_dataset = single_ko_dataset.split_train_test(
-            test_fraction=0.25
-        )
 
-        train_dataset_name = "train_single_ko"
-        val_dataset_name = "val_single_ko"
-        test_dataset_name = "double_ko"
-        dataset_dict = {
-            train_dataset_name: train_ko_dataset,
-            val_dataset_name: validation_ko_dataset,
-            test_dataset_name: double_ko_dataset,
-        }
+def train_models_on_simulation_run(sim_run_id: str):
+    run = mlflow.get_run(sim_run_id)
+    params = run.data.params
+    logging.info(f"Loaded run with params: {params}")
 
-        # Create train jobs
-        device = cycle(["cuda:0", "cuda:1"])
-        optimizer_kwargs = {"lr": 0.01}
-        batch_size = 32
-        train_jobs: list[ModelRunner] = []
+    # Load data
+    ml_flow_download_path = mlflow.artifacts.download_artifacts(
+        run_id=sim_run_id, artifact_path="dataset"
+    )
+    sim_output = SimulationResult.load_from_pkl(
+        Path(ml_flow_download_path) / "simulation_result.pkl"
+    )
+    # From sim output to datasets
+    single_ko_dataset, double_ko_dataset, time_scaling_factor = (
+        sim_output.create_datasets()
+    )
+    train_ko_dataset, validation_ko_dataset = single_ko_dataset.split_train_test(
+        test_fraction=0.25
+    )
 
-        # Phoenix
-        for hidden_size in [20, 50, 100]:
-            for lambda_value in [0.0, 0.1, 1]:
-                loss = MSELossPlusL1(lambda_param=lambda_value)
-                ml_model = PhoenixAddAndProdLayers(
-                    modelled_gene_labels=single_ko_dataset.genes,
-                    hidden_size=hidden_size,
-                    condition_names=single_ko_dataset.all_environments,
-                    synthesis_only_positive=True,
-                    device=next(device),
-                )
+    train_dataset_name = "train_single_ko"
+    val_dataset_name = "val_single_ko"
+    test_dataset_name = "double_ko"
+    dataset_dict = {
+        train_dataset_name: train_ko_dataset,
+        val_dataset_name: validation_ko_dataset,
+        test_dataset_name: double_ko_dataset,
+    }
 
-                # my_loss = MSELossPlusMachineLearningL2(lambda_param=0.5)
-                model_runner = ModelRunner(
-                    model=ml_model,
-                    batch_size=batch_size,
-                    optimizer_kwargs=optimizer_kwargs,
-                    loss=loss,
-                )
-                train_jobs.append(model_runner)
+    # Create train jobs
+    device = cycle(["cuda:0", "cuda:1"])
+    optimizer_kwargs = {"lr": 0.01}
+    batch_size = 32
+    train_jobs: list[ModelRunner] = []
 
-        # CellBox
+    # Phoenix
+    for hidden_size in [20, 50, 100]:
         for lambda_value in [0.0, 0.1, 1]:
             loss = MSELossPlusL1(lambda_param=lambda_value)
-            cellbox = CellBox(
+            ml_model = PhoenixAddAndProdLayers(
                 modelled_gene_labels=single_ko_dataset.genes,
+                hidden_size=hidden_size,
                 condition_names=single_ko_dataset.all_environments,
+                synthesis_only_positive=True,
                 device=next(device),
             )
 
             model_runner = ModelRunner(
-                model=cellbox,
+                model=ml_model,
                 batch_size=batch_size,
                 optimizer_kwargs=optimizer_kwargs,
                 loss=loss,
             )
             train_jobs.append(model_runner)
 
-        # MLP
-        for hidden_size in [10, 20, 50]:
-            for nr_layers in [1, 2, 3]:
-                for lambda_value in [0.0, 0.1, 1]:
-                    loss = MSELossPlusL1(lambda_param=lambda_value)
-                    mlp = MLP(
-                        modelled_gene_labels=single_ko_dataset.genes,
-                        condition_names=single_ko_dataset.all_environments,
-                        hidden_size=hidden_size,
-                        nr_layers=nr_layers,
-                        device=next(device),
-                    )
+    # CellBox
+    for lambda_value in [0.0, 0.1, 1]:
+        loss = MSELossPlusL1(lambda_param=lambda_value)
+        cellbox = CellBox(
+            modelled_gene_labels=single_ko_dataset.genes,
+            condition_names=single_ko_dataset.all_environments,
+            device=next(device),
+        )
 
-                    model_runner = ModelRunner(
-                        model=mlp,
-                        batch_size=batch_size,
-                        optimizer_kwargs=optimizer_kwargs,
-                        loss=loss,
-                    )
-                    train_jobs.append(model_runner)
+        model_runner = ModelRunner(
+            model=cellbox,
+            batch_size=batch_size,
+            optimizer_kwargs=optimizer_kwargs,
+            loss=loss,
+        )
+        train_jobs.append(model_runner)
 
-        for job in train_jobs:
-            logging.info(f"{job=}")
+    # MLP
+    for hidden_size in [10, 20, 50]:
+        for nr_layers in [1, 2, 3]:
+            for lambda_value in [0.0, 0.1, 1]:
+                loss = MSELossPlusL1(lambda_param=lambda_value)
+                mlp = MLP(
+                    modelled_gene_labels=single_ko_dataset.genes,
+                    condition_names=single_ko_dataset.all_environments,
+                    hidden_size=hidden_size,
+                    nr_layers=nr_layers,
+                    device=next(device),
+                )
 
-        # Do the training
-        nr_epochs = 1000
-        nr_processes = 8
+                model_runner = ModelRunner(
+                    model=mlp,
+                    batch_size=batch_size,
+                    optimizer_kwargs=optimizer_kwargs,
+                    loss=loss,
+                )
+                train_jobs.append(model_runner)
 
-        with mp.Pool(processes=nr_processes) as pool:
-            pool.map(
-                partial(
-                    run_training_job,
-                    dataset_dict=dataset_dict,
-                    train_data_key_in_dict=train_dataset_name,
-                    val_data_key_in_dict=val_dataset_name,
-                    test_data_key_in_dict=test_dataset_name,
-                    simulation_parent_id=sim_run_id,
-                    nr_epochs=nr_epochs,
-                    do_mlflow_model_logging=False,
-                ),
-                train_jobs,
-            )
+    for job in train_jobs:
+        logging.info(f"{job=}")
+
+    # Do the training
+    nr_epochs = 1000
+    nr_processes = 8
+
+    with mp.Pool(processes=nr_processes) as pool:
+        pool.map(
+            partial(
+                run_training_job,
+                dataset_dict=dataset_dict,
+                train_data_key_in_dict=train_dataset_name,
+                val_data_key_in_dict=val_dataset_name,
+                test_data_key_in_dict=test_dataset_name,
+                simulation_parent_id=sim_run_id,
+                nr_epochs=nr_epochs,
+                do_mlflow_model_logging=False,
+            ),
+            train_jobs,
+        )
 
 
 if __name__ == "__main__":
