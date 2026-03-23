@@ -119,8 +119,8 @@ def main():
             train_jobs.append(model_runner)
 
         # MLP
-        for hidden_size in []:
-            for nr_layers in []:
+        for hidden_size in [10, 20, 50]:
+            for nr_layers in [1, 2, 3]:
                 for lambda_value in [0.0, 0.1, 1]:
                     loss = MSELossPlusL1(lambda_param=lambda_value)
                     mlp = MLP(
