@@ -39,11 +39,12 @@ class ModelRunner:
             batch_size (int, optional): Batch size to use during training. Defaults to 32.
             optimizer_fn (Callable, optional): Optimizer function. Defaults to torch.optim.Adam.
             optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
-            loss (Callable, optional): Loss functions. Defaults to mse loss.
+            loss (Callable, optional): Loss function. Defaults to mse loss.
         """
         self.model = model
         self.batch_size = batch_size
         self.loss_fn = loss
+        self.mse_loss_fn = MSELossFlexible()
 
         self.file_name_prefix = file_name_prefix
         self.file_name_suffix = ".pt"
@@ -90,7 +91,7 @@ class ModelRunner:
         out_dict.update(
             {
                 "batch_size": self.batch_size,
-                "loss_fn": self.loss_fn.__class__.__name__,
+                "loss_fn": str(self.loss_fn),
                 "model_class": self.model.name,
             }
         )
@@ -123,10 +124,10 @@ class ModelRunner:
         """
         train_dataloader = self._dataloader_factory(train_dataset)
         time_points_tensor = self._get_time_points_as_tensor(train_dataset)
-
         for epoch in range(nr_epochs):
             self.model.train()
             epoch_loss = 0.0
+            mse_loss = 0.0
             for batch in train_dataloader:
                 self.optimizer.zero_grad()
                 ground_truth_expression, prediction = (
@@ -136,28 +137,44 @@ class ModelRunner:
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
+                with torch.no_grad():
+                    mse_loss += self.mse_loss_fn(
+                        prediction, ground_truth_expression, self.model
+                    ).item()
 
             mean_epoch_loss = epoch_loss / len(train_dataloader)
+            mean_mse_loss = mse_loss / len(train_dataloader)
             logging.info(f"Epoch {epoch}, train_loss\t{mean_epoch_loss}")
 
             self.loss_history.append(mean_epoch_loss)
             if mlflow.active_run():
                 mlflow.log_metric("train_loss", mean_epoch_loss, step=epoch)
+                mlflow.log_metric("train_mse", mean_mse_loss, step=epoch)
 
             if save_every_n_epochs and (epoch + 1) % save_every_n_epochs == 0:
                 self._log_model_to_mlflow(epoch)
 
             # --- val/test ---
             if val_dataset is not None:
-                val_loss = self._log_loss_on_unseen_data(val_dataset, "val_loss", epoch)
+                self._log_loss_on_unseen_data(
+                    val_dataset, "val_loss", epoch, self.loss_fn
+                )
+                val_mse = self._log_loss_on_unseen_data(
+                    val_dataset, "val_mse", epoch, self.mse_loss_fn
+                )
 
             if test_dataset is not None:
-                self._log_loss_on_unseen_data(test_dataset, "test_loss", epoch)
+                self._log_loss_on_unseen_data(
+                    test_dataset, "test_loss", epoch, self.loss_fn
+                )
+                self._log_loss_on_unseen_data(
+                    test_dataset, "test_mse", epoch, self.mse_loss_fn
+                )
 
             if (
                 self.early_stopper
                 and val_dataset is not None
-                and self.early_stopper.should_stop(val_loss)
+                and self.early_stopper.should_stop(val_mse)
             ):
                 logging.info(f"Early stopping at epoch {epoch}")
                 self._log_model_if_not_saved_already(
@@ -179,7 +196,11 @@ class ModelRunner:
 
     @torch.no_grad()
     def _log_loss_on_unseen_data(
-        self, dataset: ExpressionDataWithConditions, loss_name: str, epoch: int
+        self,
+        dataset: ExpressionDataWithConditions,
+        loss_name: str,
+        epoch: int,
+        loss_fn: nn.Module,
     ) -> torch.Tensor:
         """Calculate loss on unseen data (e.g. validation or test data) and log to mlflow if available
 
@@ -187,6 +208,7 @@ class ModelRunner:
             dataset (ExpressionDataWithConditions): Dataset on which to calculate loss
             loss_name (str): Name of loss that should be reported to MLFlow
             epoch (int): Current epoch
+            loss_fn (nn.Module): Loss function to use
 
         Returns:
             Loss as toch.tensor
@@ -194,7 +216,7 @@ class ModelRunner:
         _, gt_expression, predicted_expression = self.predict(
             dataset, disable_progress_bar=True
         )
-        loss = self.loss_fn(predicted_expression, gt_expression, self.model)
+        loss = loss_fn(predicted_expression, gt_expression, self.model)
         logging.info(f"Epoch {epoch}, {loss_name}\t{loss}")
         if mlflow.active_run():
             mlflow.log_metric(loss_name, loss, step=epoch)
@@ -317,13 +339,16 @@ class ModelRunner:
                         logging.debug(f"Temp dir: {tmpdir}")
                         tmpdir_path = Path(tmpdir)
 
-                        final_loss, predicted_file_path = (
+                        final_loss, mse_loss, predicted_file_path = (
                             self._predict_for_mlflow_logging(
                                 dataset_name, dataset, tmpdir_path
                             )
                         )
                         mlflow.log_metric(
                             f"{dataset_name}_final_loss", final_loss.item()
+                        )
+                        mlflow.log_metric(
+                            f"{dataset_name}_final_mse_loss", mse_loss.item()
                         )
                         mlflow.log_artifact(
                             predicted_file_path,
@@ -357,15 +382,19 @@ class ModelRunner:
         dataset_name: str,
         dataset: ExpressionDataWithConditions,
         tmpdir_path: Path,
-    ):
+    ) -> tuple[torch.Tensor, torch.Tensor, Path]:
         """Creates the files and metrics of model predictions that are logged to MLFlow.
 
         Returns:
-            Tuple of final_loss and file_path to model predictions saved as .parquet"""
+            Tuple of final_loss, mse_loss, and file_path to model predictions saved as .parquet
+        """
         experiment_as_string_list, all_gt_expression_data, all_predictions = (
             self.predict(dataset)
         )
         final_loss = self.loss_fn(all_predictions, all_gt_expression_data, self.model)
+        final_mse_loss = self.mse_loss_fn(
+            all_predictions, all_gt_expression_data, self.model
+        )
 
         predicted_file_path = self._save_predictions_to_file(
             dataset_name,
@@ -376,7 +405,7 @@ class ModelRunner:
             tmpdir_path,
         )
 
-        return final_loss, predicted_file_path
+        return final_loss, final_mse_loss, predicted_file_path
 
     def _save_predictions_to_file(
         self,
@@ -386,7 +415,7 @@ class ModelRunner:
         all_gt_expression_data: torch.Tensor,
         all_predictions: torch.Tensor,
         tmpdir_path: Path,
-    ):
+    ) -> Path:
         """Save the raw prediction tensors etc to a parquet file to log as artifact in MLFlow"""
         predicted_file_path = tmpdir_path / f"prediction_{dataset_name}_data.parquet"
 
