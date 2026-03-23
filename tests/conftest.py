@@ -198,7 +198,9 @@ def trainers_for_all_models(
 def ode_model(request):
     gene_labels = ["a", "b", "c"]
     if request.param == "phoenix":
-        return PhoenixOnlyAddLayers(gene_labels, ("test_cond",), hidden_size=2)
+        return PhoenixOnlyAddLayers(
+            gene_labels, ("test_cond",), hidden_size=2, synthesis_only_positive=True
+        )
     elif request.param == "mlp":
         return MLP(
             gene_labels,

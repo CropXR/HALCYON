@@ -31,9 +31,6 @@ class NeuralODEWithDecay(GeneExpressionModel, ABC):
     def get_inferred_network(self, threshold=None) -> RegulatoryNetwork:
         raise NotImplementedError
 
-    def _get_decay(self, state):
-        return nn.functional.relu(self.decay_params * state)
-
     def init_sparse_weights(self, model: nn.Sequential, sparsity=0.95):
         for layer in model:
             if isinstance(layer, nn.Linear):
@@ -68,7 +65,10 @@ class PhoenixABC(NeuralODEWithDecay, ABC):
             synthesis_only_positive,
             **kwargs,
         )
-        per_gene_multipliers = torch.ones(self.n_genes)
+        # Fill in log(e-1) so final value will be 1 after softplus
+        per_gene_multipliers = torch.full(
+            (self.n_genes,), torch.log(torch.tensor(torch.e - 1))
+        )
 
         self.disable_per_gene_multipliers = disable_per_gene_multipliers
         if self.disable_per_gene_multipliers:

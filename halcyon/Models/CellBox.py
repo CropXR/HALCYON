@@ -43,12 +43,11 @@ class CellBox(GeneExpressionModel):
             state.unsqueeze(2),  # type: ignore
         ).squeeze(2)
         synthesis = self.ko_masks * (self.epsilon * self.phi(input_term))
-        # Decay always has to be negative, hence the softplus
-        decay = nn.functional.softplus(self.decay_params * state)
-        gene_expression_changes = synthesis - decay
+
+        gene_expression_changes = synthesis - self._get_decay(state)
         return gene_expression_changes
 
-    def get_hyperparams(self):
+    def get_hyperparams(self) -> list:
         out_list = []
         for name, value in zip(
             ["device", "phi", "self_activations"],
