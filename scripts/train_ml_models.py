@@ -134,7 +134,7 @@ def train_models_on_simulation_run(sim_run_id: str):
                         hidden_size=hidden_size,
                         nr_layers=nr_layers,
                         device=next(device),
-                        only_pos_synthesis=only_pos_synthesis,
+                        synthesis_only_positive=only_pos_synthesis,
                     )
 
                     model_runner = ModelRunner(
