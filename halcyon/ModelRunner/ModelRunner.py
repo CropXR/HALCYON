@@ -92,7 +92,8 @@ class ModelRunner:
             {
                 "batch_size": self.batch_size,
                 "loss_fn": str(self.loss_fn),
-                "lambda_l1": self.loss_fn.lambda_param,
+                # In case no lambda is present (e.g. normal MSE), return None
+                "lambda_l1": getattr(self.loss_fn, "lambda_param", None),
                 "model_class": self.model.name,
             }
         )
