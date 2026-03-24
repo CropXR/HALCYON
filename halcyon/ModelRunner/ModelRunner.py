@@ -92,6 +92,7 @@ class ModelRunner:
             {
                 "batch_size": self.batch_size,
                 "loss_fn": str(self.loss_fn),
+                "lambda_l1": self.loss_fn.lambda_param,
                 "model_class": self.model.name,
             }
         )
