@@ -99,13 +99,6 @@ class ModelRunner:
         )
         return out_dict
 
-    @property
-    def file_name(self) -> str:
-        file_name = f"{self.file_name_prefix}{self.model.name}"
-        for hyperparam_name, hyperparam_value in self.get_hyperparams_to_log().items():
-            file_name += f"_{hyperparam_name}_{hyperparam_value}"
-        return file_name
-
     def train(
         self,
         train_dataset: ExpressionDataWithConditions,
@@ -227,7 +220,9 @@ class ModelRunner:
     def _log_model_to_mlflow(self, epoch: int):
         if mlflow.active_run():
             with tempfile.TemporaryDirectory() as tmpdir:
-                checkpoint_path = Path(tmpdir) / f"{self.file_name}_epoch{epoch + 1}.pt"
+                checkpoint_path = (
+                    Path(tmpdir) / f"checkpoint_{self.model.name}_epoch{epoch + 1}.pt"
+                )
                 self.save(checkpoint_path)
                 mlflow.log_artifact(checkpoint_path, artifact_path="model")
 
