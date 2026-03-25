@@ -41,8 +41,8 @@ def main():
 
     sim_run_ids = [
         "d660c1d337c34d98a349605d9b4d5b47",
-        "19ba6fc0e8094a66a68f2f67cdca2162",
-        "e56b1774f68349209f3b7e672158fa01",
+        # "19ba6fc0e8094a66a68f2f67cdca2162",
+        # "e56b1774f68349209f3b7e672158fa01",
     ]
 
     for sim_run_id in sim_run_ids:
@@ -105,45 +105,45 @@ def train_models_on_simulation_run(sim_run_id: str):
                 )
                 train_jobs.append(model_runner)
 
-    # CellBox
-    for lambda_value in [0.0, 0.1, 1]:
-        loss = MSELossPlusL1(lambda_param=lambda_value)
-        cellbox = CellBox(
-            modelled_gene_labels=single_ko_dataset.genes,
-            condition_names=single_ko_dataset.all_environments,
-            device=next(device),
-        )
+    # # CellBox
+    # for lambda_value in [0.0, 0.1, 1]:
+    #     loss = MSELossPlusL1(lambda_param=lambda_value)
+    #     cellbox = CellBox(
+    #         modelled_gene_labels=single_ko_dataset.genes,
+    #         condition_names=single_ko_dataset.all_environments,
+    #         device=next(device),
+    #     )
 
-        model_runner = ModelRunner(
-            model=cellbox,
-            batch_size=batch_size,
-            optimizer_kwargs=optimizer_kwargs,
-            loss=loss,
-        )
-        train_jobs.append(model_runner)
+    #     model_runner = ModelRunner(
+    #         model=cellbox,
+    #         batch_size=batch_size,
+    #         optimizer_kwargs=optimizer_kwargs,
+    #         loss=loss,
+    #     )
+    #     train_jobs.append(model_runner)
 
-    # MLP
-    for hidden_size in [10, 20, 50]:
-        for nr_layers in [1, 2, 3]:
-            for lambda_value in [0.0, 0.1, 1]:
-                for only_pos_synthesis in [True, False]:
-                    loss = MSELossPlusL1(lambda_param=lambda_value)
-                    mlp = MLP(
-                        modelled_gene_labels=single_ko_dataset.genes,
-                        condition_names=single_ko_dataset.all_environments,
-                        hidden_size=hidden_size,
-                        nr_layers=nr_layers,
-                        device=next(device),
-                        synthesis_only_positive=only_pos_synthesis,
-                    )
+    # # MLP
+    # for hidden_size in [10, 20, 50]:
+    #     for nr_layers in [1, 2, 3]:
+    #         for lambda_value in [0.0, 0.1, 1]:
+    #             for only_pos_synthesis in [True, False]:
+    #                 loss = MSELossPlusL1(lambda_param=lambda_value)
+    #                 mlp = MLP(
+    #                     modelled_gene_labels=single_ko_dataset.genes,
+    #                     condition_names=single_ko_dataset.all_environments,
+    #                     hidden_size=hidden_size,
+    #                     nr_layers=nr_layers,
+    #                     device=next(device),
+    #                     synthesis_only_positive=only_pos_synthesis,
+    #                 )
 
-                    model_runner = ModelRunner(
-                        model=mlp,
-                        batch_size=batch_size,
-                        optimizer_kwargs=optimizer_kwargs,
-                        loss=loss,
-                    )
-                    train_jobs.append(model_runner)
+    #                 model_runner = ModelRunner(
+    #                     model=mlp,
+    #                     batch_size=batch_size,
+    #                     optimizer_kwargs=optimizer_kwargs,
+    #                     loss=loss,
+    #                 )
+    #                 train_jobs.append(model_runner)
 
     # Do the training
     nr_epochs = 2000
