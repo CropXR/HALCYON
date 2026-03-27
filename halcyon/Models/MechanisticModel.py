@@ -19,28 +19,7 @@ from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 
 
-class MechanisticModel(GeneExpressionModel):
-    def __init__(
-        self, modelled_gene_labels: List[str], condition_names: List[str], **kwargs
-    ):
-        super().__init__(modelled_gene_labels, condition_names, **kwargs)
-        self.register_buffer("time_scaler", torch.tensor(1.0))
-
-    @property
-    @abstractmethod
-    def regulatory_network(self) -> RegulatoryNetwork:
-        """Return the regulatory network of the model."""
-        pass
-
-    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
-        return []
-
-    def set_timescaler(self, new_value: torch.Tensor):
-        new_value = new_value.to(device=self.device)
-        self.time_scaler = new_value
-
-
-class PyTorchODE(MechanisticModel):
+class PyTorchODE(GeneExpressionModel):
     alternative_max_name = "max_rate"
 
     def __init__(
@@ -50,6 +29,8 @@ class PyTorchODE(MechanisticModel):
         synthesis_dict: Dict[str, sp.Expr],
         decay_dict: Dict[str, sp.Expr],
         param_dict: Dict[str, float],
+        goldstandard_signed_file_for_expression_substitution: None | Path = None,
+        fill_value_for_gene_not_in_model: float | None = 0.0,
         **kwargs,
     ):
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
@@ -64,17 +45,41 @@ class PyTorchODE(MechanisticModel):
                 for key, value in param_dict.items()
             }
         )
-        self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
-        self._synthesis_module: Optional[nn.Module] = (
-            None  # compiled synthesis modules will be stored here after compilation
+        # should be false until expressions are compiled, which is done at first integration
+        self._compiled_ready = False
+
+        # compiled synthesis modules will be stored here after compilation
+        self._synthesis_module: Optional[nn.Module] = None
+
+        # compiled decay modules will be stored here after compilation
+        self._decay_module: Optional[nn.Module] = None
+        self.register_buffer("time_scaler", torch.tensor(1.0))
+        # Storing some hyperparams
+        self.goldstandard_signed_file_for_expression_substitution = (
+            goldstandard_signed_file_for_expression_substitution
         )
-        self._decay_module: Optional[nn.Module] = (
-            None  # compiled decay modules will be stored here after compilation
-        )
+        self.fill_value_for_gene_not_in_model = fill_value_for_gene_not_in_model
+
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        out_list = []
+        for name, value in zip(
+            ["signed_file_input", "fill_value_for_gene_not_in_model"],
+            [
+                self.goldstandard_signed_file_for_expression_substitution,
+                self.fill_value_for_gene_not_in_model,
+            ],
+        ):
+            out_list.append((name, value))
+
+        return out_list
 
     @property
     def regulatory_network(self) -> RegulatoryNetwork:
         raise NotImplementedError("This method needs to be implemented in subclass.")
+
+    def set_timescaler(self, new_value: torch.Tensor):
+        new_value = new_value.to(device=self.device)
+        self.time_scaler = new_value
 
     def integrate(
         self,
@@ -150,7 +155,6 @@ class PyTorchODE(MechanisticModel):
     def select_genes(
         self,
         genes_to_keep: list[str],
-        goldstandard_signed_file_for_expression_substitution: None | Path = None,
     ):
         """From full set of genes that are modelled in this model, only keep the ones specified in this method.
 
@@ -181,16 +185,14 @@ class PyTorchODE(MechanisticModel):
 
         else:
             logging.info(
-                "No regulatory file provided, setting all unmodelled gene expressions to 0 as heuristic."
+                f"No regulatory file provided, setting all unmodelled gene expressions to {fill_value_for_gene_not_in_model} as heuristic."
             )
-            logging.info(
-                f"Might be preferred to provide the file next time to the select_genes() method. <3"
-            )
-            # Heuristic, set all gene expressions to 0 for genes that are not modelled
+            # Heuristic, set all gene expressions to fill_value_for_gene_not_in_model for genes that are not modelled
             replacement_dict = dict()
             for gene in genes_to_keep:
                 replacement_dict[gene] = {
-                    unmodeled_gene: 0 for unmodeled_gene in genes_to_remove
+                    unmodeled_gene: fill_value_for_gene_not_in_model
+                    for unmodeled_gene in genes_to_remove
                 }
 
         for gene in genes_to_keep:
