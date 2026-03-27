@@ -64,7 +64,6 @@ def main():
 
     # Create train jobs
     device = cycle(["cuda:0", "cuda:1"])
-    optimizer_kwargs = {"lr": 0.01}
     batch_size = 32
 
     hyperparams_to_test = [
