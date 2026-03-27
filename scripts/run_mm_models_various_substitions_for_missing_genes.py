@@ -67,11 +67,11 @@ def main():
     batch_size = 32
 
     hyperparams_to_test = [
-        {
-            "goldstandard_signed_file_for_expression_substitution": sim_output.data_path
-            / f"{sim_output.network_name}_goldstandard_signed.tsv",
-            "fill_value_for_gene_not_in_model": None,
-        },
+        # {
+        #     "goldstandard_signed_file_for_expression_substitution": sim_output.data_path
+        #     / f"{sim_output.network_name}_goldstandard_signed.tsv",
+        #     "fill_value_for_gene_not_in_model": None,
+        # },
         *[
             {
                 "goldstandard_signed_file_for_expression_substitution": None,
@@ -93,7 +93,6 @@ def main():
             )
 
             # Select only genes from specific module
-            # TODO here do the various settings
             mm.select_genes(genes_to_select)
             mm.set_timescaler(time_scaling_factor)
 
