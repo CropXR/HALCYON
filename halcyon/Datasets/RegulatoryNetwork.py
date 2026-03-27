@@ -26,7 +26,7 @@ class RegulatoryNetwork:
         )
         # convert back to node names
         self._clustering = [
-            {ig_graph.vs[i]["_nx_name"] for i in community} for community in partition
+            [ig_graph.vs[i]["_nx_name"] for i in community] for community in partition
         ]
 
         # self._clustering = algorithms.leiden(self._graph, seed=12).communities

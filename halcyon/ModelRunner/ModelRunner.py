@@ -178,9 +178,13 @@ class ModelRunner:
                 break
         else:
             # Save model when training finishes
-            self._log_model_if_not_saved_already(
-                save_every_n_epochs, epoch, total_nr_epochs=nr_epochs
-            )
+            if nr_epochs == 0:
+                # Edge case when no training was done
+                self._log_model_to_mlflow(0)
+            else:
+                self._log_model_if_not_saved_already(
+                    save_every_n_epochs, epoch, total_nr_epochs=nr_epochs
+                )
 
     def _log_model_if_not_saved_already(
         self, save_every_n_epochs: int, current_epoch: int, total_nr_epochs: int
