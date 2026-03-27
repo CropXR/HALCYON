@@ -5,19 +5,19 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-import networkx.algorithms.community as nxcom
+from cdlib import algorithms
 
 
 class RegulatoryNetwork:
     def __init__(self, network: nx.DiGraph):
-        self._graph = network
-        self._clustering = []
+        self._graph: nx.DiGraph = network
+        self._clustering: list[set] = []
 
     def __eq__(self, other: Self):
         return nx.is_isomorphic(self._graph, other._graph)
 
     def do_clustering(self):
-        self._clustering = nxcom.louvain_communities(self._graph)
+        self._clustering = algorithms.leiden(self._graph).communities
 
     def get_ingoing_interactions(self, gene_name: str) -> List:
         """Get interactions that influence a certain gene

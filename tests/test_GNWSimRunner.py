@@ -59,6 +59,11 @@ def test_plot_gnw_run(sim_result: SimulationResult):
     sim_result.network.plot()
 
 
+def test_cluster_network(sim_result: SimulationResult):
+    # Just rough code to see if no errors
+    sim_result.network.do_clustering()
+
+
 def test_sim_result_get_no_noise_file(sim_result):
     file_name = "knockout_timeseries0.tsv"
     filename_no_noise = sim_result._build_filename(file_name)
