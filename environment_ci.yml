@@ -7,7 +7,6 @@ channels:
 dependencies:
   - black=24.2.0
   - coverage=7.6.12=py310h89163eb_0
-  - cdlib
   - igraph
   - leidenalg
   - matplotlib-base=3.10.1=py310h68603db_0

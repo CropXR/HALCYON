@@ -5,7 +5,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from cdlib import algorithms
+import leidenalg
+import igraph as ig
 
 
 class RegulatoryNetwork:
@@ -17,7 +18,18 @@ class RegulatoryNetwork:
         return nx.is_isomorphic(self._graph, other._graph)
 
     def do_clustering(self):
-        self._clustering = algorithms.leiden(self._graph).communities
+        ig_graph = ig.Graph.from_networkx(self._graph)
+        partition = leidenalg.find_partition(
+            ig_graph,
+            leidenalg.ModularityVertexPartition,
+            seed=174,
+        )
+        # convert back to node names
+        self._clustering = [
+            {ig_graph.vs[i]["_nx_name"] for i in community} for community in partition
+        ]
+
+        # self._clustering = algorithms.leiden(self._graph, seed=12).communities
 
     def get_ingoing_interactions(self, gene_name: str) -> List:
         """Get interactions that influence a certain gene

@@ -38,7 +38,6 @@ dependencies:
   - coverage=7.6.12=py310h89163eb_0
   - cpython=3.10.16=py310hd8ed1ab_1
   - cycler=0.12.1=pyhd8ed1ab_1
-  - cdlib
   - igraph
   - leidenalg
   - debugpy=1.8.13=py310hf71b8c6_0
