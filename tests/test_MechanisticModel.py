@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pathlib import Path
 import pandas as pd
 import pytest
@@ -47,11 +48,13 @@ def ode_with_two_nodes(test_pytorchode_model):
 @pytest.fixture
 def ode_with_two_nodes_and_informed_substitute_value(test_pytorchode_model, in_folder):
     nodes_to_select = ["Node_0", "Node_2"]
+    test_pytorchode_model = deepcopy(test_pytorchode_model)
+    # Provide the prior info
+    test_pytorchode_model.goldstandard_signed_file_for_expression_substitution = Path(
+        in_folder / "integration_test_network_goldstandard_signed.tsv"
+    )
     test_pytorchode_model.select_genes(
         nodes_to_select,
-        goldstandard_signed_file_for_expression_substitution=Path(
-            in_folder / "integration_test_network_goldstandard_signed.tsv"
-        ),
     )
     return test_pytorchode_model
 
