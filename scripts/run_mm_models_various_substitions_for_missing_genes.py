@@ -33,8 +33,8 @@ def main():
     mlflow.set_experiment(experiment_name)
     mlflow.set_experiment_tag("Tool name", "HALCYON")
 
-    # Run on 50 genes with lowest noise
-    sim_run_id = "dcbfe325396842f3ba4ec365436a0fe4"
+    # Run on 100 genes with lowest noise
+    sim_run_id = "aa7b3f101bb94054a85dde642cf28ad2"
 
     run = mlflow.get_run(sim_run_id)
     params = run.data.params
