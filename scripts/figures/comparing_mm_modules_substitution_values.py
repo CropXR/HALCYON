@@ -29,7 +29,7 @@ def main():
 
     print(mlflow.get_tracking_uri())
     [f"{experiment.name=}" for experiment in mlflow.search_experiments()]
-    mlflow.set_experiment("Halcyon comparing models and datasets")
+    mlflow.set_experiment(experiment_id="4")
     mlflow.set_experiment_tag("Tool name", "HALCYON")
 
     # 20, 50, and 100 genes simulations

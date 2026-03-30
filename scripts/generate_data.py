@@ -31,7 +31,7 @@ def main(
 
     load_dotenv()
 
-    mlflow.set_experiment("Halcyon comparing models and datasets")
+    mlflow.set_experiment(experiment_id="4")
     mlflow.set_experiment_tag("Tool name", "HALCYON")
 
     nr_genes_list = [20, 50, 100]

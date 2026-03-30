@@ -33,10 +33,8 @@ def main():
     random.seed(seed)
     load_dotenv()
 
-    experiment_name = "Halcyon comparing models and datasets"
-
     logging.info(f'Tracking to {os.getenv("MLFLOW_TRACKING_URI")}')
-    mlflow.set_experiment(experiment_name)
+    mlflow.set_experiment(experiment_id="4")
     mlflow.set_experiment_tag("Tool name", "HALCYON")
 
     sim_run_ids = [

@@ -27,14 +27,11 @@ def main():
     random.seed(seed)
     load_dotenv()
 
-    experiment_name = "Halcyon comparing models and datasets"
-
     logging.info(f'Tracking to {os.getenv("MLFLOW_TRACKING_URI")}')
-    mlflow.set_experiment(experiment_name)
+    mlflow.set_experiment(experiment_id="4")
     mlflow.set_experiment_tag("Tool name", "HALCYON")
 
     # Run on 20, 50, 100 genes with lowest noise
-
     sim_run_ids = [
         "912f193730964b508691ee4ec81d66be",
         "dcbfe325396842f3ba4ec365436a0fe4",
@@ -42,7 +39,6 @@ def main():
     ]
 
     for sim_run_id in sim_run_ids:
-
         run = mlflow.get_run(sim_run_id)
         params = run.data.params
         logging.info(f"Loaded run with params: {params}")
