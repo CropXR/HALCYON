@@ -151,17 +151,17 @@ class ModelRunner:
 
             # --- val/test ---
             if val_dataset is not None:
-                self._log_loss_on_unseen_data(
-                    val_dataset, "val_loss", epoch, self.loss_fn
-                )
+                # self._log_loss_on_unseen_data(
+                #     val_dataset, "val_loss", epoch, self.loss_fn
+                # )
                 val_mse = self._log_loss_on_unseen_data(
                     val_dataset, "val_mse", epoch, self.mse_loss_fn
                 )
 
             if test_dataset is not None:
-                self._log_loss_on_unseen_data(
-                    test_dataset, "test_loss", epoch, self.loss_fn
-                )
+                # self._log_loss_on_unseen_data(
+                #     test_dataset, "test_loss", epoch, self.loss_fn
+                # )
                 self._log_loss_on_unseen_data(
                     test_dataset, "test_mse", epoch, self.mse_loss_fn
                 )
