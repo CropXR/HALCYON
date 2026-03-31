@@ -55,11 +55,11 @@ class PyTorchODE(GeneExpressionModel):
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
-        # Convert param_dict to a trainable ParameterDict
+        # Convert param_dict to a ParameterDict
         self.param_dict = nn.ParameterDict(
             {
                 key: nn.Parameter(
-                    torch.tensor(value, dtype=torch.float32), requires_grad=True
+                    torch.tensor(value, dtype=torch.float32), requires_grad=False
                 )
                 for key, value in param_dict.items()
             }
@@ -184,17 +184,6 @@ class PyTorchODE(GeneExpressionModel):
         new_value = new_value.to(device=self.device)
         self.time_scaler = new_value
 
-    def integrate(
-        self,
-        initial_state: torch.Tensor,
-        t_eval: torch.Tensor,
-    ) -> torch.Tensor:
-        self._synthesis_module = None
-        self._decay_module = None
-        self._compiled_ready = False
-        self._compile_expressions()
-        return super().integrate(initial_state, t_eval)
-
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
         Get the derivative at a given time point.
@@ -304,6 +293,7 @@ class PyTorchODE(GeneExpressionModel):
             [self.modelled_gene_labels.index(gene) for gene in genes_to_keep]
         ]
         self.modelled_gene_labels = genes_to_keep
+        self._compile_expressions()
 
     def _get_replacement_dict_from_regulation(
         self, genes_to_remove: list[str]
@@ -402,6 +392,9 @@ class PyTorchODE(GeneExpressionModel):
                 "sympytorch is required for MechanisticModel. Install it via 'pip install sympytorch'."
             )
 
+        logging.info(
+            "Compiling mechanistic model. This is a slow step and if correct is only carried out once."
+        )
         param_subs = {symbols(name): value for name, value in self.param_dict.items()}
 
         def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
