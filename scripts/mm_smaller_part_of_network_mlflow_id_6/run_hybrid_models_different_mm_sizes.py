@@ -117,36 +117,25 @@ def train_hybrid_model_on(sim_run_id: str):
         )
 
         hybrid_model_jobs.append(model_runner)
-        break
 
-    for train_job in hybrid_model_jobs:
-        train_job.train_and_predict_for_mlflow(
-            dataset_dict=dataset_dict,
-            simulation_parent_id=sim_run_id,
-            nr_epochs=3,
-            train_data_key_in_dict=train_dataset_name,
-            val_data_key_in_dict=val_dataset_name,
-            test_data_key_in_dict=test_dataset_name,
+    # Do the training
+    nr_epochs = 2000
+    nr_processes = 16
+
+    with mp.Pool(processes=nr_processes) as pool:
+        pool.map(
+            partial(
+                run_training_job,
+                dataset_dict=dataset_dict,
+                train_data_key_in_dict=train_dataset_name,
+                val_data_key_in_dict=val_dataset_name,
+                test_data_key_in_dict=test_dataset_name,
+                simulation_parent_id=sim_run_id,
+                nr_epochs=nr_epochs,
+                do_mlflow_model_logging=False,
+            ),
+            hybrid_model_jobs,
         )
-
-    # # Do the training
-    # nr_epochs = 2000
-    # nr_processes = 16
-
-    # with mp.Pool(processes=nr_processes) as pool:
-    #     pool.map(
-    #         partial(
-    #             run_training_job,
-    #             dataset_dict=dataset_dict,
-    #             train_data_key_in_dict=train_dataset_name,
-    #             val_data_key_in_dict=val_dataset_name,
-    #             test_data_key_in_dict=test_dataset_name,
-    #             simulation_parent_id=sim_run_id,
-    #             nr_epochs=nr_epochs,
-    #             do_mlflow_model_logging=False,
-    #         ),
-    #         hybrid_model_jobs,
-    #     )
 
 
 if __name__ == "__main__":
