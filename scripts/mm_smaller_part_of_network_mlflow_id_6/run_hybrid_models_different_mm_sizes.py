@@ -1,7 +1,8 @@
 from pathlib import Path
 from copy import deepcopy
 
-import torch.multiprocessing as mp
+from pathos.multiprocessing import ProcessingPool as Pool
+import multiprocess as mp
 import logging
 import random
 from itertools import cycle
@@ -41,8 +42,11 @@ def main():
         filter_string="tags.run_type = 'dataset' and params.noise_level = 'MEDIUM'",
     )
 
-    for sim_run_id in sim_runs["run_id"]:
-        train_hybrid_model_on(sim_run_id)
+    train_hybrid_model_on("d660c1d337c34d98a349605d9b4d5b47")
+
+    # for sim_run_id in sim_runs["run_id"]:
+
+    #     train_hybrid_model_on(sim_run_id)
 
 
 def train_hybrid_model_on(sim_run_id: str):
@@ -119,43 +123,25 @@ def train_hybrid_model_on(sim_run_id: str):
             loss=loss,
         )
 
-        # hybrid_model_jobs.append(model_runner)
+        hybrid_model_jobs.append(model_runner)
 
-        model_runner.train_and_predict_for_mlflow(
-            dataset_dict=dataset_dict,
-            simulation_parent_id=sim_run_id,
-            nr_epochs=nr_epochs,
-            train_data_key_in_dict=train_dataset_name,
-            val_data_key_in_dict=val_dataset_name,
-            test_data_key_in_dict=test_dataset_name,
+    nr_processes = 4
+    with Pool(nodes=nr_processes) as pool:
+        pool.map(
+            partial(
+                run_training_job,
+                dataset_dict=dataset_dict,
+                train_data_key_in_dict=train_dataset_name,
+                val_data_key_in_dict=val_dataset_name,
+                test_data_key_in_dict=test_dataset_name,
+                simulation_parent_id=sim_run_id,
+                nr_epochs=nr_epochs,
+                do_mlflow_model_logging=False,
+            ),
+            hybrid_model_jobs,
         )
-
-    # for train_job in hybrid_model_jobs:
-    #     train_job.train_and_predict_for_mlflow(
-    #         dataset_dict=dataset_dict,
-    #         simulation_parent_id=sim_run_id,
-    #         nr_epochs=nr_epochs,
-    #         train_data_key_in_dict=train_dataset_name,
-    #         val_data_key_in_dict=val_dataset_name,
-    #         test_data_key_in_dict=test_dataset_name,
-    #     )
-
-    # nr_processes = 16
-    # with mp.Pool(processes=nr_processes) as pool:
-    #     pool.map(
-    #         partial(
-    #             run_training_job,
-    #             dataset_dict=dataset_dict,
-    #             train_data_key_in_dict=train_dataset_name,
-    #             val_data_key_in_dict=val_dataset_name,
-    #             test_data_key_in_dict=test_dataset_name,
-    #             simulation_parent_id=sim_run_id,
-    #             nr_epochs=nr_epochs,
-    #             do_mlflow_model_logging=False,
-    #         ),
-    #         hybrid_model_jobs,
-    #     )
 
 
 if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)
     main()
