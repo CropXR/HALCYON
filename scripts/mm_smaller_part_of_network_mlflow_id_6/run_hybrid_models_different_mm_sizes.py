@@ -82,6 +82,8 @@ def train_hybrid_model_on(sim_run_id: str):
     batch_size = 32
     optimizer_kwargs = {"lr": 0.01}
 
+    nr_epochs = 2000
+
     hybrid_model_jobs: list[ModelRunner] = []
 
     for genes_to_select in sim_output.network._clustering:
@@ -117,13 +119,9 @@ def train_hybrid_model_on(sim_run_id: str):
             loss=loss,
         )
 
-        hybrid_model_jobs.append(model_runner)
+        # hybrid_model_jobs.append(model_runner)
 
-    # Do the training
-    nr_epochs = 2000
-
-    for train_job in hybrid_model_jobs:
-        train_job.train_and_predict_for_mlflow(
+        model_runner.train_and_predict_for_mlflow(
             dataset_dict=dataset_dict,
             simulation_parent_id=sim_run_id,
             nr_epochs=nr_epochs,
@@ -131,6 +129,16 @@ def train_hybrid_model_on(sim_run_id: str):
             val_data_key_in_dict=val_dataset_name,
             test_data_key_in_dict=test_dataset_name,
         )
+
+    # for train_job in hybrid_model_jobs:
+    #     train_job.train_and_predict_for_mlflow(
+    #         dataset_dict=dataset_dict,
+    #         simulation_parent_id=sim_run_id,
+    #         nr_epochs=nr_epochs,
+    #         train_data_key_in_dict=train_dataset_name,
+    #         val_data_key_in_dict=val_dataset_name,
+    #         test_data_key_in_dict=test_dataset_name,
+    #     )
 
     # nr_processes = 16
     # with mp.Pool(processes=nr_processes) as pool:
