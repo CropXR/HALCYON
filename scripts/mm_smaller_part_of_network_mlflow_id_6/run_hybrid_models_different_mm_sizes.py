@@ -42,11 +42,8 @@ def main():
         filter_string="tags.run_type = 'dataset' and params.noise_level = 'MEDIUM'",
     )
 
-    train_hybrid_model_on("d660c1d337c34d98a349605d9b4d5b47")
-
-    # for sim_run_id in sim_runs["run_id"]:
-
-    #     train_hybrid_model_on(sim_run_id)
+    for sim_run_id in sim_runs["run_id"]:
+        train_hybrid_model_on(sim_run_id)
 
 
 def train_hybrid_model_on(sim_run_id: str):
@@ -125,7 +122,7 @@ def train_hybrid_model_on(sim_run_id: str):
 
         hybrid_model_jobs.append(model_runner)
 
-    nr_processes = 4
+    nr_processes = 16
     with Pool(nodes=nr_processes) as pool:
         pool.map(
             partial(
