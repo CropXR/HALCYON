@@ -15,6 +15,7 @@ dependencies:
   - networkx=3.4.2=pyh267e887_2
   - numpy=2.2.3=py310hefbff90_0
   - pandas=2.2.3=py310h5eaa309_1
+  - pathos
   - pip=25.0.1=pyh8b19718_0
   - pytest=8.3.5=pyhd8ed1ab_0
   - pytest-cov=6.0.0=pyhd8ed1ab_1

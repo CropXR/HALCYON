@@ -173,6 +173,7 @@ dependencies:
   - pandocfilters=1.5.0=pyhd8ed1ab_0
   - parso=0.8.4=pyhd8ed1ab_1
   - patsy=1.0.1=pyhd8ed1ab_1
+  - pathos
   - pcre2=10.44=hba22ea6_2
   - pexpect=4.9.0=pyhd8ed1ab_1
   - pickleshare=0.7.5=pyhd8ed1ab_1004
