@@ -78,7 +78,7 @@ def train_hybrid_model_on(sim_run_id: str):
     }
 
     # Create train jobs
-    device = cycle(["cuda:0", "cuda:1"])
+    device = cycle(["cuda:1"])  # , "cuda:0"])
     batch_size = 32
     optimizer_kwargs = {"lr": 0.01}
 
