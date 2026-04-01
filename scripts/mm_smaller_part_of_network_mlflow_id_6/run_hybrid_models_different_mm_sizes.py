@@ -78,18 +78,20 @@ def train_hybrid_model_on(sim_run_id: str):
     }
 
     # Create train jobs
-    device = cycle(["cuda:1"])  # , "cuda:0"])
+    devices = cycle(["cuda:1", "cuda:0"])
     batch_size = 32
     optimizer_kwargs = {"lr": 0.01}
 
     hybrid_model_jobs: list[ModelRunner] = []
 
     for genes_to_select in sim_output.network._clustering:
+        device = next(devices)
         mm = PyTorchODE.from_sbml(
             sim_output.data_path / "my_network.xml",
             condition_names=[],
             from_gnw=True,
             fill_value_for_gene_not_in_model=0.5,
+            device=device,
         )
 
         # Select only genes from specific module
@@ -103,11 +105,10 @@ def train_hybrid_model_on(sim_run_id: str):
             hidden_size=10,
             condition_names=single_ko_dataset.all_environments,
             synthesis_only_positive=False,
+            device=device,
         )
 
-        hybrid_model = HybridModel(
-            deepcopy(mm), deepcopy(ml_model), device=next(device)
-        )
+        hybrid_model = HybridModel(deepcopy(mm), deepcopy(ml_model), device=device)
 
         model_runner = ModelRunner(
             model=hybrid_model,
