@@ -301,7 +301,7 @@ class ModelRunner:
         val_data_key_in_dict: str | None = None,
         test_data_key_in_dict: str | None = None,
         do_mlflow_model_logging: bool = False,
-        save_every_n_epochs: int | None = 5,
+        save_every_n_epochs: int | None = 10,
     ):
         """Carry out training and predicting and log everything to MLFlow
 
