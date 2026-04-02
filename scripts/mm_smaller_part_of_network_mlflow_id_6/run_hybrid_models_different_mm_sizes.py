@@ -42,6 +42,10 @@ def main():
         filter_string="tags.run_type = 'dataset' and params.noise_level = 'MEDIUM'",
     )
 
+    # Start with smallest network first
+    sim_runs["params.nr_genes"] = sim_runs["params.nr_genes"].astype(int)
+    sim_runs = sim_runs.sort_values("params.nr_genes", ascending=True)
+
     for sim_run_id in sim_runs["run_id"]:
         train_hybrid_model_on(sim_run_id)
 
