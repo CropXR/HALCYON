@@ -25,7 +25,7 @@ def run_training_job(
             nr_epochs=nr_epochs,
             do_mlflow_model_logging=do_mlflow_model_logging,
         )
-    except AssertionError as e:
+    except Exception as e:
         logging.error(f"Error occurred while running job: {e}")
         output = {"error": str(e)}
     return output
