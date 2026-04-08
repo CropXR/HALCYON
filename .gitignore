@@ -8,3 +8,4 @@ notebooks/.ipynb_checkpoints/
 *.egg-info/
 tests/generated_test_data/*
 data/
+.env

@@ -3,73 +3,14 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass, fields
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
-@dataclass
-class SimulationResult:
-    """Container for storing the results of a simulated gene network.
-
-    Attributes:
-        data_path (Path): Directory for output files.
-        network_name (str): File name to use for outputting the files.
-        nr_genes (int): Number of genes in the network.
-        nr_modules (int): Number of modules in the network.
-        sparsity (float): How sparse the network is
-            (higher values mean fewer connections).
-        keep_self_interactions (bool): Whether self-interactions are kept.
-        network (RegulatoryNetwork): The generated gene regulatory network.
-    """
-
-    data_path: Path
-    network_name: str
-    nr_genes: int
-    nr_modules: int
-    sparsity: float
-    keep_self_interactions: bool
-    network: RegulatoryNetwork
-
-    def items(self):
-        """Iterate over field names and their values (as if this were a dict)"""
-        for field in fields(self):
-            yield field.name, getattr(self, field.name)
-
-    def double_ko_timeseries_nonoise_file_path(self) -> Path:
-        """Get path to double knockout timeseries file."""
-        out_path = (
-            self.data_path / f"{self.network_name}_nonoise_dualknockout_timeseries0.tsv"
-        )
-        assert out_path.exists()
-        return out_path
-
-    def get_double_ko_expressiondata(self) -> ExpressionDataWithConditions:
-        double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
-            expression_file_path=self.double_ko_timeseries_nonoise_file_path(),
-            ko_file_path=self.double_ko_index_file_path(),
-        )
-        return double_ko_expressions
-
-    def double_ko_index_file_path(self) -> Path:
-        """Get path to double knockout index file."""
-        out_path = self.data_path / f"{self.network_name}_dualknockouts_indexes.tsv"
-        assert out_path.exists()
-        return out_path
-
-    def get_no_noise_ko_timeseries_expressiondata(self) -> ExpressionDataWithConditions:
-        """Get knockout timeseries without noise data."""
-        out_path = (
-            self.data_path / f"{self.network_name}_nonoise_knockout_timeseries0.tsv"
-        )
-        assert out_path.exists()
-
-        return ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
-            out_path
-        )
+from halcyon.Simulators.NoiseLevel import NoiseLevel
+from halcyon.Simulators.SimulationResult import SimulationResult
 
 
 class GNWSimRunner:
@@ -102,6 +43,7 @@ class GNWSimRunner:
         num_modules: int,
         network_name: str,
         output_path: Path,
+        noise_level: NoiseLevel,
         keep_self_interactions: bool = True,
         network_type: int = 1,
     ) -> SimulationResult:
@@ -174,4 +116,5 @@ class GNWSimRunner:
             sparsity=sparsity,
             keep_self_interactions=keep_self_interactions,
             network=network,
+            noise_level=noise_level,
         )

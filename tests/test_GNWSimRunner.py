@@ -3,10 +3,12 @@ from pathlib import Path
 import networkx as nx
 import json
 
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
-from halcyon.Simulators.GNWSimRunner import SimulationResult
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Simulators.NoiseLevel import NoiseLevel
 
 import hashlib
+
+from halcyon.Simulators.SimulationResult import SimulationResult
 
 
 def create_file_hash(path: Path):
@@ -48,6 +50,7 @@ def test_gnw_reproducible(sim_result):
         sparsity=0.1,
         network=RegulatoryNetwork(expected_network),
         keep_self_interactions=True,
+        noise_level=sim_result.noise_level,
     )
     assert asdict(sim_result) == asdict(expected_sim_result)
 
@@ -55,3 +58,26 @@ def test_gnw_reproducible(sim_result):
 def test_plot_gnw_run(sim_result: SimulationResult):
     # Just rough code to see if no errors
     sim_result.network.plot()
+
+
+def test_sim_result_build_file_path_with_different_noise(sim_result):
+    file_name = "knockout_timeseries0.tsv"
+    filename_no_noise = sim_result._build_filename(file_name)
+    assert (
+        filename_no_noise.name.endswith(f"_nonoise_{file_name}")
+        and filename_no_noise.exists()
+    )
+
+    sim_result.noise_level = NoiseLevel.NOEXPNOISE
+    filename_no_exp_noise = sim_result._build_filename(file_name)
+    assert (
+        filename_no_exp_noise.name.endswith(f"_noexpnoise_{file_name}")
+        and filename_no_exp_noise.exists()
+    )
+
+    sim_result.noise_level = NoiseLevel.ALLNOISE
+    filename_with_noise = sim_result._build_filename(file_name)
+    assert (
+        filename_with_noise.name.endswith(f"_{file_name}")
+        and filename_with_noise.exists()
+    )

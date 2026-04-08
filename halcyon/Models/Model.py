@@ -7,7 +7,7 @@ from torchdiffeq import odeint
 import logging
 
 
-class Model(ABC, nn.Module):
+class GeneExpressionModel(ABC, nn.Module):
     def __init__(
         self,
         modelled_gene_labels: List[str],
@@ -26,6 +26,16 @@ class Model(ABC, nn.Module):
         self.reset_conditions()
 
     @property
+    def name(self):
+        return self.__class__.__name__
+
+    def __repr__(self):
+        return (
+            f"{self.name} with hyperparams: "
+            f"{[f'{key}={val}' for key,val in self.get_hyperparams()]}"
+        )
+
+    @property
     def n_genes(self):
         return len(self.modelled_gene_labels)
 
@@ -36,6 +46,10 @@ class Model(ABC, nn.Module):
     def set_timescaler(self, new_value):
         """Allows polymorphism so even classes that do not have a mech model subclass do not throw error"""
         return
+
+    def get_genes_and_conditions_as_list(self) -> List[str]:
+        """Get the list of gene labels and condition names concatenated."""
+        return self.modelled_gene_labels + self.condition_names
 
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
@@ -159,9 +173,6 @@ class Model(ABC, nn.Module):
             logging.error(f"Unexpected error checking GPU compatibility: {e}")
             logging.info("Falling back to CPU.")
             return torch.device("cpu")
-
-    def get_name(self):
-        return self.__class__.__name__
 
     @abstractmethod
     def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:

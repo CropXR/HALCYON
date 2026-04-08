@@ -1,0 +1,251 @@
+import logging
+from pathlib import Path
+import textwrap
+import mlflow
+import numpy as np
+from sklearn.metrics import mean_squared_error
+import seaborn as sns
+import pandas as pd
+from typing import Callable, List, Tuple
+
+from matplotlib.colors import LogNorm
+import matplotlib.pyplot as plt
+import scipy.cluster.hierarchy as sch
+from typing_extensions import Self
+
+
+class TidyDfResults:
+    """Class to easily make plots from tidy dataframe (and sometimes convert to other formats).
+    Dataframe keeps track of predictions of different models for different genes under different conditions at different times.
+    """
+
+    # Store column names here
+    RUN_ID_COL = "run_id"
+    MODEL_COL = "model"
+    GENE_COL = "gene"
+    TIME_COL = "time"
+    CONDITION_COL = "condition"
+    GENE_IS_IN_MM_COL = "gene_is_in_mm"
+    EXPRESSION_COL = "predicted_expression"
+    GROUND_TRUTH_COL = "ground_truth"
+    MSE_COL = "MSE"
+
+    def __init__(self, df: pd.DataFrame):
+        # Check if the columns are correct
+        assert set(df.columns) == {
+            self.RUN_ID_COL,
+            self.GENE_COL,
+            self.TIME_COL,
+            self.EXPRESSION_COL,
+            self.GROUND_TRUTH_COL,
+            self.CONDITION_COL,
+        }
+        self.df = df
+
+    @classmethod
+    def from_mlflow_runs(cls, runs: List[mlflow.entities.Run]) -> Self:
+        """Create TidyDfResults from a list of mlflow runs"""
+        dfs = []
+        for run in runs:
+            run_id = run.info.run_id
+            logging.info(f"Downloading artifacts for run {run_id}")
+            artifacts = mlflow.artifacts.download_artifacts(
+                run_id=run_id, artifact_path="evaluation"
+            )
+            for artifact in Path(artifacts).iterdir():
+                if artifact.is_file() and artifact.suffix == ".parquet":
+                    df = pd.read_parquet(artifact)
+                    df[cls.RUN_ID_COL] = run_id
+                    dfs.append(df)
+
+        return cls(pd.concat(dfs, ignore_index=True))
+
+    def split_into_single_and_double_ko(self) -> Tuple[Self, Self]:
+        """Split this dataframe into one with single knockouts and double knockouts.
+
+        Can be used if you want to plot these predictions separately
+
+        Returns:
+            Tuple[Self, Self]: First element is TidyDfResults with single KOs, second element is TidyDfResults with double KOs
+        """
+        nr_of_ko_genes = self.df[self.CONDITION_COL].str.count("Node_")
+        single_ko = self.df[nr_of_ko_genes == 1]
+        double_ko = self.df[nr_of_ko_genes == 2]
+        return self.__class__(single_ko), self.__class__(double_ko)
+
+    @staticmethod
+    def _rotate_x_tick_labels(g, rotation=45):
+        for ax in g.axes.flatten():
+            for label in ax.get_xticklabels():
+                label.set_rotation(rotation)
+                label.set_horizontalalignment("right")
+        g.figure.tight_layout()
+
+    @staticmethod
+    def _wrap_titles(g: sns.FacetGrid, width=40):
+        """Wrap titles to be max length width"""
+        for ax in g.axes.flat:
+            title = ax.get_title()
+            wrapped = "\n".join(textwrap.wrap(title, width=width))
+            ax.set_title(wrapped)
+
+    def plot_model_plots(self, df_selection_function: Callable):
+        """Plot lineplots of expression over time for each model, split by conditions."""
+        df_with_model_name = self._get_df_with_model_names()
+        if df_selection_function is not None:
+            df_with_model_name = df_with_model_name[
+                df_selection_function(df_with_model_name)
+            ]
+
+        df_with_gt_as_model = self._df_with_ground_truth_as_kind_of_model(
+            df_with_model_name
+        )
+
+        g = sns.relplot(
+            data=df_with_gt_as_model,
+            col=self.MODEL_COL,
+            row=self.CONDITION_COL,
+            hue=self.GENE_COL,
+            x=self.TIME_COL,
+            y=self.EXPRESSION_COL,
+            kind="line",
+            facet_kws={"margin_titles": True},
+        )
+        return g
+
+    def per_gene_mse_heatmap(
+        self, df_selection_function=None, cmap="viridis", robust_cmap=False
+    ) -> sns.FacetGrid:
+        """Show per gene MSE in heatmap for various models
+
+        Args:
+            df_selection_function (_type_, optional): Function which takes DF as input and returns a boolean mask. Defaults to None. Can be used to only plot subset of data (only some genes for example)
+            cmap (str, optional): Colourmap. Defaults to "viridis".
+            robust (bool, optional): How to determine colour mapping. If false, span full min to max. If true, span 1st to 99th percentile. Defaults to False.
+        """
+        df_with_model_name = self._get_df_with_model_names()
+        if df_selection_function is not None:
+            df_with_model_name = df_with_model_name[
+                df_selection_function(df_with_model_name)
+            ]
+        groupby_list = [
+            self.MODEL_COL,
+            self.GENE_COL,
+            self.CONDITION_COL,
+        ]
+        mse_df = (
+            df_with_model_name.groupby(groupby_list)
+            .apply(
+                lambda g: mean_squared_error(
+                    g[self.GROUND_TRUTH_COL], g[self.EXPRESSION_COL]
+                ),
+                include_groups=False,
+            )
+            .reset_index(name=self.MSE_COL)
+        )
+
+        if robust_cmap:
+            vmin, vmax = np.percentile(mse_df[self.MSE_COL].dropna(), [1, 99])
+            norm = LogNorm(vmin=vmin, vmax=vmax)
+        else:
+            norm = LogNorm(
+                vmin=mse_df[self.MSE_COL].min(),
+                vmax=mse_df[self.MSE_COL].max(),
+            )
+
+        # Use correlations between conditions to order columns
+        full_pivot = mse_df.pivot(
+            index=[self.GENE_COL, self.MODEL_COL],
+            columns=self.CONDITION_COL,
+            values=self.MSE_COL,
+        )
+        corr = full_pivot.corr()
+        linkage = sch.linkage(corr, method="average")
+        col_order = full_pivot.columns[sch.leaves_list(linkage)]
+
+        # Use how often gene shows up (i.e. if it is in MM or not) to order rows
+        gene_order = mse_df[self.GENE_COL].value_counts().index
+
+        # Do the actual plotting
+        g = sns.FacetGrid(
+            mse_df, col=self.MODEL_COL, margin_titles=True, aspect=0.4, height=10
+        )
+
+        def _plot_heatmap_func(data, **kwargs):
+            df_pivot = data.pivot(
+                index=self.GENE_COL, columns=self.CONDITION_COL, values=self.MSE_COL
+            ).reindex(index=gene_order, columns=col_order)
+            sns.heatmap(data=df_pivot, cmap=cmap, norm=norm, cbar=False, **kwargs)
+
+        g.map_dataframe(_plot_heatmap_func)
+
+        # Remove all gene and condition names
+        for ax in g.axes.flat:
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        # add one shared colourbar
+        mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+        mappable.set_array([])
+        g.figure.colorbar(mappable, ax=g.axes, fraction=0.02, pad=0.01, label="MSE")
+
+        return g
+
+    def _run_id_to_model_name(self, run_id: str) -> str:
+        """Convert mlflow run_id to a more human readable model name by looking up the parameters of the run."""
+        logging.info(f"Getting model name for run_id {run_id}")
+        run = mlflow.get_run(run_id)
+        out_string_list = []
+        for key, value in run.data.params.items():
+            out_string_list.append(f"{key}_{value}")
+        out_string = "__".join(out_string_list)
+        return out_string
+
+    def _get_df_with_model_names(self) -> pd.DataFrame:
+        """For a dataframe which only contains mlflow run ids, return one where these are converted to strings representing the underlying model."""
+        run_id_to_model_dict = {}
+        for run_id in self.df[self.RUN_ID_COL].unique():
+            model_name = self._run_id_to_model_name(run_id)
+            run_id_to_model_dict[run_id] = model_name
+        df_with_model_name = self.df.assign(
+            **{self.MODEL_COL: self.df[self.RUN_ID_COL].map(run_id_to_model_dict)}
+        )
+        return df_with_model_name
+
+    @classmethod
+    def _df_with_ground_truth_as_kind_of_model(
+        cls, in_df: pd.DataFrame
+    ) -> pd.DataFrame:
+        """For some plotting, pretend that the ground truth expression was a form of model.
+
+        This function creates a new dataframe where the ground truth is added as a
+        'ground truth' model predictions. This way, it can be plotted together with the predictions.
+        """
+        df_with_ground_truth_as_model = in_df.copy()
+
+        df_with_ground_truth_as_model[cls.EXPRESSION_COL] = (
+            df_with_ground_truth_as_model[cls.GROUND_TRUTH_COL]
+        )
+        df_with_ground_truth_as_model[cls.MODEL_COL] = cls.GROUND_TRUTH_COL
+        df_expanded = pd.concat(
+            [in_df, df_with_ground_truth_as_model], ignore_index=True
+        )
+        return df_expanded
+
+    def to_csv(self, filepath):
+        """Save to csv file."""
+        self.df.to_csv(filepath, index=False)
+
+    @classmethod
+    def from_csv(cls, filepath):
+        df = pd.read_csv(filepath)
+        return cls(df)
+
+    @classmethod
+    def from_parquet(cls, filepath):
+        df = pd.read_parquet(filepath)
+        return cls(df)
+
+    def to_parquet(self, filepath):
+        """Save to parquet file."""
+        self.df.to_parquet(filepath, index=False)

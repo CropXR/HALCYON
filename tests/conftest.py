@@ -12,13 +12,20 @@ import torch
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
-from halcyon.FittedTrainerList import FittedTrainerList
-from halcyon.Models.CellBox import CellBox
 from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
-from halcyon.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
-from halcyon.Simulators.GNWSimRunner import GNWSimRunner, SimulationResult
-from halcyon.Trainer import Trainer
+from halcyon.Simulators.GNWSimRunner import GNWSimRunner
+from halcyon.Simulators.NoiseLevel import NoiseLevel
+from halcyon.Simulators.SimulationResult import SimulationResult
+from halcyon.Models.ModelRunner import ModelRunner
+
+from dotenv import load_dotenv
+
+
+@pytest.fixture(scope="session", autouse=True)
+def get_env_variables():
+    load_dotenv()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -54,21 +61,29 @@ def sim_result() -> SimulationResult:
         num_modules=2,
         network_name="integration_test_network",
         output_path=generated_data_path,
+        noise_level=NoiseLevel.NONOISE,
     )
     return sim_result
 
 
 @pytest.fixture
-def expr_data_from_sim(sim_result):
-    expr_data = ExpressionDataWithConditions.from_genenetweaver_ko_timeseries_output(
-        sim_result.data_path
-        / f"{sim_result.network_name}_nonoise_knockout_timeseries0.tsv"
-    )
+def expr_data_from_sim(sim_result: SimulationResult) -> ExpressionDataWithConditions:
+    return sim_result.get_single_ko_timeseries_expressiondata()
+
+
+@pytest.fixture
+def normalised_expr_data_from_sim(
+    sim_result: SimulationResult,
+) -> ExpressionDataWithConditions:
+    expr_data = deepcopy(sim_result.get_single_ko_timeseries_expressiondata())
+    sim_result._time_scale_all_datasets_and_get_scaling_factor([expr_data])
     return expr_data
 
 
 @pytest.fixture
-def mech_model_from_sim_result(sim_result, expr_data_from_sim):
+def mech_model_from_sim_result(
+    sim_result: SimulationResult, expr_data_from_sim: ExpressionDataWithConditions
+) -> PyTorchODE:
     model = PyTorchODE.from_sbml(
         sim_result.data_path / "integration_test_network.xml",
         condition_names=expr_data_from_sim.all_environments,
@@ -78,7 +93,9 @@ def mech_model_from_sim_result(sim_result, expr_data_from_sim):
 
 
 @pytest.fixture
-def ml_model_from_sim_result(expr_data_from_sim):
+def ml_model_from_sim_result(
+    expr_data_from_sim: ExpressionDataWithConditions,
+) -> PhoenixAddAndProdLayers:
     model = PhoenixAddAndProdLayers(
         expr_data_from_sim.genes, expr_data_from_sim.all_environments, hidden_size=2
     )
@@ -86,16 +103,20 @@ def ml_model_from_sim_result(expr_data_from_sim):
 
 
 @pytest.fixture
-def hybrid_model(mech_model_from_sim_result, ml_model_from_sim_result):
+def hybrid_model(
+    mech_model_from_sim_result: PyTorchODE,
+    ml_model_from_sim_result: PhoenixAddAndProdLayers,
+) -> HybridModel:
     return HybridModel(mech_model_from_sim_result, ml_model_from_sim_result)
 
 
 @pytest.fixture
 def hybrid_model_with_zero_ml_influence(
-    mech_model_from_sim_result, ml_model_from_sim_result
-):
+    mech_model_from_sim_result: PyTorchODE,
+    ml_model_from_sim_result: PhoenixAddAndProdLayers,
+) -> HybridModel:
     ml_model_from_sim_result = deepcopy(ml_model_from_sim_result)
-    ml_model_from_sim_result._set_per_gene_multipliers(-50)
+    ml_model_from_sim_result._set_raw_per_gene_importance(-50)
     return HybridModel(
         mech_model_from_sim_result,
         ml_model_from_sim_result,
@@ -103,64 +124,57 @@ def hybrid_model_with_zero_ml_influence(
 
 
 @pytest.fixture
-def hybrid_model_mm_no_node_9(mech_model_from_sim_result, ml_model_from_sim_result):
+def hybrid_model_mm_no_node_9(
+    mech_model_from_sim_result: PyTorchODE,
+    ml_model_from_sim_result: PhoenixAddAndProdLayers,
+) -> HybridModel:
     mech_model_from_sim_result = deepcopy(mech_model_from_sim_result)
     mech_model_from_sim_result.select_genes([f"Node_{i}" for i in range(9)])
     return HybridModel(
         deepcopy(mech_model_from_sim_result),
         deepcopy(ml_model_from_sim_result),
-        device="cpu",
     )
 
 
 @pytest.fixture
-def trainers_for_all_models(sim_result, hybrid_model_mm_no_node_9) -> list[Trainer]:
-    trainers: list[Trainer] = []
+def trainers_for_all_models(
+    sim_result: SimulationResult, hybrid_model_mm_no_node_9: HybridModel
+) -> list[ModelRunner]:
+    trainers: list[ModelRunner] = []
+    expr_data = sim_result.get_single_ko_timeseries_expressiondata()
+
+    time_scaler = sim_result._time_scale_all_datasets_and_get_scaling_factor(
+        [expr_data]
+    )
     for model_class, model_args in zip(
-        [CellBox, PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
+        [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
         [
-            {"self_activations": True},
             {"hidden_size": 2},
             {"hidden_size": 2},
         ],
     ):
-        expr_data = sim_result.get_no_noise_ko_timeseries_expressiondata()
 
         model = model_class(
             modelled_gene_labels=expr_data.genes,
             condition_names=expr_data.all_environments,
             **model_args,
         )
-        trainer = Trainer(
+        trainer = ModelRunner(
             model,
-            sim_result,
-            nr_training_steps=2,
             optimizer_kwargs={"lr": 0.1},
         )
         trainers.append(trainer)
-
+    hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
+    hybrid_model_mm_no_node_9._mm.set_timescaler(time_scaler)
     # Add hybrid model
     trainers.append(
-        Trainer(
+        ModelRunner(
             hybrid_model_mm_no_node_9,
-            sim_result,
-            nr_training_steps=5,
             optimizer_kwargs={"lr": 0.1},
         )
     )
 
     return trainers
-
-
-@pytest.fixture
-def result_list_from_jobs(trainers_for_all_models) -> FittedTrainerList:
-    trainers = deepcopy(trainers_for_all_models)
-    for trainer in trainers:
-        trainer.save_path = (
-            trainer.save_path.parent.parent / "expected_output" / trainer.save_path.name
-        )
-    result_list = FittedTrainerList.load_saved_jobs(trainers)
-    return result_list
 
 
 @pytest.fixture

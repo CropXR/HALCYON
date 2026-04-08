@@ -8,10 +8,11 @@ from numpy.testing import assert_allclose
 def test_extract_info(expression_data_from_gnw):
     # First sample, expression data, all genes, timepoint 0
 
-    env_tensor, expression = expression_data_from_gnw[0]
+    env_tensor, expression, ko_string = expression_data_from_gnw[0]
     assert_close(
         env_tensor, torch.tensor([1, 0, 0, 0, 0, 0, 0, 0, 0, 0]), check_dtype=False
     )
+    assert ko_string == "KO: Node_0. Env: None"
 
     initial_states = expression[:, 0]
     assert_close(
@@ -76,7 +77,7 @@ def test_extract_info(expression_data_from_gnw):
     ]
 
     # For each knocked-out index check that it also has an expression of 0 at the end.
-    for env_vector, expressions in expression_data_from_gnw:
+    for env_vector, expressions, _ in expression_data_from_gnw:
         ko_gene_index = (env_vector == 1).nonzero().squeeze()
         assert_close(
             expressions[ko_gene_index][-1], torch.tensor(0.0), rtol=1e-4, atol=1e-4
@@ -84,7 +85,7 @@ def test_extract_info(expression_data_from_gnw):
 
 
 def test_match_genes_to_list(expression_data_from_gnw):
-    expression_data_from_gnw.match_genes_to_list(
+    expression_data_with_matching_genes = expression_data_from_gnw.match_genes_to_list(
         [
             "Node_1",
             "Node_0",
@@ -98,7 +99,7 @@ def test_match_genes_to_list(expression_data_from_gnw):
             "Node_9",
         ]
     )
-    assert expression_data_from_gnw.genes == [
+    assert expression_data_with_matching_genes.genes == [
         "Node_1",
         "Node_0",
         "Node_2",
@@ -110,10 +111,11 @@ def test_match_genes_to_list(expression_data_from_gnw):
         "Node_8",
         "Node_9",
     ]
-    env_tensor, expression = expression_data_from_gnw[0]
+    env_tensor, expression, ko_string = expression_data_with_matching_genes[0]
     assert_close(
         env_tensor, torch.tensor([0, 1, 0, 0, 0, 0, 0, 0, 0, 0]), check_dtype=False
     )
+    assert ko_string == "KO: Node_0. Env: None"
 
     initial_states = expression[:, 0]
     assert_close(

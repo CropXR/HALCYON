@@ -9,38 +9,6 @@ from halcyon.Models.MechanisticModel import PyTorchODE
 from torch.testing import assert_close
 
 
-def test_select_subset_genes(test_pytorchode_model):
-    nodes_to_select = ["Node_0", "Node_2"]
-    test_pytorchode_model.select_genes(nodes_to_select)
-    assert test_pytorchode_model.modelled_gene_labels == nodes_to_select
-
-
-def test_adjust_time_scale(mech_model_from_sim_result, expected_batch):
-    _, expressions = expected_batch
-    expressions = expressions.to(device=mech_model_from_sim_result.device)
-    forward = mech_model_from_sim_result(None, expressions[:, :, 0])
-    mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
-    scaled_forward = mech_model_from_sim_result(None, expressions[:, :, 0])
-    assert_close(forward * 1000, scaled_forward)
-
-
-def test_steady_state_derivateives_zero(test_pytorchode_model, ss_initial_values):
-    """
-    Test the integration of the model with multiplicative interactions.
-    1. Load a predefined SBML model that includes multiplicative interactions.
-    2. Read steady-state values from a TSV file to use as initial conditions.
-    3. Initialize the model using the SBML file and sets up the initial state.
-    4. Perform a forward pass of the model to compute the derivatives at time t=0.
-    5. Assert that the computed derivatives are close to zero, indicating that
-       the system is indeed at steady state.
-    """
-    forward_results = test_pytorchode_model.forward(
-        t=torch.tensor([0]), state=ss_initial_values
-    )
-
-    assert_close(forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0)
-
-
 @pytest.fixture
 def in_folder() -> Path:
     return Path("tests/4_genes_multplicative_interactions")
@@ -67,6 +35,72 @@ def ss_initial_values(in_folder, test_pytorchode_model) -> torch.Tensor:
     )
     steady_state = steady_state.to(test_pytorchode_model.device)
     return steady_state
+
+
+@pytest.fixture
+def ode_with_two_nodes(test_pytorchode_model):
+    nodes_to_select = ["Node_0", "Node_2"]
+    test_pytorchode_model.select_genes(nodes_to_select)
+    return test_pytorchode_model
+
+
+@pytest.fixture
+def ode_with_two_nodes_and_informed_substitute_value(test_pytorchode_model, in_folder):
+    nodes_to_select = ["Node_0", "Node_2"]
+    test_pytorchode_model.select_genes(
+        nodes_to_select,
+        goldstandard_signed_file_for_expression_substitution=Path(
+            in_folder / "integration_test_network_goldstandard_signed.tsv"
+        ),
+    )
+    return test_pytorchode_model
+
+
+def test_select_subset_genes(ode_with_two_nodes):
+    assert ode_with_two_nodes.modelled_gene_labels == ["Node_0", "Node_2"]
+
+
+def test_subset_ode_forward(ode_with_two_nodes, ss_initial_values):
+    forward_results = ode_with_two_nodes(
+        t=torch.tensor([0]), state=ss_initial_values[:, [0, 2]]
+    )
+    assert_close(forward_results, torch.tensor([[0.0050, -0.0151]]), atol=1e-4, rtol=0)
+
+
+def test_ode_with_informed_substitution_forward(
+    ode_with_two_nodes_and_informed_substitute_value, ss_initial_values
+):
+    forward_results = ode_with_two_nodes_and_informed_substitute_value(
+        t=torch.tensor([0]), state=ss_initial_values[:, [0, 2]]
+    )
+    # First term slightly different due to different substitution value
+    assert_close(forward_results, torch.tensor([[-0.0049, -0.0151]]), atol=1e-4, rtol=0)
+
+
+def test_adjust_time_scale(mech_model_from_sim_result, expected_batch):
+    _, expressions = expected_batch
+    expressions = expressions.to(device=mech_model_from_sim_result.device)
+    forward = mech_model_from_sim_result(None, expressions[:, :, 0])
+    mech_model_from_sim_result.set_timescaler(torch.tensor(1000))
+    scaled_forward = mech_model_from_sim_result(None, expressions[:, :, 0])
+    assert_close(forward * 1000, scaled_forward)
+
+
+def test_steady_state_derivateives_zero(test_pytorchode_model, ss_initial_values):
+    """
+    Test the integration of the model with multiplicative interactions.
+    1. Load a predefined SBML model that includes multiplicative interactions.
+    2. Read steady-state values from a TSV file to use as initial conditions.
+    3. Initialize the model using the SBML file and sets up the initial state.
+    4. Perform a forward pass of the model to compute the derivatives at time t=0.
+    5. Assert that the computed derivatives are close to zero, indicating that
+       the system is indeed at steady state.
+    """
+    forward_results = test_pytorchode_model.forward(
+        t=torch.tensor([0]), state=ss_initial_values
+    )
+
+    assert_close(forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0)
 
 
 def test_knockout_masks_zero_synthesis_for_target_gene(

@@ -19,6 +19,12 @@ class ExpressionDataWithConditions(Dataset):
         self._check_if_all_genes_same()
         self._check_if_all_timepoints_same()
 
+    def __repr__(self) -> str:
+        example_conditions = " & ".join(
+            [f"({key.as_string()})" for key in list(self._ko_dict.keys())[:2]]
+        )
+        return f"ExpressionDataWithConditions with e.g. {example_conditions} and {len(self.genes)} genes"
+
     def _check_if_all_timepoints_same(self):
         # Assert that all timepoints are the same
         assert (
@@ -63,9 +69,9 @@ class ExpressionDataWithConditions(Dataset):
         return list(self._ko_dict.keys())
 
     @property
-    def all_environments(self) -> tuple[str, ...]:
+    def all_environments(self) -> list[str]:
         """Return the list of all environments"""
-        return list(self._ko_dict.keys())[0].all_environments
+        return list(list(self._ko_dict.keys())[0].all_environments)
 
     def scale_time_series(self):
         """Scale time series so it spans from 0 to 1. Can be used to prevent ODEs from exploding."""
@@ -103,17 +109,22 @@ class ExpressionDataWithConditions(Dataset):
                 f"Found {len(possible_keys)} matching conditions found for KO {ko_gene}"
             )
         condition_to_use = possible_keys[0]
-        return condition_to_use, self._ko_dict[condition_to_use]
+        expression_to_use = self._ko_dict[condition_to_use]
+        return condition_to_use, expression_to_use
 
-    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data."""
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, str]:
+        """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data, third item the condition as a string."""
         experiment_condition, expression_data = (
             self._get_experiment_and_expression_at_index(idx)
         )
-        return experiment_condition.as_tensor(), expression_data.as_tensor()
+        return (
+            experiment_condition.as_tensor(),
+            expression_data.as_tensor(),
+            experiment_condition.as_string(),
+        )
 
-    def match_genes_to_list(self, genes: list[str]):
-        """Reorder the genes in the expression data to match the given list of genes.
+    def match_genes_to_list(self, genes: list[str]) -> Self:
+        """Reorder the genes in the expression data to match the given list of genes. Return new object with matched genes.
 
         Args:
             genes (list): list of strings of genes that should be in the expression data, and the order in which the models expect them to be.
@@ -130,7 +141,12 @@ class ExpressionDataWithConditions(Dataset):
             new_dict[new_experiment_condition] = expression_data.match_genes_to_list(
                 genes
             )
-        self._ko_dict = new_dict
+        return self.__class__(new_dict)
+
+    def return_subset_copy(self, size: int):
+        """Return a copy of this object with only the first `size` items in the ko_dict."""
+        subset_dict = dict(list(self._ko_dict.items())[:size])
+        return self.__class__(subset_dict)
 
     @classmethod
     def from_genenetweaver_ko_timeseries_output(cls, input_path: Path) -> Self:

@@ -5,8 +5,10 @@ channels:
   - defaults
   - nodefaults
 dependencies:
+  - black=24.2.0
   - coverage=7.6.12=py310h89163eb_0
   - matplotlib-base=3.10.1=py310h68603db_0
+  - mlflow
   - natsort=8.4.0=pyh29332c3_1
   - networkx=3.4.2=pyh267e887_2
   - numpy=2.2.3=py310hefbff90_0
@@ -15,6 +17,7 @@ dependencies:
   - pytest=8.3.5=pyhd8ed1ab_0
   - pytest-cov=6.0.0=pyhd8ed1ab_1
   - python=3.10.16=he725a3c_1_cpython
+  - python-dotenv
   - python-libsbml=5.20.5=py310h1a6248f_0
   - pyyaml=6.0.2=py310h89163eb_2
   - scikit-learn=1.6.1=py310h27f47ee_0
