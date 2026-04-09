@@ -48,25 +48,25 @@ def main():
 
     # Rerun training for:
     runs_to_rerun = {
-        # # 50 genes
-        # "19ba6fc0e8094a66a68f2f67cdca2162": [
-        #     {
-        #         "Node_2",
-        #         "Node_6",
-        #         "Node_23",
-        #         "Node_3",
-        #         "Node_12",
-        #         "Node_7",
-        #         "Node_25",
-        #         "Node_17",
-        #         "Node_35",
-        #         "Node_37",
-        #         "Node_43",
-        #         "Node_45",
-        #         "Node_47",
-        #         "Node_48",
-        #     }
-        # ],
+        # 50 genes
+        "19ba6fc0e8094a66a68f2f67cdca2162": [
+            {
+                "Node_2",
+                "Node_6",
+                "Node_23",
+                "Node_3",
+                "Node_12",
+                "Node_7",
+                "Node_25",
+                "Node_17",
+                "Node_35",
+                "Node_37",
+                "Node_43",
+                "Node_45",
+                "Node_47",
+                "Node_48",
+            }
+        ],
         # 100 genes
         "e56b1774f68349209f3b7e672158fa01": [
             {
