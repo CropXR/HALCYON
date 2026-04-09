@@ -36,21 +36,82 @@ def main():
     mlflow.set_experiment(experiment_id="6")
     mlflow.set_experiment_tag("Tool name", "HALCYON")
 
-    # Run on 20, 50, 100 with medium noise
-    sim_runs = mlflow.search_runs(
-        experiment_ids=["4"],
-        filter_string="tags.run_type = 'dataset' and params.noise_level = 'MEDIUM'",
-    )
+    # # Run on 20, 50, 100 with medium noise
+    # sim_runs = mlflow.search_runs(
+    #     experiment_ids=["4"],
+    #     filter_string="tags.run_type = 'dataset' and params.noise_level = 'MEDIUM'",
+    # )
 
-    # Start with smallest network first
-    sim_runs["params.nr_genes"] = sim_runs["params.nr_genes"].astype(int)
-    sim_runs = sim_runs.sort_values("params.nr_genes", ascending=True)
+    # # Start with smallest network first
+    # sim_runs["params.nr_genes"] = sim_runs["params.nr_genes"].astype(int)
+    # sim_runs = sim_runs.sort_values("params.nr_genes", ascending=True)
 
-    for sim_run_id in sim_runs["run_id"]:
-        train_hybrid_model_on(sim_run_id)
+    # Rerun training for:
+    runs_to_rerun = {
+        # # 50 genes
+        # "19ba6fc0e8094a66a68f2f67cdca2162": [
+        #     {
+        #         "Node_2",
+        #         "Node_6",
+        #         "Node_23",
+        #         "Node_3",
+        #         "Node_12",
+        #         "Node_7",
+        #         "Node_25",
+        #         "Node_17",
+        #         "Node_35",
+        #         "Node_37",
+        #         "Node_43",
+        #         "Node_45",
+        #         "Node_47",
+        #         "Node_48",
+        #     }
+        # ],
+        # 100 genes
+        "e56b1774f68349209f3b7e672158fa01": [
+            {
+                "Node_37",
+                "Node_12",
+                "Node_17",
+                "Node_25",
+                "Node_35",
+                "Node_53",
+                "Node_45",
+                "Node_77",
+                "Node_86",
+                "Node_96",
+            },
+            {
+                "Node_32",
+                "Node_10",
+                "Node_39",
+                "Node_92",
+                "Node_85",
+                "Node_30",
+                "Node_47",
+                "Node_66",
+                "Node_94",
+                "Node_99",
+            },
+            {
+                "Node_31",
+                "Node_20",
+                "Node_27",
+                "Node_34",
+                "Node_50",
+                "Node_64",
+                "Node_75",
+                "Node_72",
+                "Node_62",
+            },
+        ],
+    }
+
+    for sim_run_id, mm_genes_that_need_rerun in runs_to_rerun.items():
+        train_hybrid_model_on(sim_run_id, mm_genes=mm_genes_that_need_rerun)
 
 
-def train_hybrid_model_on(sim_run_id: str):
+def train_hybrid_model_on(sim_run_id: str, mm_genes: list[set]):
     run = mlflow.get_run(sim_run_id)
     params = run.data.params
     logging.info(f"Loaded run with params: {params}")
@@ -92,6 +153,8 @@ def train_hybrid_model_on(sim_run_id: str):
     hybrid_model_jobs: list[ModelRunner] = []
 
     for genes_to_select in sim_output.network._clustering:
+        if not any(set(genes_to_select) == i for i in mm_genes):
+            continue
         device = next(devices)
         mm = PyTorchODE.from_sbml(
             sim_output.data_path / "my_network.xml",
@@ -126,6 +189,9 @@ def train_hybrid_model_on(sim_run_id: str):
 
         hybrid_model_jobs.append(model_runner)
 
+    assert len(hybrid_model_jobs) == len(
+        mm_genes
+    ), "Number of jobs should match number of gene sets to rerun"
     nr_processes = 16
     with Pool(nodes=nr_processes) as pool:
         pool.map(
