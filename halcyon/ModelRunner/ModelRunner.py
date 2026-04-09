@@ -172,25 +172,21 @@ class ModelRunner:
                 and self.early_stopper.should_stop(val_mse)
             ):
                 logging.info(f"Early stopping at epoch {epoch}")
-                self._log_model_if_not_saved_already(
-                    save_every_n_epochs, epoch, total_nr_epochs=nr_epochs
-                )
+                self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
                 break
         else:
-            # Save model when training finishes
+            # Save model when training due to reaching final epoch
             if nr_epochs == 0:
                 # Edge case when no training was done
                 self._log_model_to_mlflow(0)
             else:
-                self._log_model_if_not_saved_already(
-                    save_every_n_epochs, epoch, total_nr_epochs=nr_epochs
-                )
+                self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
 
     def _log_model_if_not_saved_already(
-        self, save_every_n_epochs: int, current_epoch: int, total_nr_epochs: int
+        self, save_every_n_epochs: int, current_epoch: int
     ):
         """Log final model state, unless it was already saved at this epoch via save_every_n_epochs."""
-        if not (save_every_n_epochs and total_nr_epochs % save_every_n_epochs == 0):
+        if current_epoch % save_every_n_epochs != 0:
             self._log_model_to_mlflow(current_epoch)
 
     @torch.no_grad()
