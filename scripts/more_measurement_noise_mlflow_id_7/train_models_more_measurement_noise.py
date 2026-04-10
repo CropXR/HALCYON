@@ -52,10 +52,10 @@ def main():
     sim_runs = pd.concat([sim_runs_high_noise, sim_runs_low_noise])
 
     for sim_run_id in sim_runs["run_id"]:
-        train_hybrid_model_on(sim_run_id)
+        train_hybrid_and_ml_model_on(sim_run_id)
 
 
-def train_hybrid_model_on(sim_run_id: str):
+def train_hybrid_and_ml_model_on(sim_run_id: str):
     run = mlflow.get_run(sim_run_id)
     params = run.data.params
     logging.info(f"Loaded run with params: {params}")
@@ -95,7 +95,8 @@ def train_hybrid_model_on(sim_run_id: str):
     nr_epochs = 2000
 
     model_jobs: list[ModelRunner] = []
-
+    device = next(devices)
+    loss = MSELossFlexible()
     ml_model = PhoenixAddAndProdLayers(
         modelled_gene_labels=single_ko_dataset.genes,
         hidden_size=10,
