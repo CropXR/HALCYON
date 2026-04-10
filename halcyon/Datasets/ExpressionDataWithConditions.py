@@ -10,6 +10,7 @@ from typing_extensions import Self
 
 from halcyon.Datasets.ExperimentCondition import ExperimentCondition
 from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.results import DfColumnNames
 
 
 class ExpressionDataWithConditions(Dataset):
@@ -143,10 +144,17 @@ class ExpressionDataWithConditions(Dataset):
             )
         return self.__class__(new_dict)
 
-    def return_subset_copy(self, size: int):
-        """Return a copy of this object with only the first `size` items in the ko_dict."""
-        subset_dict = dict(list(self._ko_dict.items())[:size])
-        return self.__class__(subset_dict)
+    def to_long_form_df(self):
+        df_list = []
+        for experiment_condition, expression_data in self._ko_dict.items():
+            df = expression_data.df.melt(
+                ignore_index=False,
+                var_name=DfColumnNames.TIME_COL,
+                value_name=DfColumnNames.GROUND_TRUTH_COL,
+            )
+            df[DfColumnNames.CONDITION_COL] = experiment_condition.as_string()
+            df_list.append(df.reset_index(names=DfColumnNames.GENE_COL))
+        return pd.concat(df_list, ignore_index=False)
 
     @classmethod
     def from_genenetweaver_ko_timeseries_output(cls, input_path: Path) -> Self:

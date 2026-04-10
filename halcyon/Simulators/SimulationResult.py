@@ -2,6 +2,7 @@ import pickle
 from dataclasses import dataclass, fields
 from pathlib import Path
 
+import pandas as pd
 import torch
 from typing_extensions import Self
 
@@ -134,3 +135,10 @@ class SimulationResult:
         else:
             scaling_factor = torch.tensor(1.0)
         return scaling_factor
+
+    def to_long_form_df(self):
+        df_list = []
+        single_ko_dataset, double_ko_dataset, scaling_factor = self.create_datasets()
+        for dataset in [single_ko_dataset, double_ko_dataset]:
+            df_list.append(dataset.to_long_form_df())
+        return pd.concat(df_list)

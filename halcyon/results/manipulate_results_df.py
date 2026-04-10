@@ -15,6 +15,7 @@ def create_tidy_df_from_mlflow_runs(runs: List[mlflow.entities.Run]):
     for run in runs:
         run_id = run.info.run_id
         logging.info(f"Downloading artifacts for run {run_id}")
+        parent_run_id = run.data.tags["mlflow.parentRunId"]
         artifacts = mlflow.artifacts.download_artifacts(
             run_id=run_id, artifact_path="evaluation"
         )
@@ -22,6 +23,7 @@ def create_tidy_df_from_mlflow_runs(runs: List[mlflow.entities.Run]):
             if artifact.is_file() and artifact.suffix == ".parquet":
                 df = pd.read_parquet(artifact)
                 df[DfColumnNames.RUN_ID_COL] = run_id
+                df[DfColumnNames.PARENT_RUN_ID_COL] = parent_run_id
                 dfs.append(df)
 
     full_df = pd.concat(dfs, ignore_index=True)
@@ -32,6 +34,7 @@ def create_tidy_df_from_mlflow_runs(runs: List[mlflow.entities.Run]):
         DfColumnNames.EXPRESSION_COL,
         DfColumnNames.GROUND_TRUTH_COL,
         DfColumnNames.CONDITION_COL,
+        DfColumnNames.PARENT_RUN_ID_COL,
     }
     return full_df
 
