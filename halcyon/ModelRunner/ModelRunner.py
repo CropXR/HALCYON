@@ -178,10 +178,10 @@ class ModelRunner:
                 self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
 
     def _log_model_if_not_saved_already(
-        self, save_every_n_epochs: int, current_epoch: int
+        self, save_every_n_epochs: int | None, current_epoch: int
     ):
         """Log final model state, unless it was already saved at this epoch via save_every_n_epochs."""
-        if current_epoch % save_every_n_epochs != 0:
+        if save_every_n_epochs is not None and current_epoch % save_every_n_epochs != 0:
             self._log_model_to_mlflow(current_epoch)
 
     @torch.no_grad()
