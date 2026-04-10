@@ -51,7 +51,7 @@ def main():
 
     sim_runs = pd.concat([sim_runs_high_noise, sim_runs_low_noise])
 
-    for sim_run_id in sim_runs["sim_run_id"]:
+    for sim_run_id in sim_runs["run_id"]:
         train_hybrid_model_on(sim_run_id)
 
 
