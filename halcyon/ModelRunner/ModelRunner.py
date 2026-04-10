@@ -120,6 +120,7 @@ class ModelRunner:
         train_dataloader = self._dataloader_factory(train_dataset)
         time_points_tensor = self._get_time_points_as_tensor(train_dataset)
         for epoch in range(nr_epochs):
+            # set model to training mode
             self.model.train()
             epoch_loss = 0.0
             mse_loss = 0.0
@@ -151,17 +152,11 @@ class ModelRunner:
 
             # --- val/test ---
             if val_dataset is not None:
-                # self._log_loss_on_unseen_data(
-                #     val_dataset, "val_loss", epoch, self.loss_fn
-                # )
                 val_mse = self._log_loss_on_unseen_data(
                     val_dataset, "val_mse", epoch, self.mse_loss_fn
                 )
 
             if test_dataset is not None:
-                # self._log_loss_on_unseen_data(
-                #     test_dataset, "test_loss", epoch, self.loss_fn
-                # )
                 self._log_loss_on_unseen_data(
                     test_dataset, "test_mse", epoch, self.mse_loss_fn
                 )
@@ -169,7 +164,7 @@ class ModelRunner:
             if (
                 self.early_stopper
                 and val_dataset is not None
-                and self.early_stopper.should_stop(val_mse)
+                and self.early_stopper.check_if_should_stop(val_mse)
             ):
                 logging.info(f"Early stopping at epoch {epoch}")
                 self._log_model_if_not_saved_already(save_every_n_epochs, epoch)

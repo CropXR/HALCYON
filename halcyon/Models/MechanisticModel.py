@@ -158,32 +158,6 @@ class PyTorchODE(GeneExpressionModel):
             **kwargs,
         )
 
-    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
-        out_list = []
-        for name, value in zip(
-            [
-                "signed_file_input",
-                "fill_value_for_gene_not_in_model",
-                "modelled_gene_labels",
-            ],
-            [
-                self.goldstandard_signed_file_for_expression_substitution,
-                self.fill_value_for_gene_not_in_model,
-                self.modelled_gene_labels,
-            ],
-        ):
-            out_list.append((name, value))
-
-        return out_list
-
-    @property
-    def regulatory_network(self) -> RegulatoryNetwork:
-        raise NotImplementedError("This method needs to be implemented in subclass.")
-
-    def set_timescaler(self, new_value: torch.Tensor):
-        new_value = new_value.to(device=self.device)
-        self.time_scaler = new_value
-
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """
         Get the derivative at a given time point.
@@ -228,6 +202,32 @@ class PyTorchODE(GeneExpressionModel):
             decay = decay.unsqueeze(0)
 
         return (synthesis * self.ko_masks - decay) * self.time_scaler
+
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        out_list = []
+        for name, value in zip(
+            [
+                "signed_file_input",
+                "fill_value_for_gene_not_in_model",
+                "modelled_gene_labels",
+            ],
+            [
+                self.goldstandard_signed_file_for_expression_substitution,
+                self.fill_value_for_gene_not_in_model,
+                self.modelled_gene_labels,
+            ],
+        ):
+            out_list.append((name, value))
+
+        return out_list
+
+    @property
+    def regulatory_network(self) -> RegulatoryNetwork:
+        raise NotImplementedError("This method needs to be implemented in subclass.")
+
+    def set_timescaler(self, new_value: torch.Tensor):
+        new_value = new_value.to(device=self.device)
+        self.time_scaler = new_value
 
     def set_parameters(self, param_values: dict):
         """
@@ -324,55 +324,6 @@ class PyTorchODE(GeneExpressionModel):
                     out_dict[target][source] = sign_to_value[direction]
         return out_dict
 
-    @classmethod
-    def parse_one_reaction(
-        cls,
-        name: str,
-        formula_string: str,
-        libsbml_parameters: libsbml.ListOfParameters,
-    ):
-        """
-
-        Parse a single reaction from the SBML model.
-        Args:
-            name (str): The name of the reaction.
-            formula_string (str): The formula string of the reaction.
-            libsbml_parameters (libsbml.ListOfParameters): The list of parameters associated with the reaction.
-        Returns:
-            tuple[str, sp.Expr, Dict[str, float]]: A tuple containing the base node name, the sympy expression, and a dictionary of parameters used in the equation.
-        """
-        base_node_name = name.replace("_degradation", "").replace("_synthesis", "")
-        formula_string = re.sub(r"\bmax\b", cls.alternative_max_name, formula_string)
-
-        param_dict = dict()
-
-        # This way the order of the terms is preserved, eases readability
-        with evaluate(0):
-            sympy_formula = parse_expr(formula_string, evaluate=False)
-
-        replacement_dict = dict()
-
-        for old_param_name in sympy_formula.free_symbols:
-            old_param_name = str(old_param_name)
-            if old_param_name.startswith("Node"):
-                continue
-            elif old_param_name == "cell":
-                continue
-            new_param_name = f"{old_param_name}_{base_node_name}"
-            replacement_dict[old_param_name] = new_param_name
-            # Also figure out the value of the parameter
-            assert (
-                new_param_name not in param_dict
-            ), f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
-            if old_param_name == cls.alternative_max_name:
-                old_param_name = "max"
-            param_dict[new_param_name] = libsbml_parameters.get(
-                old_param_name
-            ).getValue()
-        sympy_formula = sympy_formula.subs(replacement_dict)
-
-        return base_node_name, sympy_formula, param_dict
-
     def _set_all_parameters_to_zero(self):
         for key in self.param_dict.keys():
             self.param_dict[key].data = torch.tensor(
@@ -438,6 +389,55 @@ class PyTorchODE(GeneExpressionModel):
         self._synthesis_module.to(device=self.device)
         self._decay_module.to(device=self.device)
         self._compiled_ready = True
+
+    @classmethod
+    def parse_one_reaction(
+        cls,
+        name: str,
+        formula_string: str,
+        libsbml_parameters: libsbml.ListOfParameters,
+    ):
+        """
+
+        Parse a single reaction from the SBML model.
+        Args:
+            name (str): The name of the reaction.
+            formula_string (str): The formula string of the reaction.
+            libsbml_parameters (libsbml.ListOfParameters): The list of parameters associated with the reaction.
+        Returns:
+            tuple[str, sp.Expr, Dict[str, float]]: A tuple containing the base node name, the sympy expression, and a dictionary of parameters used in the equation.
+        """
+        base_node_name = name.replace("_degradation", "").replace("_synthesis", "")
+        formula_string = re.sub(r"\bmax\b", cls.alternative_max_name, formula_string)
+
+        param_dict = dict()
+
+        # This way the order of the terms is preserved, eases readability
+        with evaluate(0):
+            sympy_formula = parse_expr(formula_string, evaluate=False)
+
+        replacement_dict = dict()
+
+        for old_param_name in sympy_formula.free_symbols:
+            old_param_name = str(old_param_name)
+            if old_param_name.startswith("Node"):
+                continue
+            elif old_param_name == "cell":
+                continue
+            new_param_name = f"{old_param_name}_{base_node_name}"
+            replacement_dict[old_param_name] = new_param_name
+            # Also figure out the value of the parameter
+            assert (
+                new_param_name not in param_dict
+            ), f"Parameter {new_param_name} already exists in param_dict. Check for naming conflicts."
+            if old_param_name == cls.alternative_max_name:
+                old_param_name = "max"
+            param_dict[new_param_name] = libsbml_parameters.get(
+                old_param_name
+            ).getValue()
+        sympy_formula = sympy_formula.subs(replacement_dict)
+
+        return base_node_name, sympy_formula, param_dict
 
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:

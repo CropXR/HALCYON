@@ -12,6 +12,14 @@ class CellBox(GeneExpressionModel):
         self_activations=False,
         **kwargs,
     ):
+        """Create a cellbox model; a linear ODE with a nonlinear activation function.
+
+        Args:
+            modelled_gene_labels (list[str]): list of all modelled genes
+            condition_names (tuple[str, ...]): names of the conditions
+            phi: Activation function. Defaults to torch.tanh.
+            self_activations: Whether to allow self-interactions. Defaults to False.
+        """
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.phi = phi
         self.self_activations = self_activations

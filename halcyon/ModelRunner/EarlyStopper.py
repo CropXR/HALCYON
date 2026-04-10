@@ -5,7 +5,7 @@ class EarlyStopper:
         self.best_loss = float("inf")
         self.epochs_without_improvement = 0
 
-    def should_stop(self, val_loss) -> bool:
+    def check_if_should_stop(self, val_loss) -> bool:
         """Call after each epoch. Returns True if training should stop.
 
         An improvement is only counted if val_loss dropped by at least
