@@ -58,7 +58,7 @@ class SimulationResult:
 
     def _build_filename(self, filename_end: str) -> Path:
         if self.noiseless_for_testing:
-            filepath_insertion = "_nonoise_"
+            filepath_insertion = "_noexpnoise_"
         else:
             filepath_insertion = "_"
         return self.data_path / f"{self.network_name}{filepath_insertion}{filename_end}"
@@ -75,9 +75,7 @@ class SimulationResult:
         assert out_path.exists()
         return out_path
 
-    def get_double_ko_expressiondata(
-        self, do_time_scaling: bool = True
-    ) -> ExpressionDataWithConditions:
+    def get_double_ko_expressiondata(self) -> ExpressionDataWithConditions:
         double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
             expression_file_path=self.double_ko_timeseries_file_path(),
             ko_file_path=self.double_ko_index_file_path(),
