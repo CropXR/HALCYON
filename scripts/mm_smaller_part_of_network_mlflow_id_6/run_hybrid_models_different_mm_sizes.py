@@ -38,7 +38,7 @@ def main():
 
     # Run on 20, 50, 100 with medium noise
     sim_runs = mlflow.search_runs(
-        experiment_ids=["4"],
+        experiment_ids=["7"],
         filter_string="tags.run_type = 'dataset' and params.noise_level = 'MEDIUM'",
     )
 
@@ -89,7 +89,24 @@ def train_hybrid_model_on(sim_run_id: str):
 
     nr_epochs = 2000
 
-    hybrid_model_jobs: list[ModelRunner] = []
+    model_jobs: list[ModelRunner] = []
+
+    ml_model = PhoenixAddAndProdLayers(
+        modelled_gene_labels=single_ko_dataset.genes,
+        hidden_size=10,
+        condition_names=single_ko_dataset.all_environments,
+        synthesis_only_positive=False,
+        device=device,
+    )
+
+    model_runner = ModelRunner(
+        model=ml_model,
+        batch_size=batch_size,
+        optimizer_kwargs=optimizer_kwargs,
+        loss=loss,
+    )
+
+    model_jobs.append(model_runner)
 
     for genes_to_select in sim_output.network._clustering:
         device = next(devices)
@@ -124,7 +141,7 @@ def train_hybrid_model_on(sim_run_id: str):
             loss=loss,
         )
 
-        hybrid_model_jobs.append(model_runner)
+        model_jobs.append(model_runner)
 
     nr_processes = 16
     with Pool(nodes=nr_processes) as pool:
@@ -139,7 +156,7 @@ def train_hybrid_model_on(sim_run_id: str):
                 nr_epochs=nr_epochs,
                 do_mlflow_model_logging=False,
             ),
-            hybrid_model_jobs,
+            model_jobs,
         )
 
 
