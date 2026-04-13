@@ -148,4 +148,4 @@ normalStdev = 0.15
 # The standard deviation of the lognormal noise
 lognormalStdev = 0.075
 # Set true to normalize the datasets after adding the experimental noise
-normalizeAfterAddingNoise = 1
+normalizeAfterAddingNoise = 0
