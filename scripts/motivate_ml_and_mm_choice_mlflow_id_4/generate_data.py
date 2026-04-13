@@ -39,8 +39,8 @@ def main(
     sparsity_list = [0.1]
     keep_self_interactions = False
 
-    # Assume settings are one directory up and in the setting_files directory
-    settings_dir = Path(__file__).parent.parent / "setting_files"
+    # Assume settings are two directories up and in the setting_files directory
+    settings_dir = Path(__file__).parent.parent.parent / "setting_files"
 
     for nr_genes, nr_modules in zip(nr_genes_list, nr_modules_list):
         for sparsity in sparsity_list:
