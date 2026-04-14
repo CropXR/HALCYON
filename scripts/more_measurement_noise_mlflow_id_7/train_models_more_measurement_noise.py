@@ -43,13 +43,13 @@ def main():
         filter_string="tags.run_type = 'dataset' and params.noise_level = 'HIGH' and params.nr_genes = '50'",
     )
 
-    # # 50 genes with low noise
-    # sim_runs_low_noise = mlflow.search_runs(
-    #     experiment_ids=["7"],
-    #     filter_string="tags.run_type = 'dataset' and params.noise_level = 'LOW' and params.nr_genes = '50'",
-    # )
+    # 50 genes with low noise
+    sim_runs_low_noise = mlflow.search_runs(
+        experiment_ids=["7"],
+        filter_string="tags.run_type = 'dataset' and params.noise_level = 'LOW' and params.nr_genes = '50'",
+    )
 
-    sim_runs = pd.concat([sim_runs_high_noise])  # , sim_runs_low_noise])
+    sim_runs = pd.concat([sim_runs_high_noise, sim_runs_low_noise])
 
     for sim_run_id in sim_runs["run_id"]:
         train_hybrid_and_ml_model_on(sim_run_id)
@@ -115,23 +115,6 @@ def train_hybrid_and_ml_model_on(sim_run_id: str):
     model_jobs.append(model_runner)
 
     for genes_to_select in sim_output.network._clustering:
-        if not set(genes_to_select) == {
-            "Node_2",
-            "Node_6",
-            "Node_23",
-            "Node_3",
-            "Node_12",
-            "Node_7",
-            "Node_25",
-            "Node_17",
-            "Node_35",
-            "Node_37",
-            "Node_43",
-            "Node_45",
-            "Node_47",
-            "Node_48",
-        }:
-            continue
         device = next(devices)
         mm = PyTorchODE.from_sbml(
             sim_output.data_path / "my_network.xml",
