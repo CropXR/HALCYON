@@ -149,7 +149,7 @@ def train_hybrid_and_ml_model_on(sim_run_id: str):
 
         model_jobs.append(model_runner)
 
-    nr_processes = 16
+    nr_processes = 8
     with Pool(nodes=nr_processes) as pool:
         pool.map(
             partial(
