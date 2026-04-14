@@ -88,9 +88,9 @@ def train_hybrid_model_on(sim_run_id: str):
     optimizer_kwargs = {"lr": 0.01}
 
     nr_epochs = 2000
+    device = next(devices)
 
     model_jobs: list[ModelRunner] = []
-
     ml_model = PhoenixAddAndProdLayers(
         modelled_gene_labels=single_ko_dataset.genes,
         hidden_size=10,
