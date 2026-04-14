@@ -103,7 +103,6 @@ def train_hybrid_model_on(sim_run_id: str):
         model=ml_model,
         batch_size=batch_size,
         optimizer_kwargs=optimizer_kwargs,
-        loss=loss,
     )
 
     model_jobs.append(model_runner)
@@ -122,7 +121,6 @@ def train_hybrid_model_on(sim_run_id: str):
         mm.select_genes(genes_to_select)
         mm.set_timescaler(time_scaling_factor)
 
-        loss = MSELossFlexible()
         # These are selected based on best results in experiment_id 4
         ml_model = PhoenixAddAndProdLayers(
             modelled_gene_labels=single_ko_dataset.genes,
@@ -138,7 +136,6 @@ def train_hybrid_model_on(sim_run_id: str):
             model=hybrid_model,
             batch_size=batch_size,
             optimizer_kwargs=optimizer_kwargs,
-            loss=loss,
         )
 
         model_jobs.append(model_runner)
