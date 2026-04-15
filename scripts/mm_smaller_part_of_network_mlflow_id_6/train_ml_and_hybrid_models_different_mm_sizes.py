@@ -37,7 +37,7 @@ def main():
     sim_runs = sim_runs.sort_values("params.nr_genes", ascending=True)
 
     for sim_run_id in sim_runs["run_id"]:
-        train_hybrid_and_ml_model_sim_run_id(sim_run_id)
+        train_hybrid_and_ml_model_sim_run_id(sim_run_id, nr_processes=16)
 
 
 if __name__ == "__main__":
