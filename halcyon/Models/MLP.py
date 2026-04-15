@@ -2,7 +2,8 @@ import logging
 
 import torch
 
-from halcyon.Models.PhoenixModels import NeuralODEWithDecay, PhoenixABC
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Models.PhoenixModels import NeuralODEWithDecay
 
 from torch import nn
 
@@ -61,3 +62,16 @@ class MLP(NeuralODEWithDecay):
         orig_hyperparams = super().get_hyperparams()
         orig_hyperparams.append(("nr_layers", self.nr_layers))
         return orig_hyperparams
+
+
+def best_mlp_factory(dataset: ExpressionDataWithConditions, device: str):
+    # These are selected based on best results in experiment_id 4
+    mlp = MLP(
+        modelled_gene_labels=dataset.genes,
+        condition_names=dataset.all_environments,
+        hidden_size=10,
+        nr_layers=2,
+        device=device,
+        synthesis_only_positive=False,
+    )
+    return mlp
