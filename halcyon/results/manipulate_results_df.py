@@ -55,33 +55,6 @@ def split_df_into_single_and_double_ko(
     return single_ko, double_ko
 
 
-def add_model_name_to_df(df: pd.DataFrame) -> pd.DataFrame:
-    """For a dataframe which only contains mlflow run ids, return one where these are converted to strings representing the underlying model."""
-    run_id_to_model_dict = {}
-    for run_id in df[DfColumnNames.RUN_ID_COL].unique():
-        model_name = run_id_to_model_name(run_id)
-        run_id_to_model_dict[run_id] = model_name
-    df_with_model_name = df.assign(
-        **{
-            DfColumnNames.MODEL_COL: df[DfColumnNames.RUN_ID_COL].map(
-                run_id_to_model_dict
-            )
-        }
-    )
-    return df_with_model_name
-
-
-def run_id_to_model_name(run_id: str) -> str:
-    """Convert mlflow run_id to a more human readable model name by looking up the parameters of the run and merging them into one big string."""
-    logging.info(f"Getting model name for run_id {run_id}")
-    run = mlflow.get_run(run_id)
-    out_string_list = []
-    for key, value in run.data.params.items():
-        out_string_list.append(f"{key}_{value}")
-    out_string = "__".join(out_string_list)
-    return out_string
-
-
 def df_with_ground_truth_as_kind_of_model(in_df: pd.DataFrame) -> pd.DataFrame:
     """For some plotting, pretend that the ground truth expression was a form of model.
 
