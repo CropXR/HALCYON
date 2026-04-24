@@ -30,13 +30,13 @@ def main():
     # mlflow.set_experiment('Disconnected modules')
     mlflow.set_experiment_tag("Tool name", "HALCYON")
     # Assume settings is two directories up and in the setting_files directory
-    settings_dir = Path().resolve().parent.parent / "setting_files"
+    settings_dir = Path().resolve() / "setting_files"
     assert (
         settings_dir.exists()
     ), f"Settings directory {settings_dir.resolve()} does not exist."
 
     out_path = (
-        Path().resolve().parent.parent
+        Path().resolve()
         / "data"
         / "datasets_for_more_experiments"
         / "disconnected_modules"
