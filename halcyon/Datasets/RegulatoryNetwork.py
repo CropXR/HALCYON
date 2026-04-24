@@ -108,6 +108,8 @@ class RegulatoryNetwork:
         component_spacing=2.0,
         with_labels=True,
         node_size=300,
+        arrowsize=10,
+        width=1,
     ):
         """Plot the network using networkx's draw function.
 
@@ -147,6 +149,8 @@ class RegulatoryNetwork:
             edge_color=edge_colors,
             node_color=node_colours,
             node_size=node_size,
+            arrowsize=arrowsize,
+            width=width,
         )
         return fig, ax
 
