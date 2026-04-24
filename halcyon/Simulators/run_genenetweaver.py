@@ -19,6 +19,7 @@ def run_gnw(
     keep_self_interactions: bool = True,
     noiseless_for_testing: bool = False,
     network_type: int = 1,
+    grouping_bias: float = 100.0,
     jar_path=None,
 ) -> SimulationResult:
     """Run a GeneNetWeaver simulation and return the result.
@@ -77,6 +78,8 @@ def run_gnw(
         str(output_path),
         "--network-name",
         network_name,
+        "--grouping-bias",
+        str(grouping_bias),
     ]
     if keep_self_interactions:
         step_1_args.append("--keep-self-interactions")
