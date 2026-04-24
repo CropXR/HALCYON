@@ -53,6 +53,7 @@ def main():
         out_path
         / f"genes_{nr_genes}_modules_{nr_modules}_sparsity_{sparsity}_noise_{noise.name}_group_bias{grouping_bias}"
     )
+    generated_data_path.mkdir(exist_ok=True)
 
     log_location = generated_data_path / "simulation.log"
     logging.basicConfig(
