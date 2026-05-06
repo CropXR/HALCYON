@@ -30,15 +30,13 @@ def run_mm_sim_run_id(
         val_dataset_name,
         test_dataset_name,
         dataset_dict,
-    ) = prepare_dataset(sim_run_id)
+    ) = prepare_dataset(sim_run_id, for_mm=True)
 
     # Create train jobs
     optimizer_kwargs = {"lr": lr}
 
     model_jobs: list[ModelRunner] = []
     for genes_to_select in sim_output.network._clustering:
-        if "Node_30" not in genes_to_select:
-            continue
         device = next(devices)
         mm = PyTorchODE.from_sbml(
             sim_output.data_path / "my_network.xml",
@@ -162,7 +160,7 @@ def train_hybrid_and_ml_model_sim_run_id(
         )
 
 
-def prepare_dataset(sim_run_id):
+def prepare_dataset(sim_run_id, for_mm: bool = False):
     run = mlflow.get_run(sim_run_id)
     params = run.data.params
     logging.info(f"Loaded run with params: {params}")
@@ -180,19 +178,25 @@ def prepare_dataset(sim_run_id):
     single_ko_dataset, double_ko_dataset, time_scaling_factor = (
         sim_output.create_datasets()
     )
-
-    train_ko_dataset, validation_ko_dataset = single_ko_dataset.split_train_test(
-        test_fraction=0.25
-    )
+    if for_mm:
+        train_ko_dataset = single_ko_dataset
+        val_dataset_name = None
+    else:
+        train_ko_dataset, validation_ko_dataset = single_ko_dataset.split_train_test(
+            test_fraction=0.25
+        )
+        val_dataset_name = "val_single_ko"
 
     train_dataset_name = "train_single_ko"
-    val_dataset_name = "val_single_ko"
     test_dataset_name = "double_ko"
+
     dataset_dict = {
         train_dataset_name: train_ko_dataset,
-        val_dataset_name: validation_ko_dataset,
         test_dataset_name: double_ko_dataset,
     }
+
+    if not for_mm:
+        dataset_dict[val_dataset_name] = validation_ko_dataset
 
     return (
         sim_output,
