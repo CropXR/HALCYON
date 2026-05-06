@@ -29,7 +29,7 @@ def main():
 
     df_list = []
 
-    for noise_level in ["HIGH", "MEDIUM", "LOW"]:
+    for noise_level in ["HIGH"]:
         sim_runs = mlflow.search_runs(
             experiment_ids=["7"],
             filter_string=f"tags.run_type = 'dataset' and params.noise_level = '{noise_level}' and params.nr_genes = '50'",

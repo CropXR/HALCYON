@@ -37,6 +37,8 @@ def run_mm_sim_run_id(
 
     model_jobs: list[ModelRunner] = []
     for genes_to_select in sim_output.network._clustering:
+        if "Node_30" not in genes_to_select:
+            continue
         device = next(devices)
         mm = PyTorchODE.from_sbml(
             sim_output.data_path / "my_network.xml",
