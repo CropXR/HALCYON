@@ -314,6 +314,10 @@ class ModelRunner:
             mlflow.set_tag("run_type", "model_training_and_prediction")
             mlflow.log_params(self.get_hyperparams_to_log())
             mlflow.log_param("nr_epochs", nr_epochs)
+            mlflow.log_param(
+                "n_timepoints_training",
+                len(dataset_dict[train_data_key_in_dict].get_time_points()),
+            )
 
             log_path = self._setup_logging_to_file()
             try:

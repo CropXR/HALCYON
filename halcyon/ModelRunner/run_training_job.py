@@ -81,6 +81,7 @@ def train_hybrid_and_ml_model_sim_run_id(
     batch_size: int = 32,
     lr: float = 0.01,
     devices: cycle = cycle(["cuda:1", "cuda:0"]),
+    time_points_training_fraction: float = 1.0,
 ):
     """Perform ML and hybrid model training based on a simulation run id
 
@@ -93,6 +94,7 @@ def train_hybrid_and_ml_model_sim_run_id(
         batch_size (int, optional): Batch size for training. Defaults to 32.
         lr (float, optional): Learning rate for the optimizer. Defaults to 0.01.
         devices (_type_, optional): Devices to use for training. Defaults to cycle(["cuda:1", "cuda:0"]).
+        time_points_training_fraction (float, optional): Fraction of time points to use for training. Defaults to 1.0.
     """
     (
         sim_output,
@@ -104,6 +106,13 @@ def train_hybrid_and_ml_model_sim_run_id(
         dataset_dict,
     ) = prepare_dataset(sim_run_id)
 
+    if time_points_training_fraction < 1.0:
+        dataset_dict[train_dataset_name].subsample_time_points(
+            time_points_training_fraction
+        )
+        dataset_dict[val_dataset_name].subsample_time_points(
+            time_points_training_fraction
+        )
     # Create train jobs
     optimizer_kwargs = {"lr": lr}
 
