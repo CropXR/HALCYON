@@ -21,6 +21,7 @@ def run_gnw(
     network_type: int = 1,
     grouping_bias: float = 100.0,
     jar_path=None,
+    load_perturbations=False,
 ) -> SimulationResult:
     """Run a GeneNetWeaver simulation and return the result.
 
@@ -45,6 +46,10 @@ def run_gnw(
     assert jar_path.exists(), f"GNW jar file {jar_path} does not exist"
 
     settings_path = settings_dir / noise_level.value
+    if load_perturbations:
+        settings_path = settings_path.with_name(
+            f"{settings_path.stem}_load_perturbations.txt"
+        )
     assert settings_path.exists(), f"Settings file {settings_path} does not exist"
     assert network_type in [0, 1], "network_type must be 0 or 1"
 
@@ -103,6 +108,7 @@ def run_gnw(
     step2_process = subprocess.run(
         step_2_args, check=True, capture_output=True, text=True
     )
+    logging.info(step2_process.stderr)
 
     # Step 3 -> move the files to the correct directory because simulation step cannot seem to do it
     for line in step2_process.stderr.splitlines():

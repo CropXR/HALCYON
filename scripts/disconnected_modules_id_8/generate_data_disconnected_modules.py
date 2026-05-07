@@ -76,6 +76,7 @@ def main():
         noise_level=noise,
         keep_self_interactions=keep_self_interactions,
         grouping_bias=grouping_bias,
+        load_perturbations=True,
     )
 
     sim_output.network.do_clustering()
@@ -92,7 +93,7 @@ def main():
         node_size=50,
     )
 
-    fig_path = generated_data_path / "network_plot.png"
+    fig_path = generated_data_path / "network_plot.pdf"
     plt.savefig(fig_path)
 
     sim_output.save_to_pkl(generated_data_path / "simulation_result.pkl")

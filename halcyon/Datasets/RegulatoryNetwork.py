@@ -63,6 +63,10 @@ class RegulatoryNetwork:
         """Get all nodes in the network."""
         return self._graph.nodes
 
+    def get_disconnected_modules(self) -> list[set]:
+        """For disconnected modules, return list of sets of genes that are in the same module."""
+        return list(nx.weakly_connected_components(self._graph))
+
     def add_edge(self, edge: tuple, attributes: dict, contains_new_genes=False):
         """Add an edge to the network.
 
