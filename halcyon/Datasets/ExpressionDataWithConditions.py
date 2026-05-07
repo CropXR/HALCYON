@@ -17,7 +17,7 @@ class ExpressionDataWithConditions(Dataset):
     """Class to store the expression data of multiple experiments output by GeneNetWeaver."""
 
     def __init__(self, ko_dict: dict[ExperimentCondition, ExpressionData]):
-        self._ko_dict = ko_dict
+        self._ko_dict: dict[ExperimentCondition, ExpressionData] = ko_dict
         self._check_if_all_genes_same()
         self._check_if_all_timepoints_same()
 
@@ -44,6 +44,12 @@ class ExpressionDataWithConditions(Dataset):
     def get_time_points(self) -> np.ndarray:
         self._check_if_all_timepoints_same()
         return next(iter(self._ko_dict.values()))._get_time_points()
+
+    def subsample_time_points(self, fraction: float):
+        """Subsample the time points in the expression data by keeping only a fraction of them. The same time points are kept for each condition."""
+        self._check_if_all_timepoints_same()
+        for expression_data in self._ko_dict.values():
+            expression_data.subsample_time_points(fraction)
 
     def _check_if_all_genes_same(self):
         # Assert that all ExpressionData contain the same genes

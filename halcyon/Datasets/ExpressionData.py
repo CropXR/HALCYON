@@ -23,6 +23,14 @@ class ExpressionData:
         """Keep only the specified genes in the data"""
         return ExpressionData(self.df.loc[genes])
 
+    def subsample_time_points(self, fraction: float):
+        """Keep only fraction of time points. The time points are evenly spaced.
+
+        Used for testing how well models work when there are fewer time points. Modifies the object in place.
+        """
+        step = max(1, round(1 / fraction))
+        self.df = self.df.iloc[:, ::step]
+
     @property
     def genes(self) -> List:
         return list(self.df.index)

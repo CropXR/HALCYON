@@ -211,3 +211,41 @@ def test_scale_time_series(expression_data_from_gnw: ExpressionDataWithCondition
             ]
         ),
     )
+
+
+def test_subsample_time_points(expression_data_from_gnw: ExpressionDataWithConditions):
+    expression_data_from_gnw.scale_time_series()
+    original_time_points = expression_data_from_gnw.get_time_points()
+    assert np.allclose(
+        original_time_points,
+        [
+            0.0,
+            0.05,
+            0.1,
+            0.15,
+            0.2,
+            0.25,
+            0.3,
+            0.35,
+            0.4,
+            0.45,
+            0.5,
+            0.55,
+            0.6,
+            0.65,
+            0.7,
+            0.75,
+            0.8,
+            0.85,
+            0.9,
+            0.95,
+            1.0,
+        ],
+    )
+    expression_data_from_gnw.subsample_time_points(fraction=0.5)
+    subsampled_time_points = expression_data_from_gnw.get_time_points()
+    assert np.allclose(
+        subsampled_time_points, [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    )
+    _, expression_data, _ = expression_data_from_gnw[1]
+    assert expression_data.shape[1] == len(subsampled_time_points)
