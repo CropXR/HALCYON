@@ -1,3 +1,5 @@
+from itertools import cycle
+
 import multiprocess as mp
 import random
 
@@ -27,9 +29,10 @@ def main():
         experiment_ids=["8"],
         filter_string="tags.run_type = 'dataset'",
     )
+    devices = ["cuda:1"]
 
     for sim_run_id in sim_runs["run_id"]:
-        train_hybrid_and_ml_model_sim_run_id(sim_run_id)
+        train_hybrid_and_ml_model_sim_run_id(sim_run_id, devices=cycle(devices))
 
 
 if __name__ == "__main__":
