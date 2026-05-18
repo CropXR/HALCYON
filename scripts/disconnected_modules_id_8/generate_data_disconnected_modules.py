@@ -1,3 +1,5 @@
+import re
+
 import networkx as nx
 
 from pathlib import Path
@@ -84,6 +86,16 @@ def main():
     assert (
         number_weakly_connected_components(sim_output.network._graph) > 1
     ), "The generated network still fully connected."
+
+    # Check if double KOs in different submodules
+    for _, _, ko_string in sim_output.get_double_ko_expressiondata():
+        ko_genes = re.findall(r"Node_\d+", ko_string)
+        is_weakly_connected = nx.has_path(
+            sim_output.network._graph.to_undirected(), ko_genes[0], ko_genes[1]
+        )
+        assert (
+            not is_weakly_connected
+        ), f"Double KO {ko_string} is in the same submodule, but should be in different submodules."
 
     sim_output.network.plot(
         separate_components=True,
