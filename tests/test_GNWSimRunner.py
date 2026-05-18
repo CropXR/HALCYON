@@ -2,10 +2,14 @@ from dataclasses import asdict
 from pathlib import Path
 import networkx as nx
 import json
+import pandas as pd
+from pandas.testing import assert_frame_equal
 
 from halcyon.Datasets import RegulatoryNetwork
 from halcyon.Simulators import NoiseLevel, SimulationResult
-
+from halcyon.Simulators.SimulationResult import (
+    make_ko_index_file_from_perturbation_file,
+)
 import hashlib
 
 
@@ -91,3 +95,22 @@ def test_different_noise_levels_different_expressions(
         assert (
             hash_1 != hash_2
         ), f"File with different noise levels should not be identical"
+
+
+def test_create_ko_index_file_from_perturbation_file(sim_result):
+    index_file_path = (
+        sim_result.data_path / f"{sim_result.network_name}_dualknockouts_indexes.tsv"
+    )
+    gnw_indices = pd.read_csv(index_file_path, sep="\t")
+
+    perturbation_path = (
+        sim_result.data_path
+        / f"{sim_result.network_name}_dualknockouts_perturbations.tsv"
+    )
+    inferred_from_perturbation_indices = make_ko_index_file_from_perturbation_file(
+        perturbation_path
+    )
+
+    assert_frame_equal(
+        gnw_indices, inferred_from_perturbation_indices
+    ), "KO indices in file do not match expected indices"

@@ -5,7 +5,10 @@ import subprocess
 
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Simulators.NoiseLevel import NoiseLevel
-from halcyon.Simulators.SimulationResult import SimulationResult
+from halcyon.Simulators.SimulationResult import (
+    SimulationResult,
+    make_ko_index_file_from_perturbation_file,
+)
 
 
 def run_gnw(
@@ -109,6 +112,15 @@ def run_gnw(
         step_2_args, check=True, capture_output=True, text=True
     )
     logging.info(step2_process.stderr)
+
+    if load_perturbations:
+        # Create a file like "my_network_dualknockouts_indexes.tsv" containing the indexes of the double knockouts,
+        #  because this is used downstream but not automaticaly created when double knockouts are specified through the perturbation file.
+        perturbation_path = f"{network_name}_dualknockouts_perturbations.tsv"
+        ko_indices = make_ko_index_file_from_perturbation_file(perturbation_path)
+
+        index_file_path = output_path / f"{network_name}_dualknockouts_indexes.tsv"
+        ko_indices.to_csv(index_file_path, sep="\t", index=False)
 
     # Step 3 -> move the files to the correct directory because simulation step cannot seem to do it
     for line in step2_process.stderr.splitlines():
