@@ -72,7 +72,7 @@ def test_sim_result_get_no_noise_file(sim_result):
     file_name = "knockout_timeseries0.tsv"
     filename_no_noise = sim_result._build_filename(file_name)
     assert (
-        filename_no_noise.name.endswith(f"_nonoise_{file_name}")
+        filename_no_noise.name.endswith(f"_noexpnoise_{file_name}")
         and filename_no_noise.exists()
     )
 

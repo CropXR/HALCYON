@@ -36,7 +36,6 @@ class SimulationResult:
     network: RegulatoryNetwork
     noise_level: NoiseLevel
     normalise_time_series: bool = True
-    # Only used for testing
     noiseless_for_testing: bool = False
 
     def save_to_pkl(self, save_path: Path):
