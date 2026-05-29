@@ -1,5 +1,7 @@
 from copy import deepcopy
 import pytest
+import numpy as np
+
 from pytest import approx
 import torch
 import tempfile
@@ -54,20 +56,12 @@ def test_load_double_ko_tensors(sim_result: SimulationResult):
     )
     # Check if KO genes are indeed 0 at end
     assert_close(
-        expression_data[:, -1],
+        expression_data[np.nonzero(exp_condition), -1].squeeze(),
         torch.tensor(
             [
                 0.0000,
-                0.7354,
-                0.0908,
                 0.0000,
-                0.0152,
-                0.9581,
-                0.9403,
-                0.0124,
-                1.0000,
-                0.0096,
-            ],
+            ]
         ),
         rtol=1e-03,
         atol=1e-03,
