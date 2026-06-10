@@ -1,3 +1,5 @@
+from copy import deepcopy
+from random import sample
 import logging
 import re
 import libsbml
@@ -73,11 +75,14 @@ class PyTorchODE(GeneExpressionModel):
         # compiled decay modules will be stored here after compilation
         self._decay_module: Optional[nn.Module] = None
         self.register_buffer("time_scaler", torch.tensor(1.0))
+
         # Storing some hyperparams
         self.goldstandard_signed_file_for_expression_substitution = (
             goldstandard_signed_file_for_expression_substitution
         )
         self.fill_value_for_gene_not_in_model = fill_value_for_gene_not_in_model
+        # In case we change some of the parameters of the model (i.e. introduce mistakes. Keep track of that here)
+        self.params_set_to_zero = []
 
     @classmethod
     def from_sbml(
@@ -203,6 +208,36 @@ class PyTorchODE(GeneExpressionModel):
 
         return (synthesis * self.ko_masks - decay) * self.time_scaler
 
+    def with_missing_connections(self, fraction: float) -> Self:
+        """Create mechanistic model with missing connections (i.e. mistakes in the mechanistic model)
+
+        Args:
+            fraction (float): Fraction of parameters to set to zero, should be between 0 and 1.
+        """
+        output = deepcopy(self)
+        params_to_pick_from = []
+        for param in output.param_dict.keys():
+            if param.startswith("a_") and any(
+                param.endswith(gene) for gene in output.modelled_gene_labels
+            ):
+                # Check if it is indeed used.
+                for synthesis_expr in output.synthesis_dict.values():
+                    if param in {s.name for s in synthesis_expr.free_symbols}:
+                        params_to_pick_from.append(param)
+                        break
+                else:
+                    raise AssertionError(
+                        f"Parameter {param} is not used in any synthesis expression, setting to zero does not introduce a mistake."
+                    )
+        params_to_change = sample(
+            params_to_pick_from, k=round(len(params_to_pick_from) * fraction)
+        )
+        for param in params_to_change:
+            output.param_dict[param].data.zero_()
+        output.params_set_to_zero = params_to_change
+        output._compile_expressions()
+        return output
+
     def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
         out_list = []
         for name, value in zip(
@@ -210,11 +245,13 @@ class PyTorchODE(GeneExpressionModel):
                 "signed_file_input",
                 "fill_value_for_gene_not_in_model",
                 "modelled_gene_labels",
+                "parameters_set_to_zero",
             ],
             [
                 self.goldstandard_signed_file_for_expression_substitution,
                 self.fill_value_for_gene_not_in_model,
                 self.modelled_gene_labels,
+                self.params_set_to_zero,
             ],
         ):
             out_list.append((name, value))
