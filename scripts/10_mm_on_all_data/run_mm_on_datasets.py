@@ -33,9 +33,9 @@ def main():
 
     # Run on 20, 50, 100 genes
     sim_run_ids = [
+        "6a8078c2c7764850b1fb8b3c33553a1b",
         "f02bf732b2ba4817b254bd5174f1549b",
         "f862625665764f1383bf88e5615594dc",
-        "6a8078c2c7764850b1fb8b3c33553a1b",
     ]
 
     for sim_run_id in sim_run_ids:
