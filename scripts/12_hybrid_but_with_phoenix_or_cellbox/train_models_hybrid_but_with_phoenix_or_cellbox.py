@@ -1,8 +1,7 @@
 from pathlib import Path
 from copy import deepcopy
 
-# import multiprocessing as mp
-import torch.multiprocessing as mp
+import multiprocessing as mp
 import logging
 import random
 from itertools import cycle
