@@ -1,7 +1,7 @@
 from pathlib import Path
 from copy import deepcopy
 
-import multiprocessing as mp
+import multiprocess as mp
 import logging
 import random
 from itertools import cycle
