@@ -16,6 +16,13 @@ def create_tidy_df_from_mlflow_runs(runs: List[mlflow.entities.Run]):
         run_id = run.info.run_id
         logging.info(f"Downloading artifacts for run {run_id}")
         parent_run_id = run.data.tags["mlflow.parentRunId"]
+        if not mlflow.artifacts.list_artifacts(
+            run_id=run_id, artifact_path="evaluation"
+        ):
+            logging.warning(
+                f"No 'evaluation' artifacts for run {run_id} (parent run {parent_run_id}). Skipping."
+            )
+            continue
         artifacts = mlflow.artifacts.download_artifacts(
             run_id=run_id, artifact_path="evaluation"
         )
