@@ -104,6 +104,28 @@ class RegulatoryNetwork:
                     node_to_colour[gene] = palette[i]
             return [node_to_colour[n] for n in self._graph.nodes()]
 
+    def get_ko_to_target_distance(self, gene_name: str, ko_string: str) -> float:
+        """For a gene name and a double KO. Calculate the sum of distance from the KO gene to the target gene.
+
+        Mainly used to see which gene - double KO combos were hardest to predict.
+        """
+        kos = re.findall(r"Node_\d+", ko_string)
+        assert (
+            len(kos) == 2
+        ), f"Only working / used for double KOs currently. But was privded with KO string: {ko_string}\n This gives {kos=}"
+
+        depths = []
+        for ko in kos:
+            try:
+                d = nx.shortest_path_length(self._graph, ko, gene_name)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                d = None
+            depths.append(d)
+        if any(d is None for d in depths):
+            return None
+        else:
+            return sum(depths)
+
     def plot(
         self,
         ax=None,
