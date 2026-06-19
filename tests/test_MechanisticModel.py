@@ -5,6 +5,7 @@ import pytest
 import sympy as sp
 import sympytorch
 import torch
+import random
 
 from halcyon.Models import PyTorchODE
 from torch.testing import assert_close
@@ -78,6 +79,7 @@ def test_introduce_mistakes(test_pytorchode_model: PyTorchODE, ss_initial_values
 def test_introduce_mistakes_if_subset_of_genes(
     ode_with_two_nodes: PyTorchODE, ss_initial_values
 ):
+    random.seed(174)
     original_forwards = ode_with_two_nodes.forward(
         t=torch.tensor([0]), state=ss_initial_values[:, [0, 2]]
     )
