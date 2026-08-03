@@ -25,7 +25,8 @@ def main():
 
     # 50 genes medium noise
     sim_run_id = "f02bf732b2ba4817b254bd5174f1549b"
-    for fraction in [0.25, 0.5]:
+    # for fraction in [0.25, 0.5]:
+    for fraction in [0.33, 0.75]:
         train_hybrid_and_ml_model_sim_run_id(
             sim_run_id, time_points_training_fraction=fraction
         )
