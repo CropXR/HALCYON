@@ -28,8 +28,13 @@ class ExpressionData:
 
         Used for testing how well models work when there are fewer time points. Modifies the object in place.
         """
-        step = max(1, round(1 / fraction))
-        self.df = self.df.iloc[:, ::step]
+        if not 0 < fraction <= 1:
+            raise ValueError(f"fraction must be in (0, 1], got {fraction}")
+
+        n = self.df.shape[1]
+        n_keep = min(n, max(2, round(fraction * (n - 1)) + 1))
+        idx = np.rint(np.linspace(0, n - 1, n_keep)).astype(int)
+        self.df = self.df.iloc[:, idx]
 
     @property
     def genes(self) -> List:

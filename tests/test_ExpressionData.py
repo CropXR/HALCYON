@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import torch
 
@@ -242,6 +244,8 @@ def test_subsample_time_points(expression_data_from_gnw: ExpressionDataWithCondi
             1.0,
         ],
     )
+    unmodified_df = deepcopy(expression_data_from_gnw)
+    # Check the 0.5 specifically
     expression_data_from_gnw.subsample_time_points(fraction=0.5)
     subsampled_time_points = expression_data_from_gnw.get_time_points()
     assert np.allclose(
@@ -249,3 +253,11 @@ def test_subsample_time_points(expression_data_from_gnw: ExpressionDataWithCondi
     )
     _, expression_data, _ = expression_data_from_gnw[1]
     assert expression_data.shape[1] == len(subsampled_time_points)
+
+    # Some edge cases
+    for fraction, expected_length in [(0.4, 9), (0.75, 16)]:
+        subsample_expression_df = deepcopy(unmodified_df)
+        subsample_expression_df.subsample_time_points(fraction=fraction)
+        subsampled_time_points = subsample_expression_df.get_time_points()
+        assert 0.0 in subsampled_time_points
+        assert len(subsampled_time_points) == expected_length
