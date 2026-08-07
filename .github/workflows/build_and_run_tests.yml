@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           token: ${{ secrets.GNW_ACCESS_TOKEN }}
       - name: Set up mamba environment
-        uses: mamba-org/setup-micromamba@v2
+        uses: mamba-org/setup-micromamba@v3.0.0
         with:
           micromamba-version: '1.4.5-0'
           environment-file: environment_ci.yml

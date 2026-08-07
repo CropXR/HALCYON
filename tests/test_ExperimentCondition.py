@@ -1,6 +1,6 @@
 from torch.testing import assert_close
 from torch import tensor
-from halcyon.Datasets.ExperimentCondition import ExperimentCondition
+from halcyon.Datasets import ExperimentCondition
 
 
 def test_create_ExperimentCondition():

@@ -7,12 +7,15 @@ channels:
 dependencies:
   - black=24.2.0
   - coverage=7.6.12=py310h89163eb_0
+  - igraph
+  - leidenalg
   - matplotlib-base=3.10.1=py310h68603db_0
   - mlflow
   - natsort=8.4.0=pyh29332c3_1
   - networkx=3.4.2=pyh267e887_2
   - numpy=2.2.3=py310hefbff90_0
   - pandas=2.2.3=py310h5eaa309_1
+  - pathos
   - pip=25.0.1=pyh8b19718_0
   - pytest=8.3.5=pyhd8ed1ab_0
   - pytest-cov=6.0.0=pyhd8ed1ab_1

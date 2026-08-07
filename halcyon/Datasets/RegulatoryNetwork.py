@@ -5,19 +5,31 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-import networkx.algorithms.community as nxcom
+import leidenalg
+import igraph as ig
 
 
 class RegulatoryNetwork:
     def __init__(self, network: nx.DiGraph):
-        self._graph = network
-        self._clustering = []
+        self._graph: nx.DiGraph = network
+        self._clustering: list[set] = []
 
     def __eq__(self, other: Self):
         return nx.is_isomorphic(self._graph, other._graph)
 
     def do_clustering(self):
-        self._clustering = nxcom.louvain_communities(self._graph)
+        ig_graph = ig.Graph.from_networkx(self._graph)
+        partition = leidenalg.find_partition(
+            ig_graph,
+            leidenalg.ModularityVertexPartition,
+            seed=174,
+        )
+        # convert back to node names
+        self._clustering = [
+            [ig_graph.vs[i]["_nx_name"] for i in community] for community in partition
+        ]
+
+        # self._clustering = algorithms.leiden(self._graph, seed=12).communities
 
     def get_ingoing_interactions(self, gene_name: str) -> List:
         """Get interactions that influence a certain gene
@@ -50,6 +62,10 @@ class RegulatoryNetwork:
     def nodes(self):
         """Get all nodes in the network."""
         return self._graph.nodes
+
+    def get_disconnected_modules(self) -> list[set]:
+        """For disconnected modules, return list of sets of genes that are in the same module."""
+        return list(nx.weakly_connected_components(self._graph))
 
     def add_edge(self, edge: tuple, attributes: dict, contains_new_genes=False):
         """Add an edge to the network.
@@ -88,9 +104,59 @@ class RegulatoryNetwork:
                     node_to_colour[gene] = palette[i]
             return [node_to_colour[n] for n in self._graph.nodes()]
 
-    def plot(self, ax=None):
-        """Plot the network using networkx's draw function."""
-        pos = nx.kamada_kawai_layout(self._graph)
+    def get_ko_to_target_distance(self, gene_name: str, ko_string: str) -> float:
+        """For a gene name and a double KO. Calculate the sum of distance from the KO gene to the target gene.
+
+        Mainly used to see which gene - double KO combos were hardest to predict.
+        """
+        kos = re.findall(r"Node_\d+", ko_string)
+        assert (
+            len(kos) == 2
+        ), f"Only working / used for double KOs currently. But was privded with KO string: {ko_string}\n This gives {kos=}"
+
+        depths = []
+        for ko in kos:
+            try:
+                d = nx.shortest_path_length(self._graph, ko, gene_name)
+            except (nx.NetworkXNoPath, nx.NodeNotFound):
+                d = None
+            depths.append(d)
+        if any(d is None for d in depths):
+            return None
+        else:
+            return sum(depths)
+
+    def plot(
+        self,
+        ax=None,
+        layout_func=nx.kamada_kawai_layout,
+        separate_components=False,
+        component_spacing=2.0,
+        with_labels=True,
+        node_size=300,
+        arrowsize=10,
+        width=1,
+    ):
+        """Plot the network using networkx's draw function.
+
+        Args:
+            ax (optional): Matplotlib ax to plot on. Defaults to None.
+            layout_func (_type_, optional): networkx layout function to use for positioning nodes. Defaults to nx.kamada_kawai_layout.
+            separate_components (bool, optional): Whether to plot disconnected components in the plot next to each other. Defaults to False.
+            component_spacing (float, optional): Spacing between components if plotting separate. Defaults to 2.0.
+        """
+        if separate_components:
+            pos = {}
+            x_offset = 0
+            for component in nx.weakly_connected_components(self._graph):
+                subgraph = self._graph.subgraph(component)
+                sub_pos = layout_func(subgraph)
+                for node, (x, y) in sub_pos.items():
+                    pos[node] = (x + x_offset, y)
+                x_offset += component_spacing
+        else:
+            pos = layout_func(self._graph)
+
         # Extract edge colors from the attribute
         edge_colors = [self._graph[u][v]["color"] for u, v in self._graph.edges()]
         node_colours = self._get_node_colours()
@@ -104,10 +170,13 @@ class RegulatoryNetwork:
             pos,
             ax=ax,
             connectionstyle="arc3,rad=0.2",
-            with_labels=True,
+            with_labels=with_labels,
             arrows=True,
             edge_color=edge_colors,
             node_color=node_colours,
+            node_size=node_size,
+            arrowsize=arrowsize,
+            width=width,
         )
         return fig, ax
 

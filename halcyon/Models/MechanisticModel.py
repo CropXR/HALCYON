@@ -1,3 +1,5 @@
+from copy import deepcopy
+from random import sample
 import logging
 import re
 import libsbml
@@ -16,31 +18,10 @@ import sympytorch
 import logging
 
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
-from halcyon.Models.Model import GeneExpressionModel
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 
 
-class MechanisticModel(GeneExpressionModel):
-    def __init__(
-        self, modelled_gene_labels: List[str], condition_names: List[str], **kwargs
-    ):
-        super().__init__(modelled_gene_labels, condition_names, **kwargs)
-        self.register_buffer("time_scaler", torch.tensor(1.0))
-
-    @property
-    @abstractmethod
-    def regulatory_network(self) -> RegulatoryNetwork:
-        """Return the regulatory network of the model."""
-        pass
-
-    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
-        return []
-
-    def set_timescaler(self, new_value: torch.Tensor):
-        new_value = new_value.to(device=self.device)
-        self.time_scaler = new_value
-
-
-class PyTorchODE(MechanisticModel):
+class PyTorchODE(GeneExpressionModel):
     alternative_max_name = "max_rate"
 
     def __init__(
@@ -50,189 +31,58 @@ class PyTorchODE(MechanisticModel):
         synthesis_dict: Dict[str, sp.Expr],
         decay_dict: Dict[str, sp.Expr],
         param_dict: Dict[str, float],
+        goldstandard_signed_file_for_expression_substitution: None | Path = None,
+        fill_value_for_gene_not_in_model: float | None = 0.0,
         **kwargs,
     ):
+        """Create mechanistic model
+
+        Args:
+            modelled_gene_labels (List[str]): Gene labels that are modelled
+            condition_names (list[str]): Condition names
+            synthesis_dict (Dict[str, sp.Expr]): Dict that takes care of the synthesis terms
+            decay_dict (Dict[str, sp.Expr]): Dict that takes care of the decay terms
+            param_dict (Dict[str, float]): Dictionary of parameters in model
+            goldstandard_signed_file_for_expression_substitution (None | Path, optional):
+                Path to a file (the *_goldstandard_signed.tsv file of GNW) containing signed interactions between genes.
+                Is used to 'fill in' the expression values for unmodeled genes.
+
+                If not provided, all non-modelled genes will be assumed to have an expression of `fill_value_for_gene_not_in_model`.
+
+                If path is provided, infer the value to fill in: if activates substitute the expression with a 0, if represses substitute with a 1..
+                 Defaults to None.
+            fill_value_for_gene_not_in_model (float | None, optional): If goldstandard file is not provided, use this value to fill in for genes that are not in the model.
+              Defaults to 0.0.
+        """
         super().__init__(modelled_gene_labels, condition_names, **kwargs)
         self.synthesis_dict = synthesis_dict
         self.decay_dict = decay_dict
-        # Convert param_dict to a trainable ParameterDict
+        # Convert param_dict to a ParameterDict
         self.param_dict = nn.ParameterDict(
             {
                 key: nn.Parameter(
-                    torch.tensor(value, dtype=torch.float32), requires_grad=True
+                    torch.tensor(value, dtype=torch.float32), requires_grad=False
                 )
                 for key, value in param_dict.items()
             }
         )
-        self._compiled_ready = False  # should be false until expressions are compiled, which is done at first integration
-        self._synthesis_module: Optional[nn.Module] = (
-            None  # compiled synthesis modules will be stored here after compilation
-        )
-        self._decay_module: Optional[nn.Module] = (
-            None  # compiled decay modules will be stored here after compilation
-        )
-
-    @property
-    def regulatory_network(self) -> RegulatoryNetwork:
-        raise NotImplementedError("This method needs to be implemented in subclass.")
-
-    def integrate(
-        self,
-        initial_state: torch.Tensor,
-        t_eval: torch.Tensor,
-    ) -> torch.Tensor:
-        self._synthesis_module = None
-        self._decay_module = None
+        # should be false until expressions are compiled, which is done at first integration
         self._compiled_ready = False
-        self._compile_expressions()
-        return super().integrate(initial_state, t_eval)
 
-    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
-        """
-        Get the derivative at a given time point.
-        Parameters:
-            t (torch.Tensor): The time point at which to evaluate the ODE.
-            state (torch.Tensor): The current state of the system.
-        Returns:
-            torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
-        """
-        if state.isinf().any() or state.isnan().any():
-            raise ValueError("NaN or inf in state tensor.")
+        # compiled synthesis modules will be stored here after compilation
+        self._synthesis_module: Optional[nn.Module] = None
 
-        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
-        # most likely, the steps are slightly too large and lead to negative concentrations
-        state = torch.clamp(state, min=0.0)
-        if not self._compiled_ready:
-            self._compile_expressions()
-        batch_size, n_genes = state.shape
+        # compiled decay modules will be stored here after compilation
+        self._decay_module: Optional[nn.Module] = None
+        self.register_buffer("time_scaler", torch.tensor(1.0))
 
-        if self._synthesis_module is None or self._decay_module is None:
-            raise RuntimeError("SymPy modules were not initialised correctly.")
-
-        self.ko_masks = self.ko_masks.to(device=self.device)
-
-        inputs = {
-            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
-        }
-        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
-        inputs["cell"] = torch.full(
-            (batch_size,),
-            1.0,
-            dtype=state.dtype,
-            device=self.device,
+        # Storing some hyperparams
+        self.goldstandard_signed_file_for_expression_substitution = (
+            goldstandard_signed_file_for_expression_substitution
         )
-
-        synthesis = self._synthesis_module(**inputs)
-        decay = self._decay_module(**inputs)
-        # If output is 1D (single sample), unsqueeze to add batch dimension
-        if synthesis.dim() == 1:
-            synthesis = synthesis.unsqueeze(0)
-        if decay.dim() == 1:
-            decay = decay.unsqueeze(0)
-
-        return (synthesis * self.ko_masks - decay) * self.time_scaler
-
-    def set_parameters(self, param_values: dict):
-        """
-        Set parameter values in the model. Accepts a dict of {name: value} and updates the corresponding nn.Parameter in param_dict.
-        Useful for testing and manual parameter updates.
-        """
-        for k, v in param_values.items():
-            if k in self.param_dict:
-                self.param_dict[k].data = torch.tensor(
-                    v,
-                    dtype=self.param_dict[k].dtype,
-                    device=self.param_dict[k].device,
-                    requires_grad=True,
-                )
-        self._compiled_ready = False  # recompile expressions with new parameter values
-
-    def select_genes(
-        self,
-        genes_to_keep: list[str],
-        goldstandard_signed_file_for_expression_substitution: None | Path = None,
-    ):
-        """From full set of genes that are modelled in this model, only keep the ones specified in this method.
-
-        Used when we first create a model on the full ground truth and then narrow it down to only a subset.
-
-        Args:
-            genes_to_keep (list[str]): List of gene names that the model should keep.
-            goldstandard_signed_file_for_expression_substitution (Path, optional): Path to a file (the *_goldstandard_signed.tsv file of GNW)
-                containing signed interactions between genes. Is used to 'fill in' the expression values for unmodeled genes.
-
-                If not provided, all non-modelled genes will be assumed to have an expression of 0.
-
-                If path is provided, infer the value to fill in: if activates substitute the expression with a 0, if represses substitute with a 1.
-        """
-        assert all(
-            gene_to_keep in self.modelled_gene_labels for gene_to_keep in genes_to_keep
-        ), "Not all genes that need to be kept are in the model"
-        genes_to_remove = list(set(self.modelled_gene_labels) ^ set(genes_to_keep))
-
-        new_synthesis_dict = dict()
-        new_decay_dict = dict()
-
-        # Check direction of regulatory interactions to get placeholder values
-        if goldstandard_signed_file_for_expression_substitution is not None:
-            replacement_dict = self._get_replacement_dict_from_regulation(
-                goldstandard_signed_file_for_expression_substitution, genes_to_remove
-            )
-
-        else:
-            logging.info(
-                "No regulatory file provided, setting all unmodelled gene expressions to 0 as heuristic."
-            )
-            logging.info(
-                f"Might be preferred to provide the file next time to the select_genes() method. <3"
-            )
-            # Heuristic, set all gene expressions to 0 for genes that are not modelled
-            replacement_dict = dict()
-            for gene in genes_to_keep:
-                replacement_dict[gene] = {
-                    unmodeled_gene: 0 for unmodeled_gene in genes_to_remove
-                }
-
-        for gene in genes_to_keep:
-            synthesis_formula = self.synthesis_dict[gene]
-            new_synthesis_dict[gene] = synthesis_formula.subs(replacement_dict[gene])
-            new_decay_dict[gene] = self.decay_dict[gene]
-        self._compiled_ready = False
-        self.synthesis_dict = new_synthesis_dict
-        self.decay_dict = new_decay_dict
-        self.ko_masks = self.ko_masks[
-            [self.modelled_gene_labels.index(gene) for gene in genes_to_keep]
-        ]
-        self.modelled_gene_labels = genes_to_keep
-
-    def _get_replacement_dict_from_regulation(
-        self, file_path: Path, genes_to_remove: list[str]
-    ) -> Dict[str, Dict[str, int]]:
-        """
-        Create a replacement dictionary for unmodelled genes based on their regulatory effects.
-
-        Args:
-            file_path (Path): Path to the goldstandard signed file containing regulatory interactions.
-            genes_to_remove (list[str]): List of gene names that are being removed from the model.
-
-        Returns:
-            Dict[str, Dict[str, int]]: A dictionary with first key the target gene, second the source gene, and third the value that should be used to replace them
-        """
-        out_dict = dict()
-
-        # Activators get 0, repressors get 1
-        sign_to_value = {"+": 0, "-": 1}
-        with file_path.open("r") as f:
-            for line in f.readlines():
-                source, target, direction = line.strip().split("\t")
-                if target in genes_to_remove:
-                    continue
-                if target not in out_dict:
-                    out_dict[target] = dict()
-                # Only keep entries for genes that are being removed
-                if source in genes_to_remove:
-                    out_dict[target][source] = sign_to_value[direction]
-        return out_dict
+        self.fill_value_for_gene_not_in_model = fill_value_for_gene_not_in_model
+        # In case we change some of the parameters of the model (i.e. introduce mistakes. Keep track of that here)
+        self.params_set_to_zero = []
 
     @classmethod
     def from_sbml(
@@ -313,6 +163,270 @@ class PyTorchODE(MechanisticModel):
             **kwargs,
         )
 
+    def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
+        """
+        Get the derivative at a given time point.
+        Parameters:
+            t (torch.Tensor): The time point at which to evaluate the ODE.
+            state (torch.Tensor): The current state of the system.
+        Returns:
+            torch.Tensor: The derivative of the state at the given time point in the shape [Batch, Genes].
+        """
+        if state.isinf().any() or state.isnan().any():
+            raise ValueError("NaN or inf in state tensor.")
+
+        # Clamp state to prevent negative values, for some reason without this the compiled modules can produce NaNs/complex values from negative inputs
+        # most likely, the steps are slightly too large and lead to negative concentrations
+        state = torch.clamp(state, min=0.0)
+        if not self._compiled_ready:
+            self._compile_expressions()
+        batch_size, n_genes = state.shape
+
+        if self._synthesis_module is None or self._decay_module is None:
+            raise RuntimeError("SymPy modules were not initialised correctly.")
+
+        self.ko_masks = self.ko_masks.to(device=self.device)
+
+        inputs = {
+            gene: state[:, idx] for idx, gene in enumerate(self.modelled_gene_labels)
+        }
+        # cell is a required variable in SBML expressions, it indicates the cell volume used to scale ODE's, we set it to 1
+        inputs["cell"] = torch.full(
+            (batch_size,),
+            1.0,
+            dtype=state.dtype,
+            device=self.device,
+        )
+
+        synthesis = self._synthesis_module(**inputs)
+        decay = self._decay_module(**inputs)
+        # If output is 1D (single sample), unsqueeze to add batch dimension
+        if synthesis.dim() == 1:
+            synthesis = synthesis.unsqueeze(0)
+        if decay.dim() == 1:
+            decay = decay.unsqueeze(0)
+
+        return (synthesis * self.ko_masks - decay) * self.time_scaler
+
+    def with_missing_connections(self, fraction: float) -> Self:
+        """Create mechanistic model with missing connections (i.e. mistakes in the mechanistic model)
+
+        Args:
+            fraction (float): Fraction of parameters to set to zero, should be between 0 and 1.
+        """
+        output = deepcopy(self)
+        params_to_pick_from = []
+        for param in output.param_dict.keys():
+            if param.startswith("a_") and any(
+                param.endswith(gene) for gene in output.modelled_gene_labels
+            ):
+                # Check if it is indeed used.
+                for synthesis_expr in output.synthesis_dict.values():
+                    if param in {s.name for s in synthesis_expr.free_symbols}:
+                        params_to_pick_from.append(param)
+                        break
+                else:
+                    raise AssertionError(
+                        f"Parameter {param} is not used in any synthesis expression, setting to zero does not introduce a mistake."
+                    )
+        params_to_change = sample(
+            params_to_pick_from, k=round(len(params_to_pick_from) * fraction)
+        )
+        for param in params_to_change:
+            output.param_dict[param].data.zero_()
+        output.params_set_to_zero = params_to_change
+        output._compile_expressions()
+        return output
+
+    def get_hyperparams(self) -> list[tuple[str, int | float | str | bool]]:
+        out_list = []
+        for name, value in zip(
+            [
+                "signed_file_input",
+                "fill_value_for_gene_not_in_model",
+                "modelled_gene_labels",
+                "parameters_set_to_zero",
+            ],
+            [
+                self.goldstandard_signed_file_for_expression_substitution,
+                self.fill_value_for_gene_not_in_model,
+                self.modelled_gene_labels,
+                self.params_set_to_zero,
+            ],
+        ):
+            out_list.append((name, value))
+
+        return out_list
+
+    @property
+    def regulatory_network(self) -> RegulatoryNetwork:
+        raise NotImplementedError("This method needs to be implemented in subclass.")
+
+    def set_timescaler(self, new_value: torch.Tensor):
+        new_value = new_value.to(device=self.device)
+        self.time_scaler = new_value
+
+    def set_parameters(self, param_values: dict):
+        """
+        Set parameter values in the model. Accepts a dict of {name: value} and updates the corresponding nn.Parameter in param_dict.
+        Useful for testing and manual parameter updates.
+        """
+        for k, v in param_values.items():
+            if k in self.param_dict:
+                self.param_dict[k].data = torch.tensor(
+                    v,
+                    dtype=self.param_dict[k].dtype,
+                    device=self.param_dict[k].device,
+                    requires_grad=True,
+                )
+        self._compiled_ready = False  # recompile expressions with new parameter values
+
+    def select_genes(
+        self,
+        genes_to_keep: list[str],
+    ):
+        """From full set of genes that are modelled in this model, only keep the ones specified in this method.
+
+        Used when we first create a model on the full ground truth and then narrow it down to only a subset.
+
+        Args:
+            genes_to_keep (list[str]): List of gene names that the model should keep.
+
+        """
+        assert all(
+            gene_to_keep in self.modelled_gene_labels for gene_to_keep in genes_to_keep
+        ), "Not all genes that need to be kept are in the model"
+        genes_to_remove = list(set(self.modelled_gene_labels) ^ set(genes_to_keep))
+
+        new_synthesis_dict = dict()
+        new_decay_dict = dict()
+
+        # Check direction of regulatory interactions to get placeholder values
+        if self.goldstandard_signed_file_for_expression_substitution is not None:
+            replacement_dict = self._get_replacement_dict_from_regulation(
+                genes_to_remove
+            )
+
+        else:
+            logging.info(
+                f"No regulatory file provided, setting all unmodelled gene expressions to {self.fill_value_for_gene_not_in_model} as heuristic."
+            )
+            # Heuristic, set all gene expressions to fill_value_for_gene_not_in_model for genes that are not modelled
+            replacement_dict = dict()
+            for gene in genes_to_keep:
+                replacement_dict[gene] = {
+                    unmodeled_gene: self.fill_value_for_gene_not_in_model
+                    for unmodeled_gene in genes_to_remove
+                }
+
+        for gene in genes_to_keep:
+            synthesis_formula = self.synthesis_dict[gene]
+            new_synthesis_dict[gene] = synthesis_formula.subs(replacement_dict[gene])
+            new_decay_dict[gene] = self.decay_dict[gene]
+        self._compiled_ready = False
+        self.synthesis_dict = new_synthesis_dict
+        self.decay_dict = new_decay_dict
+        self.ko_masks = self.ko_masks[
+            [self.modelled_gene_labels.index(gene) for gene in genes_to_keep]
+        ]
+        self.modelled_gene_labels = genes_to_keep
+        self._compile_expressions()
+
+    def _get_replacement_dict_from_regulation(
+        self, genes_to_remove: list[str]
+    ) -> Dict[str, Dict[str, int]]:
+        """
+        Create a replacement dictionary for unmodelled genes based on their regulatory effects.
+
+        Args:
+
+            genes_to_remove (list[str]): List of gene names that are being removed from the model.
+
+        Returns:
+            Dict[str, Dict[str, int]]: A dictionary with first key the target gene, second the source gene, and third the value that should be used to replace them
+        """
+        out_dict = dict()
+
+        # Activators get 0, repressors get 1
+        sign_to_value = {"+": 0, "-": 1}
+        with self.goldstandard_signed_file_for_expression_substitution.open("r") as f:
+            for line in f.readlines():
+                source, target, direction = line.strip().split("\t")
+                if target in genes_to_remove:
+                    continue
+                if target not in out_dict:
+                    out_dict[target] = dict()
+                # Only keep entries for genes that are being removed
+                if source in genes_to_remove:
+                    out_dict[target][source] = sign_to_value[direction]
+        return out_dict
+
+    def _set_all_parameters_to_zero(self):
+        for key in self.param_dict.keys():
+            self.param_dict[key].data = torch.tensor(
+                0,
+                dtype=self.param_dict[key].dtype,
+                device=self.device,
+                requires_grad=True,
+            )
+        self._compiled_ready = False  # recompile expressions with new parameter values
+
+    def _compile_expressions(self) -> None:
+        """Pre-compile SymPy expressions into torch modules via sympytorch."""
+        if (
+            sympytorch is None
+        ):  # pragma: no cover - executed only when missing dependency
+            raise ImportError(
+                "sympytorch is required for MechanisticModel. Install it via 'pip install sympytorch'."
+            )
+
+        logging.info(
+            "Compiling mechanistic model. This is a slow step and if correct is only carried out once."
+        )
+        param_subs = {symbols(name): value for name, value in self.param_dict.items()}
+
+        def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
+            """Prepare SymPy expressions for compilation.
+            Takes a dictionary of expressions and applies parameter substitutions from the parameter dictionary as well as float hiding. This ensures this is only done once per expression before compilation and not at each forward pass.
+            Float hiding prevents SymPy from automatically evaluating or simplifying expressions that contain floats, which can be important for preserving the exact structure of symbolic expressions
+
+            Args:
+                expr_dict (Dict[str, sp.Expr]): A dictionary expression name keys and SymPy expressions values.
+
+            Returns:
+                List[sp.Expr]: A list of prepared SymPy expressions.
+            """
+            prepared: List[sp.Expr] = []
+            for gene in self.modelled_gene_labels:
+                expr = expr_dict[gene].subs(
+                    param_subs
+                )  # Apply parameter substitutions, take parameter values from param_dict
+                expr = sympytorch.hide_floats(expr)
+                prepared.append(expr)
+            return prepared
+
+        synthesis_exprs = _prepare_expressions(self.synthesis_dict)
+        decay_exprs = _prepare_expressions(self.decay_dict)
+
+        try:
+            self._synthesis_module = sympytorch.SymPyModule(expressions=synthesis_exprs)
+            self._decay_module = sympytorch.SymPyModule(expressions=decay_exprs)
+        except KeyError as err:
+            # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
+            func_name = (
+                getattr(err.args[0], "__name__", str(err.args[0]))
+                if err.args
+                else "unknown"
+            )
+            raise ValueError(
+                f"Unsupported sympy function '{func_name}' in SBML expression. "
+                "Provide a torch implementation via sympytorch."
+            ) from err
+
+        self._synthesis_module.to(device=self.device)
+        self._decay_module.to(device=self.device)
+        self._compiled_ready = True
+
     @classmethod
     def parse_one_reaction(
         cls,
@@ -361,69 +475,6 @@ class PyTorchODE(MechanisticModel):
         sympy_formula = sympy_formula.subs(replacement_dict)
 
         return base_node_name, sympy_formula, param_dict
-
-    def _set_all_parameters_to_zero(self):
-        for key in self.param_dict.keys():
-            self.param_dict[key].data = torch.tensor(
-                0,
-                dtype=self.param_dict[key].dtype,
-                device=self.device,
-                requires_grad=True,
-            )
-        self._compiled_ready = False  # recompile expressions with new parameter values
-
-    def _compile_expressions(self) -> None:
-        """Pre-compile SymPy expressions into torch modules via sympytorch."""
-        if (
-            sympytorch is None
-        ):  # pragma: no cover - executed only when missing dependency
-            raise ImportError(
-                "sympytorch is required for MechanisticModel. Install it via 'pip install sympytorch'."
-            )
-
-        param_subs = {symbols(name): value for name, value in self.param_dict.items()}
-
-        def _prepare_expressions(expr_dict: Dict[str, sp.Expr]) -> List[sp.Expr]:
-            """Prepare SymPy expressions for compilation.
-            Takes a dictionary of expressions and applies parameter substitutions from the parameter dictionary as well as float hiding. This ensures this is only done once per expression before compilation and not at each forward pass.
-            Float hiding prevents SymPy from automatically evaluating or simplifying expressions that contain floats, which can be important for preserving the exact structure of symbolic expressions
-
-            Args:
-                expr_dict (Dict[str, sp.Expr]): A dictionary expression name keys and SymPy expressions values.
-
-            Returns:
-                List[sp.Expr]: A list of prepared SymPy expressions.
-            """
-            prepared: List[sp.Expr] = []
-            for gene in self.modelled_gene_labels:
-                expr = expr_dict[gene].subs(
-                    param_subs
-                )  # Apply parameter substitutions, take parameter values from param_dict
-                expr = sympytorch.hide_floats(expr)
-                prepared.append(expr)
-            return prepared
-
-        synthesis_exprs = _prepare_expressions(self.synthesis_dict)
-        decay_exprs = _prepare_expressions(self.decay_dict)
-
-        try:
-            self._synthesis_module = sympytorch.SymPyModule(expressions=synthesis_exprs)
-            self._decay_module = sympytorch.SymPyModule(expressions=decay_exprs)
-        except KeyError as err:
-            # extracting the function name from an error object in a defensive way, in case args is empty or does not have the expected structure
-            func_name = (
-                getattr(err.args[0], "__name__", str(err.args[0]))
-                if err.args
-                else "unknown"
-            )
-            raise ValueError(
-                f"Unsupported sympy function '{func_name}' in SBML expression. "
-                "Provide a torch implementation via sympytorch."
-            ) from err
-
-        self._synthesis_module.to(device=self.device)
-        self._decay_module.to(device=self.device)
-        self._compiled_ready = True
 
     @classmethod
     def _fix_gnw_division_brackets(cls, formula: str) -> str:

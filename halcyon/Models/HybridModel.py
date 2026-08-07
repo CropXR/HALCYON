@@ -1,13 +1,13 @@
 import logging
 import torch
 
-from halcyon.Models.MechanisticModel import MechanisticModel
-from halcyon.Models.Model import GeneExpressionModel
+from halcyon.Models.MechanisticModel import PyTorchODE
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 
 
 class HybridModel(GeneExpressionModel):
-    def __init__(self, mm: MechanisticModel, ml: GeneExpressionModel, **kwargs):
+    def __init__(self, mm: PyTorchODE, ml: GeneExpressionModel, **kwargs):
         """
         Initialize the HybridModel with a mechanistic model and a machine learning model.
         Args:
@@ -30,7 +30,7 @@ class HybridModel(GeneExpressionModel):
             condition_names=mm.condition_names,
             **kwargs,
         )
-        self._mm: MechanisticModel = mm
+        self._mm: PyTorchODE = mm
         self._ml: GeneExpressionModel = ml
         for model in [self._mm, self._ml]:
             model.device = self.device

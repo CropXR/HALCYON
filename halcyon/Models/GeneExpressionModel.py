@@ -8,6 +8,8 @@ import logging
 
 
 class GeneExpressionModel(ABC, nn.Module):
+    """All subclasses must defince self.decay_params in their __init__"""
+
     def __init__(
         self,
         modelled_gene_labels: List[str],
@@ -54,11 +56,6 @@ class GeneExpressionModel(ABC, nn.Module):
     @abstractmethod
     def forward(self, t: torch.Tensor, state: torch.Tensor) -> torch.Tensor:
         """Get the derivative at a given time point."""
-        pass
-
-    @abstractmethod
-    def set_conditions(self, conditions: torch.Tensor) -> None:
-        """Set the environmental conditions."""
         pass
 
     def integrate(
@@ -120,6 +117,17 @@ class GeneExpressionModel(ABC, nn.Module):
     def reset_conditions(self):
         self.ko_masks = torch.ones(self.n_genes, device=self.device)  # type: ignore
         self.env_flags = torch.zeros(self.n_conditions, device=self.device)  # type: ignore
+
+    def _get_decay(self, state: torch.Tensor):
+        """Get the decay
+
+        Args:
+            state: Gene expression levels
+
+        Returns:
+            The decay as positive values here (so you can do synthesis - self._get_decay to get final term)
+        """
+        return nn.functional.softplus(self.decay_params * state)
 
     @staticmethod
     def get_compatible_device() -> torch.device:

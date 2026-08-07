@@ -23,6 +23,19 @@ class ExpressionData:
         """Keep only the specified genes in the data"""
         return ExpressionData(self.df.loc[genes])
 
+    def subsample_time_points(self, fraction: float):
+        """Keep only fraction of time points. The time points are evenly spaced.
+
+        Used for testing how well models work when there are fewer time points. Modifies the object in place.
+        """
+        if not 0 < fraction <= 1:
+            raise ValueError(f"fraction must be in (0, 1], got {fraction}")
+
+        n = self.df.shape[1]
+        n_keep = min(n, max(2, round(fraction * (n - 1)) + 1))
+        idx = np.rint(np.linspace(0, n - 1, n_keep)).astype(int)
+        self.df = self.df.iloc[:, idx]
+
     @property
     def genes(self) -> List:
         return list(self.df.index)

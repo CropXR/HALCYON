@@ -1,11 +1,15 @@
+from copy import deepcopy
+
 import numpy as np
 import torch
 
 from torch.testing import assert_close
 from numpy.testing import assert_allclose
 
+from halcyon.Datasets import ExpressionDataWithConditions
 
-def test_extract_info(expression_data_from_gnw):
+
+def test_extract_info(expression_data_from_gnw: ExpressionDataWithConditions):
     # First sample, expression data, all genes, timepoint 0
 
     env_tensor, expression, ko_string = expression_data_from_gnw[0]
@@ -84,7 +88,7 @@ def test_extract_info(expression_data_from_gnw):
         )
 
 
-def test_match_genes_to_list(expression_data_from_gnw):
+def test_match_genes_to_list(expression_data_from_gnw: ExpressionDataWithConditions):
     expression_data_with_matching_genes = expression_data_from_gnw.match_genes_to_list(
         [
             "Node_1",
@@ -139,7 +143,18 @@ def test_match_genes_to_list(expression_data_from_gnw):
     )
 
 
-def test_scale_time_series(expression_data_from_gnw):
+def test_split_into_train_and_validation(
+    expression_data_from_gnw: ExpressionDataWithConditions,
+):
+    train, validation = expression_data_from_gnw.split_train_test(test_fraction=0.2)
+    assert len(train.genes) == 10
+    assert len(validation.genes) == 10
+    assert len(train) == 8
+    assert len(validation) == 2
+    assert set(train.conditions).isdisjoint(set(validation.conditions))
+
+
+def test_scale_time_series(expression_data_from_gnw: ExpressionDataWithConditions):
     assert np.allclose(
         expression_data_from_gnw.get_time_points(),
         np.array(
@@ -198,3 +213,51 @@ def test_scale_time_series(expression_data_from_gnw):
             ]
         ),
     )
+
+
+def test_subsample_time_points(expression_data_from_gnw: ExpressionDataWithConditions):
+    expression_data_from_gnw.scale_time_series()
+    original_time_points = expression_data_from_gnw.get_time_points()
+    assert np.allclose(
+        original_time_points,
+        [
+            0.0,
+            0.05,
+            0.1,
+            0.15,
+            0.2,
+            0.25,
+            0.3,
+            0.35,
+            0.4,
+            0.45,
+            0.5,
+            0.55,
+            0.6,
+            0.65,
+            0.7,
+            0.75,
+            0.8,
+            0.85,
+            0.9,
+            0.95,
+            1.0,
+        ],
+    )
+    unmodified_df = deepcopy(expression_data_from_gnw)
+    # Check the 0.5 specifically
+    expression_data_from_gnw.subsample_time_points(fraction=0.5)
+    subsampled_time_points = expression_data_from_gnw.get_time_points()
+    assert np.allclose(
+        subsampled_time_points, [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    )
+    _, expression_data, _ = expression_data_from_gnw[1]
+    assert expression_data.shape[1] == len(subsampled_time_points)
+
+    # Some edge cases
+    for fraction, expected_length in [(0.4, 9), (0.75, 16)]:
+        subsample_expression_df = deepcopy(unmodified_df)
+        subsample_expression_df.subsample_time_points(fraction=fraction)
+        subsampled_time_points = subsample_expression_df.get_time_points()
+        assert 0.0 in subsampled_time_points
+        assert len(subsampled_time_points) == expected_length

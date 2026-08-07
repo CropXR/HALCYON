@@ -1,28 +1,23 @@
-import logging
-from typing import Callable, List, Tuple
-import tempfile
-from pathlib import Path
-from collections.abc import Generator
+from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.ModelRunner.EarlyStopper import EarlyStopper
+from halcyon.Models.GeneExpressionModel import GeneExpressionModel
+from halcyon.Models.Losses import MSELossFlexible
+from halcyon.results.DfColumnNames import DfColumnNames
 
-from matplotlib import pyplot as plt
-from matplotlib.axes import Axes
+
 import mlflow
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from halcyon.Datasets.ExperimentCondition import ExperimentCondition
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
-from halcyon.Datasets.ExpressionData import ExpressionData
-from halcyon.Models.Losses import MSELossFlexible
-from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.Model import GeneExpressionModel
-from halcyon.Simulators.SimulationResult import SimulationResult
-from halcyon.Results.TidyDfResults import TidyDfResults
+
+import logging
+import tempfile
+from pathlib import Path
+from typing import Callable, List, Tuple
 
 
 class ModelRunner:
@@ -44,17 +39,20 @@ class ModelRunner:
             batch_size (int, optional): Batch size to use during training. Defaults to 32.
             optimizer_fn (Callable, optional): Optimizer function. Defaults to torch.optim.Adam.
             optimizer_kwargs (dict | None, optional): Kwargs to pass to optimiser (e.g. learning rate). Defaults to None.
-            loss (Callable, optional): Loss functions. Defaults to mse loss.
+            loss (Callable, optional): Loss function. Defaults to mse loss.
         """
         self.model = model
         self.batch_size = batch_size
         self.loss_fn = loss
+        self.mse_loss_fn = MSELossFlexible()
 
         self.file_name_prefix = file_name_prefix
         self.file_name_suffix = ".pt"
 
         self.optimizer_kwargs = dict() if optimizer_kwargs is None else optimizer_kwargs
         self.optimizer = optimizer_fn(model.parameters(), **self.optimizer_kwargs)
+
+        self.early_stopper = EarlyStopper()
 
         self.model.to(self.model.device)
 
@@ -64,7 +62,7 @@ class ModelRunner:
     def __repr__(self):
         return (
             f"Modelrunner (Model={self.model},\n optimizer={self.optimizer.__class__.__name__},\n "
-            f"optimizer_kwargs={self.optimizer_kwargs},\n batch_size={self.batch_size}\n)"
+            f"optimizer_kwargs={self.optimizer_kwargs},\n batch_size={self.batch_size},\n loss_fn={self.loss_fn}\n)"
         )
 
     def get_hyperparams_to_log(self) -> dict:
@@ -85,32 +83,48 @@ class ModelRunner:
             for kwarg_name, value in self.optimizer_kwargs.items():
                 out_dict[kwarg_name] = value
 
+        if self.early_stopper:
+            for kwarg_name, value in self.early_stopper.hyperparams_to_log().items():
+                out_dict[kwarg_name] = value
+
         # Add the ModelRunner-level hyperparams
         out_dict.update(
             {
                 "batch_size": self.batch_size,
-                "loss_fn": self.loss_fn.__class__.__name__,
+                "loss_fn": str(self.loss_fn),
+                # In case no lambda is present (e.g. normal MSE), return None
+                "lambda_l1": getattr(self.loss_fn, "lambda_param", None),
                 "model_class": self.model.name,
             }
         )
         return out_dict
 
-    @property
-    def file_name(self) -> str:
-        file_name = f"{self.file_name_prefix}{self.model.name}"
-        for hyperparam_name, hyperparam_value in self.get_hyperparams_to_log().items():
-            file_name += f"_{hyperparam_name}_{hyperparam_value}"
-        file_name += self.file_name_suffix
-        return file_name
+    def train(
+        self,
+        train_dataset: ExpressionDataWithConditions,
+        nr_epochs: int,
+        val_dataset: ExpressionDataWithConditions | None = None,
+        test_dataset: ExpressionDataWithConditions | None = None,
+        save_every_n_epochs: int | None = None,
+    ):
+        """Perform model training.
 
-    def train(self, dataset: ExpressionDataWithConditions, nr_epochs: int):
-        """Perform model training."""
-        dataloader = self._dataloader_factory(dataset)
-        time_points_tensor = self._get_time_points_as_tensor(dataset)
-
+        Args:
+            train_dataset (ExpressionDataWithConditions): Dataset to train on
+            val_dataset (ExpressionDataWithConditions): Dataset to report val_loss on
+            test_dataset (ExpressionDataWithConditions): Dataset to report test_loss on
+            save_every_n_epochs (int | None, optional): If provided, save model every
+              n_epochs and log it to MLFLow, ensures you can still retrieve your
+              model if training crashes prematurely. Defaults to None, i.e. no saving.
+        """
+        train_dataloader = self._dataloader_factory(train_dataset)
+        time_points_tensor = self._get_time_points_as_tensor(train_dataset)
         for epoch in range(nr_epochs):
+            # set model to training mode
+            self.model.train()
             epoch_loss = 0.0
-            for batch in dataloader:
+            mse_loss = 0.0
+            for batch in train_dataloader:
                 self.optimizer.zero_grad()
                 ground_truth_expression, prediction = (
                     self._predict_expression_from_batch(time_points_tensor, batch)
@@ -119,14 +133,97 @@ class ModelRunner:
                 loss.backward()
                 self.optimizer.step()
                 epoch_loss += loss.item()
+                with torch.no_grad():
+                    mse_loss += self.mse_loss_fn(
+                        prediction, ground_truth_expression, self.model
+                    ).item()
 
-            mean_epoch_loss = epoch_loss / len(dataloader)
+            mean_epoch_loss = epoch_loss / len(train_dataloader)
+            mean_mse_loss = mse_loss / len(train_dataloader)
+            logging.info(f"Epoch {epoch}, train_loss\t{mean_epoch_loss}")
+
             self.loss_history.append(mean_epoch_loss)
-            logging.info(f"Epoch {epoch}, loss {mean_epoch_loss}")
+            if mlflow.active_run():
+                mlflow.log_metric("train_loss", mean_epoch_loss, step=epoch)
+                mlflow.log_metric("train_mse", mean_mse_loss, step=epoch)
+
+            if save_every_n_epochs and (epoch + 1) % save_every_n_epochs == 0:
+                self._log_model_to_mlflow(epoch)
+
+            # --- val/test ---
+            if val_dataset is not None:
+                val_mse = self._log_loss_on_unseen_data(
+                    val_dataset, "val_mse", epoch, self.mse_loss_fn
+                )
+
+            if test_dataset is not None:
+                self._log_loss_on_unseen_data(
+                    test_dataset, "test_mse", epoch, self.mse_loss_fn
+                )
+
+            if (
+                self.early_stopper
+                and val_dataset is not None
+                and self.early_stopper.check_if_should_stop(val_mse)
+            ):
+                logging.info(f"Early stopping at epoch {epoch}")
+                self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
+                break
+        else:
+            # Save model when training due to reaching final epoch
+            if nr_epochs == 0:
+                # Edge case when no training was done
+                self._log_model_to_mlflow(0)
+            else:
+                self._log_model_if_not_saved_already(save_every_n_epochs, epoch)
+
+    def _log_model_if_not_saved_already(
+        self, save_every_n_epochs: int | None, current_epoch: int
+    ):
+        """Log final model state, unless it was already saved at this epoch via save_every_n_epochs."""
+        if save_every_n_epochs is not None and current_epoch % save_every_n_epochs != 0:
+            self._log_model_to_mlflow(current_epoch)
+
+    @torch.no_grad()
+    def _log_loss_on_unseen_data(
+        self,
+        dataset: ExpressionDataWithConditions,
+        loss_name: str,
+        epoch: int,
+        loss_fn: nn.Module,
+    ) -> torch.Tensor:
+        """Calculate loss on unseen data (e.g. validation or test data) and log to mlflow if available
+
+        Args:
+            dataset (ExpressionDataWithConditions): Dataset on which to calculate loss
+            loss_name (str): Name of loss that should be reported to MLFlow
+            epoch (int): Current epoch
+            loss_fn (nn.Module): Loss function to use
+
+        Returns:
+            Loss as toch.tensor
+        """
+        _, gt_expression, predicted_expression = self.predict(
+            dataset, disable_progress_bar=True
+        )
+        loss = loss_fn(predicted_expression, gt_expression, self.model)
+        logging.info(f"Epoch {epoch}, {loss_name}\t{loss}")
+        if mlflow.active_run():
+            mlflow.log_metric(loss_name, loss, step=epoch)
+        return loss
+
+    def _log_model_to_mlflow(self, epoch: int):
+        if mlflow.active_run():
+            with tempfile.TemporaryDirectory() as tmpdir:
+                checkpoint_path = (
+                    Path(tmpdir) / f"checkpoint_{self.model.name}_epoch{epoch + 1}.pt"
+                )
+                self.save(checkpoint_path)
+                mlflow.log_artifact(checkpoint_path, artifact_path="model")
 
     @torch.no_grad()
     def predict(
-        self, dataset: ExpressionDataWithConditions
+        self, dataset: ExpressionDataWithConditions, disable_progress_bar: bool = False
     ) -> Tuple[List[str], torch.Tensor, torch.Tensor]:
         """Use model to predict the knockouts in the provided dataset
 
@@ -134,7 +231,8 @@ class ModelRunner:
             dataset (ExpressionDataWithConditions): Dataset on which to predict.
 
         Returns:
-            Tuple of three items: list of conditions (as strings), tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data, tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
+            Tuple of three items: list of conditions (as strings), tensor of shape (n_conditions, n_genes, n_timepoints) with ground truth expression data,
+            tensor of shape (n_conditions, n_genes, n_timepoints) with predicted expression data.
         """
         # set model evaluation mode to ensure consistent behavior during prediction, e.g. with Dropout Layers or Batch Normalization Layers
         self.model.eval()
@@ -144,7 +242,7 @@ class ModelRunner:
         experiment_as_string_list = []
         batches_gt_expression_data = []
         all_predictions = []
-        for batch in tqdm(dataloader):
+        for batch in tqdm(dataloader, disable=disable_progress_bar):
             ground_truth_expression, prediction = self._predict_expression_from_batch(
                 time_points_tensor, batch
             )
@@ -188,10 +286,13 @@ class ModelRunner:
     def train_and_predict_for_mlflow(
         self,
         dataset_dict: dict[str, ExpressionDataWithConditions],
-        train_data_key_in_dict: str,
         simulation_parent_id: str,
+        train_data_key_in_dict: str,
         nr_epochs: int,
+        val_data_key_in_dict: str | None = None,
+        test_data_key_in_dict: str | None = None,
         do_mlflow_model_logging: bool = False,
+        save_every_n_epochs: int | None = 25,
     ):
         """Carry out training and predicting and log everything to MLFlow
 
@@ -199,11 +300,13 @@ class ModelRunner:
             dataset_dict (dict[str, ExpressionDataWithConditions]): Dictionary with dataset name as key and dataset as value.
                 The model will be trained on the dataset specified by train_data_key_in_dict and evaluated on all datasets in the dictionary.
             train_data_key_in_dict (str): Key that specifies on which dataset in the dataset_dict to train the model.
-            simulation_parent_id (str, optional): Simulation parent run ID of the run from which the data was
+            simulation_parent_id (str): Simulation parent run ID of the run from which the data was
                 generated. Used in MLFlow for data lineage.
             do_mlflow_model_logging (bool, optional): If set to True, the model will be logged to MLFlow using the
               pytorch.log_model function. OTherwise will just save the .pt file as artifact.
               Defaults to False.
+            save_every_n_epochs (int | None, optional): If provided, save model to
+              MLFLow every n_epochs so it can still be retrieved if training crashes prematurely.
         """
         with mlflow.start_run(
             parent_run_id=simulation_parent_id, run_name=self.model.name
@@ -211,44 +314,94 @@ class ModelRunner:
             mlflow.set_tag("run_type", "model_training_and_prediction")
             mlflow.log_params(self.get_hyperparams_to_log())
             mlflow.log_param("nr_epochs", nr_epochs)
-            self.train(dataset_dict[train_data_key_in_dict], nr_epochs=nr_epochs)
-            self._log_train_losses_to_mlflow()
+            mlflow.log_param(
+                "n_timepoints_training",
+                len(dataset_dict[train_data_key_in_dict].get_time_points()),
+            )
 
-            # Evaluate model on both datasets and log raw predictions
-            for dataset_name, dataset in dataset_dict.items():
-                experiment_as_string_list, all_gt_expression_data, all_predictions = (
-                    self.predict(dataset)
+            log_path = self._setup_logging_to_file()
+            try:
+                self.train(
+                    train_dataset=dataset_dict[train_data_key_in_dict],
+                    nr_epochs=nr_epochs,
+                    val_dataset=dataset_dict.get(val_data_key_in_dict),
+                    test_dataset=dataset_dict.get(test_data_key_in_dict),
+                    save_every_n_epochs=save_every_n_epochs,
                 )
-                final_loss = self.loss_fn(
-                    all_predictions, all_gt_expression_data, self.model
-                )
-                mlflow.log_metric(f"{dataset_name}_final_loss", final_loss.item())
 
-                with tempfile.TemporaryDirectory() as tmpdir:
-                    logging.debug("Temp dir:", tmpdir)
-                    tmpdir_path = Path(tmpdir)
+                # Finally: evaluate model on all datasets and log raw predictions
+                for dataset_name, dataset in dataset_dict.items():
+                    with tempfile.TemporaryDirectory() as tmpdir:
+                        logging.debug(f"Temp dir: {tmpdir}")
+                        tmpdir_path = Path(tmpdir)
 
-                    # Also save the model as .pt just to be sure of the model logging
-                    model_save_path = tmpdir_path / self.file_name
-                    self.save(model_save_path)
-                    mlflow.log_artifact(model_save_path)
+                        final_loss, mse_loss, predicted_file_path = (
+                            self._predict_for_mlflow_logging(
+                                dataset_name, dataset, tmpdir_path
+                            )
+                        )
+                        mlflow.log_metric(
+                            f"{dataset_name}_final_loss", final_loss.item()
+                        )
+                        mlflow.log_metric(
+                            f"{dataset_name}_final_mse_loss", mse_loss.item()
+                        )
+                        mlflow.log_artifact(
+                            predicted_file_path,
+                            artifact_path=self.mlflow_prediction_folder_name,
+                        )
 
-                    predicted_file_path = self._save_predictions_to_file(
-                        dataset_name,
-                        dataset,
-                        experiment_as_string_list,
-                        all_gt_expression_data,
-                        all_predictions,
-                        tmpdir_path,
-                    )
+                if do_mlflow_model_logging:
+                    mlflow.pytorch.log_model(self.model, name=self.model.name)
+            finally:
+                mlflow.log_artifact(log_path)
 
-                    mlflow.log_artifact(
-                        predicted_file_path,
-                        artifact_path=self.mlflow_prediction_folder_name,
-                    )
+    def _setup_logging_to_file(self) -> Path:
+        """Make run log to file so errors can be easily found back"""
+        log_path = Path(f"logs/{mlflow.active_run().info.run_id}.log")
+        log_path.parent.mkdir(exist_ok=True)
 
-            if do_mlflow_model_logging:
-                mlflow.pytorch.log_model(self.model, name=self.model.name)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(processName)s] %(message)s",
+            handlers=[
+                logging.FileHandler(log_path),
+                logging.StreamHandler(),
+            ],
+            force=True,
+        )
+
+        return log_path
+
+    def _predict_for_mlflow_logging(
+        self,
+        dataset_name: str,
+        dataset: ExpressionDataWithConditions,
+        tmpdir_path: Path,
+    ) -> tuple[torch.Tensor, torch.Tensor, Path]:
+        """Creates the files and metrics of model predictions that are logged to MLFlow.
+
+        Returns:
+            Tuple of final_loss, mse_loss, and file_path to model predictions saved as .parquet
+        """
+        experiment_as_string_list, all_gt_expression_data, all_predictions = (
+            self.predict(dataset)
+        )
+        final_loss = self.loss_fn(all_predictions, all_gt_expression_data, self.model)
+        final_mse_loss = self.mse_loss_fn(
+            all_predictions, all_gt_expression_data, self.model
+        )
+
+        predicted_file_path = self._save_predictions_to_file(
+            dataset_name,
+            dataset,
+            experiment_as_string_list,
+            all_gt_expression_data,
+            all_predictions,
+            tmpdir_path,
+        )
+
+        return final_loss, final_mse_loss, predicted_file_path
 
     def _save_predictions_to_file(
         self,
@@ -258,7 +411,7 @@ class ModelRunner:
         all_gt_expression_data: torch.Tensor,
         all_predictions: torch.Tensor,
         tmpdir_path: Path,
-    ):
+    ) -> Path:
         """Save the raw prediction tensors etc to a parquet file to log as artifact in MLFlow"""
         predicted_file_path = tmpdir_path / f"prediction_{dataset_name}_data.parquet"
 
@@ -300,32 +453,27 @@ class ModelRunner:
             melted_expression_df = []
             for matrix, col_label in zip(
                 [pred_matrix, gt_matrix],
-                [TidyDfResults.EXPRESSION_COL, TidyDfResults.GROUND_TRUTH_COL],
+                [DfColumnNames.EXPRESSION_COL, DfColumnNames.GROUND_TRUTH_COL],
             ):
                 long_form_df = pd.DataFrame(
                     matrix,
                     columns=time_points,
-                    index=pd.Index(modelled_gene_labels, name=TidyDfResults.GENE_COL),
+                    index=pd.Index(modelled_gene_labels, name=DfColumnNames.GENE_COL),
                 )
                 melted_df = long_form_df.melt(
                     ignore_index=False,
-                    var_name=TidyDfResults.TIME_COL,
+                    var_name=DfColumnNames.TIME_COL,
                     value_name=col_label,
-                ).set_index(TidyDfResults.TIME_COL, append=True)
+                ).set_index(DfColumnNames.TIME_COL, append=True)
                 melted_expression_df.append(melted_df)
 
             one_condition_df = pd.concat(melted_expression_df, axis=1).reset_index()
 
-            one_condition_df[TidyDfResults.CONDITION_COL] = condition
+            one_condition_df[DfColumnNames.CONDITION_COL] = condition
             df_list.append(one_condition_df)
 
         df = pd.concat(df_list)
         return df
-
-    def _log_train_losses_to_mlflow(self):
-        """After training, this function can be used to log the loss history to MLFlow"""
-        for epoch, loss in enumerate(self.loss_history):
-            mlflow.log_metric("train_loss", loss, step=epoch)
 
     def save(self, checkpoint_path: Path):
         checkpoint = {
@@ -385,29 +533,3 @@ class ModelRunner:
         return DataLoader(
             dataset, batch_size=self.batch_size, shuffle=True, pin_memory=True
         )
-
-
-def run_training_job(
-    job: ModelRunner,
-    dataset_dict: dict[str, ExpressionDataWithConditions],
-    train_data_key_in_dict: str,
-    simulation_parent_id: str = None,
-    do_mlflow_model_logging: bool = False,
-):
-    """Runs one training job. Can be called from mp.Pool to run multiple in parallel"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(processName)s] %(message)s",
-        force=True,
-    )
-    try:
-        output = job.train_and_predict_for_mlflow(
-            dataset_dict,
-            train_data_key_in_dict,
-            simulation_parent_id,
-            do_mlflow_model_logging,
-        )
-    except AssertionError as e:
-        logging.error(f"Error occurred while running job: {e}")
-        output = {"error": str(e)}
-    return output

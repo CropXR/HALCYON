@@ -1,11 +1,13 @@
+from copy import deepcopy
 from pathlib import Path
 import pandas as pd
 import pytest
 import sympy as sp
 import sympytorch
 import torch
+import random
 
-from halcyon.Models.MechanisticModel import PyTorchODE
+from halcyon.Models import PyTorchODE
 from torch.testing import assert_close
 
 
@@ -47,17 +49,50 @@ def ode_with_two_nodes(test_pytorchode_model):
 @pytest.fixture
 def ode_with_two_nodes_and_informed_substitute_value(test_pytorchode_model, in_folder):
     nodes_to_select = ["Node_0", "Node_2"]
+    test_pytorchode_model = deepcopy(test_pytorchode_model)
+    # Provide the prior info
+    test_pytorchode_model.goldstandard_signed_file_for_expression_substitution = Path(
+        in_folder / "integration_test_network_goldstandard_signed.tsv"
+    )
     test_pytorchode_model.select_genes(
         nodes_to_select,
-        goldstandard_signed_file_for_expression_substitution=Path(
-            in_folder / "integration_test_network_goldstandard_signed.tsv"
-        ),
     )
     return test_pytorchode_model
 
 
 def test_select_subset_genes(ode_with_two_nodes):
     assert ode_with_two_nodes.modelled_gene_labels == ["Node_0", "Node_2"]
+
+
+def test_introduce_mistakes(test_pytorchode_model: PyTorchODE, ss_initial_values):
+    mm_with_mistakes = test_pytorchode_model.with_missing_connections(0.2)
+    forward_results = mm_with_mistakes.forward(
+        t=torch.tensor([0]), state=ss_initial_values
+    )
+    # With new parameters, steady state should be disrupted
+    with pytest.raises(AssertionError):
+        assert_close(
+            forward_results, torch.zeros_like(forward_results), atol=1e-5, rtol=0
+        )
+
+
+def test_introduce_mistakes_if_subset_of_genes(
+    ode_with_two_nodes: PyTorchODE, ss_initial_values
+):
+    random.seed(174)
+    original_forwards = ode_with_two_nodes.forward(
+        t=torch.tensor([0]), state=ss_initial_values[:, [0, 2]]
+    )
+
+    mm_with_mistakes = ode_with_two_nodes.with_missing_connections(0.1)
+    forward_results_with_mistakes = mm_with_mistakes.forward(
+        t=torch.tensor([0]), state=ss_initial_values[:, [0, 2]]
+    )
+    # With new parameters, forwards should be different
+    with pytest.raises(AssertionError):
+        assert_close(
+            original_forwards, forward_results_with_mistakes, atol=1e-5, rtol=0
+        )
 
 
 def test_subset_ode_forward(ode_with_two_nodes, ss_initial_values):

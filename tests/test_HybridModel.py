@@ -6,12 +6,10 @@ import pytest
 import tempfile
 
 import torch
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
+from halcyon.Datasets import ExpressionDataWithConditions
+from halcyon.Models import HybridModel
 from halcyon.Models.Losses import MSELossFlexible, MSELossPlusMachineLearningL2
-from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
-from halcyon.Models.MechanisticModel import PyTorchODE
-from halcyon.Models.ModelRunner import ModelRunner
+from halcyon.ModelRunner import ModelRunner
 from torch.testing import assert_close
 
 
@@ -44,7 +42,7 @@ def test_hybrid_does_perfect_fit_if_ml_weights_zero(
 
 def test_most_genes_perfect_fit_if_only_remove_gene_9(
     hybrid_model_mm_no_node_9: HybridModel,
-    expr_data_from_sim: ExpressionDataWithConditions,
+    expression_data_from_gnw: ExpressionDataWithConditions,
 ):
     hybrid_model_mm_no_node_9 = deepcopy(hybrid_model_mm_no_node_9)
     hybrid_model_mm_no_node_9._ml._set_raw_per_gene_importance(-50)
@@ -52,7 +50,9 @@ def test_most_genes_perfect_fit_if_only_remove_gene_9(
         hybrid_model_mm_no_node_9,
     )
 
-    _, all_gt_expression_data, all_predictions = my_trainer.predict(expr_data_from_sim)
+    _, all_gt_expression_data, all_predictions = my_trainer.predict(
+        expression_data_from_gnw
+    )
     # First 9 genes will match perfectly
     assert_close(
         all_gt_expression_data[:, :9, :],

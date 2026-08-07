@@ -1,0 +1,50 @@
+import multiprocess as mp
+import logging
+import random
+import os
+import pandas as pd
+
+import mlflow
+import torch
+import numpy as np
+from dotenv import load_dotenv
+
+from halcyon.ModelRunner import train_hybrid_and_ml_model_sim_run_id
+
+
+def main():
+    # Do setup
+    seed = 174
+    # for CPU
+    torch.manual_seed(seed)
+    # for all GPUs
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    load_dotenv()
+
+    logging.info(f'Tracking to {os.getenv("MLFLOW_TRACKING_URI")}')
+    mlflow.set_experiment(experiment_id="7")
+    mlflow.set_experiment_tag("Tool name", "HALCYON")
+
+    # 50 genes with  high noise
+    sim_runs_high_noise = mlflow.search_runs(
+        experiment_ids=["7"],
+        filter_string="tags.run_type = 'dataset' and params.noise_level = 'HIGH' and params.nr_genes = '50'",
+    )
+
+    # 50 genes with low noise
+    sim_runs_low_noise = mlflow.search_runs(
+        experiment_ids=["7"],
+        filter_string="tags.run_type = 'dataset' and params.noise_level = 'LOW' and params.nr_genes = '50'",
+    )
+
+    sim_runs = pd.concat([sim_runs_high_noise, sim_runs_low_noise])
+
+    for sim_run_id in sim_runs["run_id"]:
+        train_hybrid_and_ml_model_sim_run_id(sim_run_id)
+
+
+if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)
+    main()

@@ -3,22 +3,24 @@ from pathlib import Path
 import random
 from typing import Tuple
 import networkx as nx
-from halcyon.Models.HybridModel import HybridModel
-from halcyon.Models.MechanisticModel import PyTorchODE
+
 import numpy as np
 
 import pytest
 import torch
-from halcyon.Datasets.ExperimentCondition import ExperimentCondition
-from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 
-from halcyon.Models.PhoenixModels import PhoenixAddAndProdLayers, PhoenixOnlyAddLayers
-from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
+from halcyon.Simulators.run_genenetweaver import run_gnw, NoiseLevel, SimulationResult
+from halcyon.Datasets import ExpressionDataWithConditions
+from halcyon.Models import (
+    MLP,
+    CellBox,
+    PhoenixAddAndProdLayers,
+    PhoenixOnlyAddLayers,
+    HybridModel,
+    PyTorchODE,
+)
+from halcyon.ModelRunner import ModelRunner
 
-from halcyon.Simulators.GNWSimRunner import GNWSimRunner
-from halcyon.Simulators.NoiseLevel import NoiseLevel
-from halcyon.Simulators.SimulationResult import SimulationResult
-from halcyon.Models.ModelRunner import ModelRunner
 
 from dotenv import load_dotenv
 
@@ -50,18 +52,32 @@ def expression_data_from_gnw():
 
 @pytest.fixture
 def sim_result() -> SimulationResult:
-    gnw_sim = GNWSimRunner(
-        settings_path=Path("setting_files/gnw_testing_runs_settings.txt")
-    )
     generated_data_path = Path("tests/generated_test_data")
-
-    sim_result = gnw_sim.run_simulation(
+    sim_result = run_gnw(
+        settings_dir=Path("setting_files"),
         n_genes=10,
         sparsity=0.1,
         num_modules=2,
         network_name="integration_test_network",
         output_path=generated_data_path,
-        noise_level=NoiseLevel.NONOISE,
+        noiseless_for_testing=True,
+        noise_level=NoiseLevel.MEDIUM,
+    )
+    return sim_result
+
+
+@pytest.fixture
+def sim_result_lower_noise() -> SimulationResult:
+    generated_data_path = Path("tests/generated_test_data_lower_noise")
+    sim_result = run_gnw(
+        settings_dir=Path("setting_files"),
+        n_genes=10,
+        sparsity=0.1,
+        num_modules=2,
+        network_name="integration_test_network",
+        output_path=generated_data_path,
+        noiseless_for_testing=True,
+        noise_level=NoiseLevel.LOW,
     )
     return sim_result
 
@@ -146,14 +162,15 @@ def trainers_for_all_models(
     time_scaler = sim_result._time_scale_all_datasets_and_get_scaling_factor(
         [expr_data]
     )
-    for model_class, model_args in zip(
-        [PhoenixOnlyAddLayers, PhoenixAddAndProdLayers],
-        [
-            {"hidden_size": 2},
-            {"hidden_size": 2},
-        ],
-    ):
 
+    model_configs = [
+        (PhoenixOnlyAddLayers, {"hidden_size": 2}),
+        (PhoenixAddAndProdLayers, {"hidden_size": 2}),
+        (MLP, {"hidden_size": 2, "nr_layers": 2}),
+        (CellBox, {"self_activations": False}),
+    ]
+
+    for model_class, model_args in model_configs:
         model = model_class(
             modelled_gene_labels=expr_data.genes,
             condition_names=expr_data.all_environments,
@@ -175,6 +192,25 @@ def trainers_for_all_models(
     )
 
     return trainers
+
+
+@pytest.fixture(params=["phoenix", "mlp", "cellbox"])
+def ode_model(request):
+    gene_labels = ["a", "b", "c"]
+    if request.param == "phoenix":
+        return PhoenixOnlyAddLayers(
+            gene_labels, ("test_cond",), hidden_size=2, synthesis_only_positive=True
+        )
+    elif request.param == "mlp":
+        return MLP(
+            gene_labels,
+            ("test_cond",),
+            hidden_size=2,
+            nr_layers=2,
+            synthesis_only_positive=True,
+        )
+    elif request.param == "cellbox":
+        return CellBox(gene_labels, ("test_cond",))
 
 
 @pytest.fixture

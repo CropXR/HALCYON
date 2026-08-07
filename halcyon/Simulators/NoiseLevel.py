@@ -2,8 +2,8 @@ from enum import Enum
 
 
 class NoiseLevel(str, Enum):
-    """Class to keep track of noise levels in data"""
+    """Class to keep track of noise levels in data. For each noise level points to correct settings file."""
 
-    NONOISE = "_nonoise_"
-    NOEXPNOISE = "_noexpnoise_"
-    ALLNOISE = "_"
+    LOW = "gnw_low_noise.txt"
+    MEDIUM = "gnw_medium_noise.txt"
+    HIGH = "gnw_high_noise.txt"

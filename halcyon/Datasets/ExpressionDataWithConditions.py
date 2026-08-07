@@ -1,5 +1,6 @@
-from halcyon.Datasets.ExperimentCondition import ExperimentCondition
-from halcyon.Datasets.ExpressionData import ExpressionData
+import random
+from io import StringIO
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -7,15 +8,16 @@ import torch
 from torch.utils.data import Dataset
 from typing_extensions import Self
 
-from io import StringIO
-from pathlib import Path
+from halcyon.Datasets.ExperimentCondition import ExperimentCondition
+from halcyon.Datasets.ExpressionData import ExpressionData
+from halcyon.results import DfColumnNames
 
 
 class ExpressionDataWithConditions(Dataset):
     """Class to store the expression data of multiple experiments output by GeneNetWeaver."""
 
     def __init__(self, ko_dict: dict[ExperimentCondition, ExpressionData]):
-        self._ko_dict = ko_dict
+        self._ko_dict: dict[ExperimentCondition, ExpressionData] = ko_dict
         self._check_if_all_genes_same()
         self._check_if_all_timepoints_same()
 
@@ -42,6 +44,12 @@ class ExpressionDataWithConditions(Dataset):
     def get_time_points(self) -> np.ndarray:
         self._check_if_all_timepoints_same()
         return next(iter(self._ko_dict.values()))._get_time_points()
+
+    def subsample_time_points(self, fraction: float):
+        """Subsample the time points in the expression data by keeping only a fraction of them. The same time points are kept for each condition."""
+        self._check_if_all_timepoints_same()
+        for expression_data in self._ko_dict.values():
+            expression_data.subsample_time_points(fraction)
 
     def _check_if_all_genes_same(self):
         # Assert that all ExpressionData contain the same genes
@@ -79,6 +87,22 @@ class ExpressionDataWithConditions(Dataset):
         for expression_data in self._ko_dict.values():
             expression_data.scale_time_series()
 
+    def split_train_test(self, test_fraction: float) -> tuple[Self, Self]:
+        """Split into train and validation sets by randomly splitting knockouts.
+
+        Args:
+            test_fraction (float): Fraction of conditions to use for validation (e.g. 0.2 for 20%).
+
+        Returns:
+            tuple[Self, Self]: (train, validation) datasets.
+        """
+        kos_to_pick_from = list(self._ko_dict.keys())
+        nr_of_kos_in_test = int(test_fraction * len(self._ko_dict))
+        val_keys = set(random.sample(kos_to_pick_from, k=nr_of_kos_in_test))
+        train_dict = {k: v for k, v in self._ko_dict.items() if k not in val_keys}
+        val_dict = {k: v for k, v in self._ko_dict.items() if k in val_keys}
+        return self.__class__(train_dict), self.__class__(val_dict)
+
     def _get_time_points(self) -> np.ndarray:
         """Return the time points of the samples"""
         self._check_if_all_timepoints_same()
@@ -94,23 +118,6 @@ class ExpressionDataWithConditions(Dataset):
         experiment_condition = list(self._ko_dict.keys())[idx]
         expression_data = self._ko_dict[experiment_condition]
         return experiment_condition, expression_data
-
-    def _get_condition_and_expression_under_ko_gene(
-        self, ko_gene: tuple[str]
-    ) -> tuple[ExperimentCondition, ExpressionData]:
-        """Get objects of experimental condition and expression data at an index."""
-        # ugly but works:
-        possible_keys = []
-        for condition in self._ko_dict.keys():
-            if condition.ko_gene == ko_gene:
-                possible_keys.append(condition)
-        if not len(possible_keys) == 1:
-            raise KeyError(
-                f"Found {len(possible_keys)} matching conditions found for KO {ko_gene}"
-            )
-        condition_to_use = possible_keys[0]
-        expression_to_use = self._ko_dict[condition_to_use]
-        return condition_to_use, expression_to_use
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, str]:
         """Return tuple of tensors: first item KO and environmental condition, and second item the corresponding expression data, third item the condition as a string."""
@@ -143,10 +150,17 @@ class ExpressionDataWithConditions(Dataset):
             )
         return self.__class__(new_dict)
 
-    def return_subset_copy(self, size: int):
-        """Return a copy of this object with only the first `size` items in the ko_dict."""
-        subset_dict = dict(list(self._ko_dict.items())[:size])
-        return self.__class__(subset_dict)
+    def to_long_form_df(self):
+        df_list = []
+        for experiment_condition, expression_data in self._ko_dict.items():
+            df = expression_data.df.melt(
+                ignore_index=False,
+                var_name=DfColumnNames.TIME_COL,
+                value_name=DfColumnNames.GROUND_TRUTH_COL,
+            )
+            df[DfColumnNames.CONDITION_COL] = experiment_condition.as_string()
+            df_list.append(df.reset_index(names=DfColumnNames.GENE_COL))
+        return pd.concat(df_list, ignore_index=False)
 
     @classmethod
     def from_genenetweaver_ko_timeseries_output(cls, input_path: Path) -> Self:

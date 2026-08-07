@@ -1,12 +1,15 @@
 import pickle
+from dataclasses import dataclass, fields
+from pathlib import Path
+
+import pandas as pd
+import numpy as np
 import torch
+from typing_extensions import Self
+
 from halcyon.Datasets.ExpressionDataWithConditions import ExpressionDataWithConditions
 from halcyon.Datasets.RegulatoryNetwork import RegulatoryNetwork
 from halcyon.Simulators.NoiseLevel import NoiseLevel
-
-from typing_extensions import Self
-from dataclasses import dataclass, fields
-from pathlib import Path
 
 
 @dataclass
@@ -33,6 +36,7 @@ class SimulationResult:
     network: RegulatoryNetwork
     noise_level: NoiseLevel
     normalise_time_series: bool = True
+    noiseless_for_testing: bool = False
 
     def save_to_pkl(self, save_path: Path):
         """Save file to pickle. Can be used to log to MLFlow as an artifact."""
@@ -53,10 +57,11 @@ class SimulationResult:
         return data
 
     def _build_filename(self, filename_end: str) -> Path:
-        return (
-            self.data_path
-            / f"{self.network_name}{self.noise_level.value}{filename_end}"
-        )
+        if self.noiseless_for_testing:
+            filepath_insertion = "_noexpnoise_"
+        else:
+            filepath_insertion = "_"
+        return self.data_path / f"{self.network_name}{filepath_insertion}{filename_end}"
 
     def items(self):
         """Iterate over field names and their values (as if this were a dict)"""
@@ -70,9 +75,7 @@ class SimulationResult:
         assert out_path.exists()
         return out_path
 
-    def get_double_ko_expressiondata(
-        self, do_time_scaling: bool = True
-    ) -> ExpressionDataWithConditions:
+    def get_double_ko_expressiondata(self) -> ExpressionDataWithConditions:
         double_ko_expressions = ExpressionDataWithConditions.from_gnw_double_ko_files(
             expression_file_path=self.double_ko_timeseries_file_path(),
             ko_file_path=self.double_ko_index_file_path(),
@@ -130,3 +133,31 @@ class SimulationResult:
         else:
             scaling_factor = torch.tensor(1.0)
         return scaling_factor
+
+    def to_long_form_df(self):
+        df_list = []
+        single_ko_dataset, double_ko_dataset, scaling_factor = self.create_datasets()
+        for dataset in [single_ko_dataset, double_ko_dataset]:
+            df_list.append(dataset.to_long_form_df())
+        return pd.concat(df_list)
+
+
+def make_ko_index_file_from_perturbation_file(
+    perturbation_path: str | Path,
+) -> pd.DataFrame:
+    """Create GNW-like double KO index file in case only the perturbation tsv is available to show the double KOs (which happens when you specify the double KOs through a perturbation file)
+
+    Args:
+        perturbation_path (str | Path): Path to perturbation tsv (e.g. "my_network_dualknockouts_perturbations.tsv")
+
+    Returns:
+        pd.DataFrame: dataframe that can be saved as a tsv file with the indexes of the double KOs, with columns "G_i" and "G_j"
+    """
+    perturbation_df = pd.read_csv(perturbation_path, sep="\t")
+    ko_indices = perturbation_df.apply(
+        lambda x: np.where(x == 0)[0], axis=1, result_type="expand"
+    )
+    ko_indices.columns = ["G_i", "G_j"]
+    # Inidices were one higher in this file when output by GNW (so be consistent)
+    ko_indices = ko_indices + 1
+    return ko_indices
