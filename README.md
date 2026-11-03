@@ -1,9 +1,10 @@
 # HALCYON
+[![bioRxiv](https://img.shields.io/badge/bioRxiv-10.64898%2F2026.10.20.758482-b31b1b.svg)](https://doi.org/10.64898/2026.10.20.758482)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Tests](https://github.com/CropXR/HALCYON/actions/workflows/build_and_run_tests.yml/badge.svg)](https://github.com/CropXR/HALCYON/actions)
+[![License](https://img.shields.io/github/license/CropXR/HALCYON)](LICENSE)
 
-Hybrid A-priori-informed Learning of Connections by Yoking ODEs with Neural Networks.
-
-WIP by 
-Thijs van Loo & Ben Noordijk
+_Hybrid A-priori-informed Learning of Connections by Yoking ODEs with Neural Networks_, preprint available [here](https://doi.org/10.64898/2026.10.20.758482).
 
 ## MLflow integration
 
